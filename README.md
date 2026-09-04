@@ -18,7 +18,7 @@
 - `third_party/building_plugin`：可选的本地建筑检测与 OCR 服务，包含 ONNX 模型和独立 Android 应用源码。它不属于主应用启动必需项。
 
 1. **准备环境**
-   安装最新版 Android Studio、Android SDK/NDK、Rust 和 `cargo-ndk`，并添加 Android Rust 编译目标。
+   推荐直接运行一键脚本：`./scripts/setup_dev.sh`。脚本会检查并安装 Android SDK/NDK、Rust 和 `cargo-ndk`，同时构建依赖服务。完整参数和手动安装方式见 [`docs/LOCAL_DEBUG.md`](docs/LOCAL_DEBUG.md)。
 2. **构建依赖服务**
    `third_party/zkqserver` 和 `third_party/building_plugin` 都是独立 Android 工程，可在各自目录运行 `./gradlew assembleDebug`。主应用已附带可直接启动的 `server.apk`。
 3. **构建主应用**
@@ -31,6 +31,13 @@
 ```sh
 ./gradlew -Pdevice=emulator-5554 runDebugOnDevice
 ./gradlew -Pdevice=emulator-5554 debugLogs
+```
+
+首次配置也可以分步执行：
+
+```sh
+./scripts/setup_dev.sh --check-only
+./scripts/setup_dev.sh --run --device emulator-5554
 ```
 
 本分支已经移除应用完整性校验、广告、用户登录/验证以及 Rust 反调试/反 Hook 逻辑。未提供外部插件 JAR 时，应用会直接加载 APK 中内置的功能模块。
