@@ -12,14 +12,18 @@
 
 如果你想自己本地构建，可以参考下面的步骤。因为这个项目非常小，只有作者一个人在开发，所以一般会先在本地开发一段时间，然后再把代码上传。作者会尽量上传最新的代码，但不保证一定能确保代码是最新的。不过大家还是能从这个仓库里学到不少东西，比如怎么做不重启的热更新、怎么在安卓上跑 Rust 代码、怎么实现自动化操作之类的。
 
-本项目依赖 https://github.com/Bob8259/ZKQserver 来提供关键操作，没有服务器文件跑不起来。
-部分额外功能依赖建筑检测插件仓库 https://github.com/Bob8259/building_plugin ，不过没有也能正常运行。
+本仓库已将以下依赖源码整合到 `third_party/`，无需再单独下载：
+
+- `third_party/zkqserver`：Root 环境下的 WebSocket/HTTP 操作服务。构建主应用前可运行其 `./gradlew assembleDebug`，再将生成的 APK 放入 `app/src/main/assets/server.apk`。
+- `third_party/building_plugin`：可选的本地建筑检测与 OCR 服务，包含 ONNX 模型和独立 Android 应用源码。它不属于主应用启动必需项。
 
 1. **准备环境**
    安装最新版 Android Studio、Android SDK/NDK、Rust 和 `cargo-ndk`，并添加 Android Rust 编译目标。
-2. **构建**
+2. **构建依赖服务**
+   `third_party/zkqserver` 和 `third_party/building_plugin` 都是独立 Android 工程，可在各自目录运行 `./gradlew assembleDebug`。主应用已附带可直接启动的 `server.apk`。
+3. **构建主应用**
    运行 `./gradlew assembleDebug`。Gradle 会先调用 `rustBuild` 构建四种 ABI 的 Rust 原生库，再生成 APK。
-3. **运行**
+4. **运行**
    将 `app/build/outputs/apk/debug/app-debug.apk` 安装到已获取 Root 权限的模拟器或设备。项目自带 `server.apk`，首次启动时会自动运行本地服务。
 
 本分支已经移除应用完整性校验、广告、用户登录/验证以及 Rust 反调试/反 Hook 逻辑。未提供外部插件 JAR 时，应用会直接加载 APK 中内置的功能模块。
