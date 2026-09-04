@@ -26,6 +26,13 @@
 4. **运行**
    将 `app/build/outputs/apk/debug/app-debug.apk` 安装到已获取 Root 权限的模拟器或设备。项目自带 `server.apk`，首次启动时会自动运行本地服务。
 
+完整的环境检查、模拟器启动、日志过滤和热加载流程见 [`docs/LOCAL_DEBUG.md`](docs/LOCAL_DEBUG.md)。常用快捷命令：
+
+```sh
+./gradlew -Pdevice=emulator-5554 runDebugOnDevice
+./gradlew -Pdevice=emulator-5554 debugLogs
+```
+
 本分支已经移除应用完整性校验、广告、用户登录/验证以及 Rust 反调试/反 Hook 逻辑。未提供外部插件 JAR 时，应用会直接加载 APK 中内置的功能模块。
 
 # 小技巧

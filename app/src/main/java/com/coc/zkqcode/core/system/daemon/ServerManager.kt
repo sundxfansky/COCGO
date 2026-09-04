@@ -5,11 +5,15 @@ import com.coc.zkqcode.core.data.database.GlobalVars
 import com.coc.zkqcode.core.util.fileactions.LogHelper.showDebugInfo
 import com.topjohnwu.superuser.Shell
 import java.io.File
+import java.net.InetSocketAddress
+import java.net.Socket
 
 object ServerManager {
 
     fun startServer(context: Context): Boolean {
         return try {
+            // Reuse a healthy local server to make app restarts fast and idempotent.
+            if (isServerAvailable()) return true
             val serverFile = File(context.filesDir, "server.apk")
             if (!serverFile.exists()) {
                 context.assets.open("server.apk").use { input ->
@@ -35,5 +39,14 @@ object ServerManager {
             e.printStackTrace()
             false
         }
+    }
+
+    private fun isServerAvailable(): Boolean {
+        return runCatching {
+            Socket().use { socket ->
+                socket.connect(InetSocketAddress("127.0.0.1", 6839), 200)
+            }
+            true
+        }.getOrDefault(false)
     }
 }

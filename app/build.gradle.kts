@@ -356,6 +356,57 @@ tasks.configureEach {
     }
 }
 
+// Small device helpers keep the normal debug loop reproducible and avoid copying
+// shell commands from the documentation by hand.
+tasks.register<Exec>("runDebugOnDevice") {
+    group = "debug"
+    description = "Install the debug APK and launch MainActivity on the selected adb device"
+    dependsOn("assembleDebug")
+    val serial = providers.gradleProperty("device").orNull
+    val installCommand = buildList {
+        add("adb")
+        if (!serial.isNullOrBlank()) {
+            add("-s")
+            add(serial)
+        }
+        addAll(listOf("install", "-r", layout.buildDirectory.file("outputs/apk/debug/app-debug.apk").get().asFile.absolutePath))
+    }
+    commandLine(installCommand)
+    doLast {
+        val stop = mutableListOf("adb")
+        if (!serial.isNullOrBlank()) stop.addAll(listOf("-s", serial))
+        stop.addAll(listOf("shell", "am", "force-stop", "com.coc.zkqcode"))
+        ProcessBuilder(stop).inheritIO().start().waitFor()
+
+        val start = mutableListOf("adb")
+        if (!serial.isNullOrBlank()) start.addAll(listOf("-s", serial))
+        start.addAll(listOf("shell", "am", "start", "-W", "-n", "com.coc.zkqcode/.MainActivity"))
+        ProcessBuilder(start).inheritIO().start().waitFor()
+    }
+}
+
+tasks.register<Exec>("debugLogs") {
+    group = "debug"
+    description = "Show only application and local server logs"
+    val serial = providers.gradleProperty("device").orNull
+    commandLine(buildList {
+        add("adb")
+        if (!serial.isNullOrBlank()) addAll(listOf("-s", serial))
+        addAll(listOf("logcat", "zkq_debug:V", "zkq_rust:V", "AndroidRuntime:E", "*:S"))
+    })
+}
+
+tasks.register<Exec>("stopDebugServer") {
+    group = "debug"
+    description = "Stop the Root ShellServer on the selected adb device"
+    val serial = providers.gradleProperty("device").orNull
+    commandLine(buildList {
+        add("adb")
+        if (!serial.isNullOrBlank()) addAll(listOf("-s", serial))
+        addAll(listOf("shell", "su", "-c", "pkill -f com.coc.zkqserver.ShellServer"))
+    })
+}
+
 dependencies {
 
     implementation(libs.libsu.core)
