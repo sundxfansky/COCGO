@@ -23,6 +23,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "ZKQcode"
+rootProject.name = "SUNcode"
 include(":app")
  

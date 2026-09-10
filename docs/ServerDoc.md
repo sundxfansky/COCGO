@@ -4,7 +4,7 @@ git remote -v //view current repo
 //push to repo
 git push open main --force 
 //see logs
-adb -s emulator-5562 logcat zkq_debug:V *:S
+adb -s emulator-5562 logcat sun_debug:V *:S
 ```
 
 This documentation of the server. 
@@ -128,7 +128,7 @@ Commands used for interacting with the device file system. These use `actionType
 {
   "actionType": "file_action",
   "subAction": "read",
-  "path": "/data/user/0/com.coc.zkqserver/files/test.txt"
+  "path": "/data/user/0/com.coc.sunserver/files/test.txt"
 }
 
 ```
@@ -139,7 +139,7 @@ Commands used for interacting with the device file system. These use `actionType
 {
   "actionType": "file_action",
   "subAction": "write",
-  "path": "/data/user/0/com.coc.zkqserver/files/new_file.txt",
+  "path": "/data/user/0/com.coc.sunserver/files/new_file.txt",
   "content": "Hello, this is some content to write."
 }
 
@@ -151,7 +151,7 @@ Commands used for interacting with the device file system. These use `actionType
 {
   "actionType": "file_action",
   "subAction": "create",
-  "path": "/data/user/0/com.coc.zkqserver/files/empty_file.txt"
+  "path": "/data/user/0/com.coc.sunserver/files/empty_file.txt"
 }
 
 ```
@@ -162,7 +162,7 @@ Commands used for interacting with the device file system. These use `actionType
 {
   "actionType": "file_action",
   "subAction": "delete",
-  "path": "/data/user/0/com.coc.zkqserver/files/old_file.txt"
+  "path": "/data/user/0/com.coc.sunserver/files/old_file.txt"
 }
 
 ```
@@ -173,7 +173,7 @@ Commands used for interacting with the device file system. These use `actionType
 {
   "actionType": "file_action",
   "subAction": "check_exists",
-  "path": "/data/user/0/com.coc.zkqserver/files/my_document.txt"
+  "path": "/data/user/0/com.coc.sunserver/files/my_document.txt"
 }
 
 ```
@@ -184,8 +184,8 @@ Commands used for interacting with the device file system. These use `actionType
 {
   "actionType": "file_action",
   "subAction": "copy",
-  "path": "/data/user/0/com.coc.zkqserver/files/source.txt",
-  "destPath": "/data/user/0/com.coc.zkqserver/files/destination.txt"
+  "path": "/data/user/0/com.coc.sunserver/files/source.txt",
+  "destPath": "/data/user/0/com.coc.sunserver/files/destination.txt"
 }
 
 ```
@@ -196,8 +196,8 @@ Commands used for interacting with the device file system. These use `actionType
 {
   "actionType": "file_action",
   "subAction": "rename",
-  "path": "/data/user/0/com.coc.zkqserver/files/old_name.txt",
-  "newPath": "/data/user/0/com.coc.zkqserver/files/new_name.txt"
+  "path": "/data/user/0/com.coc.sunserver/files/old_name.txt",
+  "newPath": "/data/user/0/com.coc.sunserver/files/new_name.txt"
 }
 ```
 ---
@@ -226,7 +226,7 @@ Downloads a file from a URL to a specified path on the device.
   "actionType": "system_action",
   "subAction": "download",
   "url": "https://example.com/file.zip",
-  "savePath": "/data/user/0/com.coc.zkqserver/files/file.zip"
+  "savePath": "/data/user/0/com.coc.sunserver/files/file.zip"
 }
 ```
 

@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.coc.zkqcode"
+    namespace = "com.coc.suncode"
     compileSdk = 36
 
     val localProperties = Properties()
@@ -19,7 +19,7 @@ android {
     val baseUrl: String = localProperties.getProperty("BASE_URL") ?: ""
 
     defaultConfig {
-        applicationId = "com.coc.zkqcode"
+        applicationId = "com.coc.suncode"
         minSdk = 24
         targetSdk = 36
         versionCode = 1
@@ -303,7 +303,7 @@ tasks.register("deployAndReload") {
         val assetsPath = file("${project.projectDir.absolutePath}/src/main/assets")
         val jarFile = assetsPath.listFiles()?.firstOrNull { it.extension == "jar" }
             ?: throw GradleException("No jar found in assets directory")
-        val devicePath = "/data/data/com.coc.zkqcode/files/assets/${jarFile.name}"
+        val devicePath = "/data/data/com.coc.suncode/files/assets/${jarFile.name}"
 
         // 1. Remove stale jar files from /sdcard before pushing
         ProcessBuilder("adb", "shell", "rm", "-f", "/sdcard/*.jar")
@@ -321,8 +321,8 @@ tasks.register("deployAndReload") {
 
         // 4. Send reload broadcast
         ProcessBuilder("adb", "shell", "am", "broadcast",
-            "-a", "com.coc.zkqcode.DEBUG_RELOAD",
-            "-n", "com.coc.zkqcode/.core.system.daemon.DebugReloadReceiver")
+            "-a", "com.coc.suncode.SUN_RELOAD",
+            "-n", "com.coc.suncode/.core.system.daemon.DebugReloadReceiver")
             .inheritIO().start().waitFor()
         println("--- deployAndReload complete ---")
     }
@@ -375,12 +375,12 @@ tasks.register<Exec>("runDebugOnDevice") {
     doLast {
         val stop = mutableListOf("adb")
         if (!serial.isNullOrBlank()) stop.addAll(listOf("-s", serial))
-        stop.addAll(listOf("shell", "am", "force-stop", "com.coc.zkqcode"))
+        stop.addAll(listOf("shell", "am", "force-stop", "com.coc.suncode"))
         ProcessBuilder(stop).inheritIO().start().waitFor()
 
         val start = mutableListOf("adb")
         if (!serial.isNullOrBlank()) start.addAll(listOf("-s", serial))
-        start.addAll(listOf("shell", "am", "start", "-W", "-n", "com.coc.zkqcode/.MainActivity"))
+        start.addAll(listOf("shell", "am", "start", "-W", "-n", "com.coc.suncode/.MainActivity"))
         ProcessBuilder(start).inheritIO().start().waitFor()
     }
 }
@@ -392,7 +392,7 @@ tasks.register<Exec>("debugLogs") {
     commandLine(buildList {
         add("adb")
         if (!serial.isNullOrBlank()) addAll(listOf("-s", serial))
-        addAll(listOf("logcat", "zkq_debug:V", "zkq_rust:V", "AndroidRuntime:E", "*:S"))
+        addAll(listOf("logcat", "sun_debug:V", "sun_rust:V", "AndroidRuntime:E", "*:S"))
     })
 }
 
@@ -403,7 +403,7 @@ tasks.register<Exec>("stopDebugServer") {
     commandLine(buildList {
         add("adb")
         if (!serial.isNullOrBlank()) addAll(listOf("-s", serial))
-        addAll(listOf("shell", "su", "-c", "pkill -f com.coc.zkqserver.ShellServer"))
+        addAll(listOf("shell", "su", "-c", "pkill -f com.coc.sunserver.ShellServer"))
     })
 }
 

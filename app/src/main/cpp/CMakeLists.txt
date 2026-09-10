@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22.1)
 
-project("zkqcode")
+project("suncode")
 
 # ==============================================================================
 # 1. 核心安全防护：编译参数 (Compiler Flags)

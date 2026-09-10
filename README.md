@@ -1,8 +1,8 @@
 # 介绍
 
-紫孔雀旨在提供无障碍服务，帮助行动不便者、视觉障碍者等人群完成简易的游戏操作。
+太阳旨在提供无障碍服务，帮助行动不便者、视觉障碍者等人群完成简易的游戏操作。
 
-若您认为紫孔雀存在侵权问题，请携带您的版权证据与紫孔雀联系。紫孔雀将在第一时间处理。
+若您认为太阳存在侵权问题，请携带您的版权证据与太阳联系。太阳将在第一时间处理。
 
 # 开箱即用
 
@@ -14,13 +14,13 @@
 
 本仓库已将以下依赖源码整合到 `third_party/`，无需再单独下载：
 
-- `third_party/zkqserver`：Root 环境下的 WebSocket/HTTP 操作服务。构建主应用前可运行其 `./gradlew assembleDebug`，再将生成的 APK 放入 `app/src/main/assets/server.apk`。
+- `third_party/sunserver`：Root 环境下的 WebSocket/HTTP 操作服务。构建主应用前可运行其 `./gradlew assembleDebug`，再将生成的 APK 放入 `app/src/main/assets/server.apk`。
 - `third_party/building_plugin`：可选的本地建筑检测与 OCR 服务，包含 ONNX 模型和独立 Android 应用源码。它不属于主应用启动必需项。
 
 1. **准备环境**
    推荐直接运行一键脚本：`./scripts/setup_dev.sh`。脚本会检查并安装 Android SDK/NDK、Rust 和 `cargo-ndk`，同时构建依赖服务。完整参数和手动安装方式见 [`docs/LOCAL_DEBUG.md`](docs/LOCAL_DEBUG.md)。
 2. **构建依赖服务**
-   `third_party/zkqserver` 和 `third_party/building_plugin` 都是独立 Android 工程，可在各自目录运行 `./gradlew assembleDebug`。主应用已附带可直接启动的 `server.apk`。
+   `third_party/sunserver` 和 `third_party/building_plugin` 都是独立 Android 工程，可在各自目录运行 `./gradlew assembleDebug`。主应用已附带可直接启动的 `server.apk`。
 3. **构建主应用**
    运行 `./gradlew assembleDebug`。Gradle 会先调用 `rustBuild` 构建四种 ABI 的 Rust 原生库，再生成 APK。
 4. **运行**

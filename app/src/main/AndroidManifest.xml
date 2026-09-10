@@ -28,11 +28,11 @@
         android:networkSecurityConfig="@xml/network_security_config"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.ZKQcode">
+        android:theme="@style/Theme.Suncode">
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:theme="@style/Theme.ZKQcode">
+            android:theme="@style/Theme.Suncode">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
@@ -41,7 +41,7 @@
         </activity>
 
         <service
-            android:name="com.coc.zkqcode.core.ui.floatingwindows.UIWindowService"
+            android:name="com.coc.suncode.core.ui.floatingwindows.UIWindowService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="mediaProjection"
@@ -51,7 +51,7 @@
                 android:value="This service maintains a floating window for user interaction and overlay controls while the app is in the background." />
         </service>
         <service
-            android:name="com.coc.zkqcode.core.ui.floatingwindows.ControlWindowService"
+            android:name="com.coc.suncode.core.ui.floatingwindows.ControlWindowService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="mediaProjection">
@@ -60,7 +60,7 @@
                 android:value="This service provides background control mechanisms and overlay management." />
         </service>
         <service
-            android:name="com.coc.zkqcode.core.ui.floatingwindows.MessageBoxService"
+            android:name="com.coc.suncode.core.ui.floatingwindows.MessageBoxService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="remoteMessaging">
@@ -83,7 +83,7 @@
             android:enabled="true"
             android:exported="true">
             <intent-filter>
-                <action android:name="com.coc.zkqcode.DEBUG_RELOAD" />
+                <action android:name="com.coc.suncode.SUN_RELOAD" />
             </intent-filter>
         </receiver>
 
@@ -114,7 +114,7 @@
         </service>
 
         <service
-            android:name=".core.system.inputmethod.ZKQInputMethodService"
+            android:name=".core.system.inputmethod.SunInputMethodService"
             android:label="@string/app_name"
             android:permission="android.permission.BIND_INPUT_METHOD"
             android:exported="true">

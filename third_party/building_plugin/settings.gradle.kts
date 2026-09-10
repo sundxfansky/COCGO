@@ -29,6 +29,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "ZKQbuilding"
+rootProject.name = "SUNbuilding"
 include(":app")
  

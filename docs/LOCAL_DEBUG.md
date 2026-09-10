@@ -57,10 +57,10 @@ adb -s emulator-5554 shell su -c id
 
 ## 4. 构建依赖与主应用
 
-`third_party/zkqserver` 是必须的 Root WebSocket 服务，构建后复制为主应用资产：
+`third_party/sunserver` 是必须的 Root WebSocket 服务，构建后复制为主应用资产：
 
 ```sh
-cd third_party/zkqserver && ./gradlew assembleDebug --no-daemon
+cd third_party/sunserver && ./gradlew assembleDebug --no-daemon
 cp app/build/outputs/apk/debug/app-debug.apk ../../app/src/main/assets/server.apk
 cd ../..
 ./gradlew assembleDebug --no-daemon

@@ -1,0 +1,77 @@
+package com.coc.suncode.core.util.exit
+
+import android.content.Context
+import android.content.Intent
+import com.coc.suncode.core.data.database.GlobalVars
+import com.coc.suncode.core.system.daemon.DaemonService
+import com.coc.suncode.core.ui.floatingwindows.ControlWindowService
+import com.coc.suncode.core.ui.floatingwindows.MessageBoxService
+import com.coc.suncode.core.ui.floatingwindows.UIWindowService
+import com.coc.suncode.core.system.accessibility.MyAccessibilityService
+import com.coc.suncode.core.system.screencapture.ScreenCaptureManager
+import com.topjohnwu.superuser.Shell
+import kotlin.system.exitProcess
+
+object AppExitHelper {
+
+    fun exitApplication(context: Context) {
+        restoreDefaultInputMethod()
+        stopDaemonProcess()
+        stopAllServices(context)
+        stopShellServer()
+        // Kill the current process
+        exitProcess(0)
+    }
+
+    fun restoreDefaultInputMethod() {
+        val defaultIme = GlobalVars.defaultInputMethod
+        if (!defaultIme.isNullOrBlank()) {
+            Shell.cmd("ime set $defaultIme").exec()
+        }
+    }
+
+    private fun stopShellServer() {
+        try {
+            // 使用 pkill -f 匹配包含指定类名的全路径进程
+            // com.coc.sunserver.ShellServer 是你在 app_process 中启动的类名
+            Shell.cmd("pkill -f com.coc.sunserver.ShellServer").exec()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun stopDaemonProcess() {
+        try {
+            // Use libsu to execute pgrep to find the PID(s) of the daemon script
+            val pgrepResult = Shell.cmd("pgrep -f /data/local/tmp/sun_daemon.sh").exec()
+
+            // Get all output lines (PIDs)
+            val pids = pgrepResult.out
+
+            if (pids.isNotEmpty()) {
+                // Kill all found PIDs
+                pids.forEach { pid ->
+                    if (pid.isNotBlank()) {
+                        Shell.cmd("kill -9 $pid").exec()
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun stopAllServices(context: Context) {
+        try {
+            context.stopService(Intent(context, UIWindowService::class.java))
+            context.stopService(Intent(context, ControlWindowService::class.java))
+            context.stopService(Intent(context, MessageBoxService::class.java))
+            context.stopService(Intent(context, DaemonService::class.java))
+
+            // Release screen capture resources
+            ScreenCaptureManager.releaseAll()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+}
