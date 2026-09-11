@@ -35,3 +35,7 @@ web/dist/
 
 # Claude Code worktrees (ephemeral agent workspaces)
 .claude/
+
+# Go backend build artifacts
+backend/sun-cloud
+backend/zkq-cloud

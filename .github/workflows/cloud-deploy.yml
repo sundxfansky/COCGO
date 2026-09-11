@@ -53,8 +53,8 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            ${{ env.IMAGE_PREFIX }}/zkq-backend
-            ${{ env.IMAGE_PREFIX }}/zkq-web
+            ${{ env.IMAGE_PREFIX }}/sun-backend
+            ${{ env.IMAGE_PREFIX }}/sun-web
           tags: |
             type=sha
             type=raw,value=latest,enable={{is_default_branch}}
@@ -63,13 +63,13 @@ jobs:
         with:
           context: ./backend
           push: true
-          tags: ${{ env.IMAGE_PREFIX }}/zkq-backend:latest,${{ env.IMAGE_PREFIX }}/zkq-backend:sha-${{ github.sha }}
+          tags: ${{ env.IMAGE_PREFIX }}/sun-backend:latest,${{ env.IMAGE_PREFIX }}/sun-backend:sha-${{ github.sha }}
       - name: Build and push web
         uses: docker/build-push-action@v6
         with:
           context: ./web
           push: true
-          tags: ${{ env.IMAGE_PREFIX }}/zkq-web:latest,${{ env.IMAGE_PREFIX }}/zkq-web:sha-${{ github.sha }}
+          tags: ${{ env.IMAGE_PREFIX }}/sun-web:latest,${{ env.IMAGE_PREFIX }}/sun-web:sha-${{ github.sha }}
 
   deploy:
     name: Update production host

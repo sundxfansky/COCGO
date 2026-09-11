@@ -1,6 +1,6 @@
 # 本地启动与调试指南
 
-本文覆盖从空白 macOS/Linux 主机到 Root Android 模拟器的完整流程。项目是 Kotlin/Jetpack Compose 主界面加 Rust 原生库的 Android 自动化宿主；启动后还会安装并拉起内置的 `ZKQserver`，通过 `ws://localhost:6839/zkq` 提供文件和操作服务。
+本文覆盖从空白 macOS/Linux 主机到 Root Android 模拟器的完整流程。项目是 Kotlin/Jetpack Compose 主界面加 Rust 原生库的 Android 自动化宿主；启动后还会安装并拉起内置的 `SUNserver`，通过 `ws://localhost:6839/sun` 提供文件和操作服务。
 
 ## 1. 一键准备环境
 
@@ -11,7 +11,7 @@ chmod +x scripts/setup_dev.sh
 ./scripts/setup_dev.sh
 ```
 
-脚本会检测或安装 JDK、Android command-line tools、SDK Platform 36、Build Tools 36、NDK `28.2.13676358`、CMake `3.22.1`、Rust 四个 Android target 和 `cargo-ndk`，然后构建并打包 `ZKQserver` 与主应用。它只写仓库内的 `local.properties`，不会修改 shell 配置文件。
+脚本会检测或安装 JDK、Android command-line tools、SDK Platform 36、Build Tools 36、NDK `28.2.13676358`、CMake `3.22.1`、Rust 四个 Android target 和 `cargo-ndk`，然后构建并打包 `SUNserver` 与主应用。它只写仓库内的 `local.properties`，不会修改 shell 配置文件。
 
 常用选项：
 
@@ -85,7 +85,7 @@ adb -s emulator-5554 install -r app/build/outputs/apk/debug/app-debug.apk
 
 ```sh
 ./gradlew -Pdevice=emulator-5554 stopDebugServer
-adb -s emulator-5554 shell am force-stop com.coc.zkqcode
+adb -s emulator-5554 shell am force-stop com.coc.suncode
 ```
 
 ## 6. 日志、端口与分层调试
@@ -94,7 +94,7 @@ adb -s emulator-5554 shell am force-stop com.coc.zkqcode
 
 ```sh
 ./gradlew -Pdevice=emulator-5554 debugLogs
-adb -s emulator-5554 logcat -v time | rg 'ZKQ|Rust|ShellServer|coc.zkqcode'
+adb -s emulator-5554 logcat -v time | rg 'SUN|Rust|ShellServer|coc.suncode'
 ```
 
 Root 服务应监听 `6839`，可在模拟器内检查：
@@ -109,7 +109,7 @@ adb -s emulator-5554 shell su -c 'ss -lntp | grep 6839'
 adb -s emulator-5554 shell 'curl -sS http://127.0.0.1:13462/ || true'
 ```
 
-Kotlin/Compose 调试使用 Android Studio 的 Debug；Rust/JNI 先看 `rust_logic` 的 Android log，再检查 ABI 与 NDK。修改动态模块 `app/src/main/java/com/coc/zkqcode/jar` 后，可使用已有 `deployAndReload` 任务热加载；它要求设备 Root，且资源、Manifest、JNI 变更仍需完整重装。
+Kotlin/Compose 调试使用 Android Studio 的 Debug；Rust/JNI 先看 `rust_logic` 的 Android log，再检查 ABI 与 NDK。修改动态模块 `app/src/main/java/com/coc/suncode/jar` 后，可使用已有 `deployAndReload` 任务热加载；它要求设备 Root，且资源、Manifest、JNI 变更仍需完整重装。
 
 ## 7. 常见故障
 

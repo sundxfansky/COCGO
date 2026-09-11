@@ -114,8 +114,8 @@ install_android_sdk() {
 
 build_project() {
   info "Building bundled Root server"
-  (cd "$ROOT_DIR/third_party/zkqserver" && ./gradlew assembleDebug --no-daemon)
-  cp "$ROOT_DIR/third_party/zkqserver/app/build/outputs/apk/debug/app-debug.apk" "$ROOT_DIR/app/src/main/assets/server.apk"
+  (cd "$ROOT_DIR/third_party/sunserver" && ./gradlew assembleDebug --no-daemon)
+  cp "$ROOT_DIR/third_party/sunserver/app/build/outputs/apk/debug/app-debug.apk" "$ROOT_DIR/app/src/main/assets/server.apk"
   if ((BUILD_PLUGIN)); then
     info "Building optional building plugin"
     (cd "$ROOT_DIR/third_party/building_plugin" && ./gradlew assembleDebug --no-daemon)

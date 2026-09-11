@@ -80,7 +80,7 @@ tasks.register("cleanJarClasses") {
 //
 //    doLast {
 //        possibleClassDirs.forEach { dir ->
-//            val jarClassDir = File(dir, "com/coc/zkqcode/jar")
+//            val jarClassDir = File(dir, "com/coc/suncode/jar")
 //            if (jarClassDir.exists()) {
 //                jarClassDir.deleteRecursively()
 //                println("Cleaned old classes from: ${jarClassDir.absolutePath}")
@@ -158,7 +158,7 @@ tasks.register<Exec>("buildJar") {
         possibleClassDirs.forEach { dir ->
             if (dir.exists()) {
                 val files = fileTree(dir) {
-                    include("com/coc/zkqcode/jar/**/*.class")
+                    include("com/coc/suncode/jar/**/*.class")
                 }.files.map { it.absolutePath }
                 classFiles.addAll(files)
                 println("Found ${files.size} class files in ${dir.absolutePath}")
@@ -235,7 +235,7 @@ tasks.register("validateUploadJarGuard") {
     description = "Block uploadJar when MainScript test code is still enabled"
 
     doLast {
-        val mainScriptFile = file("src/main/java/com/coc/zkqcode/jar/code/MainScript.kt")
+        val mainScriptFile = file("src/main/java/com/coc/suncode/jar/code/MainScript.kt")
         if (!mainScriptFile.exists()) {
             throw GradleException("Cannot validate upload safety because MainScript.kt was not found.")
         }

@@ -11,7 +11,7 @@ import com.coc.suncode.R
 
 object NotificationHelper {
     private const val CHANNEL_ID = "floating_service_channel"
-    private const val CHANNEL_NAME = "紫孔雀服务"
+    private const val CHANNEL_NAME = "太阳服务"
 
     fun createNotification(context: Context): Notification {
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -31,8 +31,8 @@ object NotificationHelper {
         val largeIcon = BitmapFactory.decodeResource(context.resources, R.drawable.main_icon)
 
         return NotificationCompat.Builder(context, CHANNEL_ID)
-            .setContentTitle("紫孔雀")
-            .setContentText("紫孔雀正在运行")
+            .setContentTitle("太阳")
+            .setContentText("太阳正在运行")
             .setSmallIcon(R.drawable.main_icon)
             .setLargeIcon(largeIcon)
             .setPriority(NotificationCompat.PRIORITY_LOW)

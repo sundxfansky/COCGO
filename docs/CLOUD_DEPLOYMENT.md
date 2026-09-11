@@ -23,17 +23,17 @@ CORS_ORIGIN=https://config.example.com
 
 ## 自动更新
 
-后端和网站镜像使用固定基础镜像版本。更新流程：拉取新代码，执行 `docker compose build --pull`，再执行 `docker compose up -d`。SQLite 数据位于命名卷 `zkq-data`，升级前备份：`docker run --rm -v zkq-data:/data -v "$PWD":/backup alpine tar czf /backup/zkq-data.tgz -C /data .`。
+后端和网站镜像使用固定基础镜像版本。更新流程：拉取新代码，执行 `docker compose build --pull`，再执行 `docker compose up -d`。SQLite 数据位于命名卷 `sun-data`，升级前备份：`docker run --rm -v sun-data:/data -v "$PWD":/backup alpine tar czf /backup/sun-data.tgz -C /data .`。
 
 建议 CI 在测试通过后推送带版本号的镜像，并由 Watchtower 或编排平台按版本更新；不要使用 `latest` 自动覆盖生产。客户端逻辑更新（JAR）仍遵循 Android 现有热加载流程，云端配置更新无需重新安装 APK。
 
 ## GitHub CI 自动更新
 
-`.github/workflows/cloud-deploy.yml` 会在 `main` 每次推送时编译 Android、构建网站，并将 `zkq-backend` 与 `zkq-web` 推送到 `ghcr.io/<仓库所有者>/`。服务器目录中的 `.env` 建议设置：
+`.github/workflows/cloud-deploy.yml` 会在 `main` 每次推送时编译 Android、构建网站，并将 `sun-backend` 与 `sun-web` 推送到 `ghcr.io/<仓库所有者>/`。服务器目录中的 `.env` 建议设置：
 
 ```env
-BACKEND_IMAGE=ghcr.io/sundxfansky/zkq-backend:latest
-WEB_IMAGE=ghcr.io/sundxfansky/zkq-web:latest
+BACKEND_IMAGE=ghcr.io/sundxfansky/sun-backend:latest
+WEB_IMAGE=ghcr.io/sundxfansky/sun-web:latest
 ```
 
 在 GitHub 仓库 Settings -> Secrets -> Actions 配置 `DEPLOY_HOST`、`DEPLOY_USER`、`DEPLOY_SSH_KEY`、`DEPLOY_PATH`、`DEPLOY_PORT`（可选）和 `GHCR_READ_TOKEN`。配置 `DEPLOY_HOST` 后 workflow 会 SSH 到服务器执行 `docker compose pull` 和 `docker compose up -d`；不配置时仍会构建并发布镜像，不会尝试远程连接。服务器上的 GHCR token 至少需要 `read:packages` 权限。

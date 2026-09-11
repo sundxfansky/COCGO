@@ -8,6 +8,19 @@
 
 本软件为自用软件，禁止用于商业行为，禁止用于违反游戏规定的行为。
 
+# 项目结构
+
+| 目录 | 说明 |
+|------|------|
+| `app/` | 主应用，Kotlin + Jetpack Compose，动态加载 `app/src/main/java/com/coc/suncode/jar` 下的脚本逻辑，并通过 JNI 调用 `rust_logic` 原生库。 |
+| `rust_logic/` | Rust 原生库源码，通过 `cargo-ndk` 编译为四种 ABI 的 `.so`，由主应用的 `rustBuild` Gradle 任务自动构建。 |
+| `third_party/sunserver/` | Root 环境下的 WebSocket/HTTP 操作服务，独立 Android 工程，构建产物作为 `app/src/main/assets/server.apk` 内置于主应用。 |
+| `third_party/building_plugin/` | 可选的本地建筑检测与 OCR 服务，独立 Android 工程，不属于主应用启动必需项。 |
+| `backend/` | 可选的云端配置同步服务，Go + SQLite，供多设备同步账号配置使用。 |
+| `web/` | 云端配置同步的管理网站，React + Vite。 |
+| `scripts/setup_dev.sh` | 一键检测/安装本地开发环境并构建依赖服务。 |
+| `docs/` | 本地调试与云端部署等详细文档。 |
+
 # 开发
 
 如果你想自己本地构建，可以参考下面的步骤。因为这个项目非常小，只有作者一个人在开发，所以一般会先在本地开发一段时间，然后再把代码上传。作者会尽量上传最新的代码，但不保证一定能确保代码是最新的。不过大家还是能从这个仓库里学到不少东西，比如怎么做不重启的热更新、怎么在安卓上跑 Rust 代码、怎么实现自动化操作之类的。
@@ -42,11 +55,15 @@
 
 本分支已经移除应用完整性校验、广告、用户登录/验证以及 Rust 反调试/反 Hook 逻辑。未提供外部插件 JAR 时，应用会直接加载 APK 中内置的功能模块。
 
+## 云端配置同步（可选）
+
+`backend/` 和 `web/` 提供一套可选的云端配置同步服务：登录后在网页上编辑 JSON 配置并发布，多台设备会通过 `CloudConfigSync` 每 30 秒轮询同步到最新版本（基于 `ETag`/`If-None-Match`，未变化时返回 304）。本地不部署也不影响主应用离线使用。部署步骤和 API 说明见 [`docs/CLOUD_DEPLOYMENT.md`](docs/CLOUD_DEPLOYMENT.md)。
+
 # 小技巧
 
 本项目支持像按键精灵/懒人精灵那样一键运行脚本，不用启动界面。步骤如下：
 
-1. 把 `app\src\main\java\com\coc\zkqcode\jar` 文件夹备份到别的地方，然后从项目里删掉。
+1. 把 `app\src\main\java\com\coc\suncode\jar` 文件夹备份到别的地方，然后从项目里删掉。
 2. 构建项目，装到模拟器上。
 3. 把第一步备份的 jar 文件夹放回原来的位置。
 4. 运行 `deployAndReload`，就能一键跑脚本了。

@@ -11,7 +11,7 @@ object GlobalSettings {
     val EXTRACT_CN = SettingDef("extract_cn", "提取国服存档到此序号", "1", "GLOBAL_SETTINGS")
     val EXTRACT_GLOBAL = SettingDef("extract_global", "提取国际服存档到此序号", "1", "GLOBAL_SETTINGS")
 
-    val EMAIL = SettingDef("email", "邮箱", "free@zkq", "GLOBAL_SETTINGS")
+    val EMAIL = SettingDef("email", "邮箱", "free@sun", "GLOBAL_SETTINGS")
     val PASSWORD = SettingDef("password", "密码", "free_for_testing", "GLOBAL_SETTINGS")
     val ENTER_GAME_TIMER = SettingDef("enter_game_timer", "进入游戏计时", "80", "GLOBAL_SETTINGS")
     val DELAY_MULTIPLIER = SettingDef(
@@ -22,7 +22,7 @@ object GlobalSettings {
     val BATCH_CREATE_ACCOUNT = SettingDef("batch_create_account", "批量创号", 0, "GLOBAL_SETTINGS")
     val CREATE_START_ID = SettingDef("create_start_id", "创号开始序号", 1, "GLOBAL_SETTINGS")
     val CREATE_END_ID = SettingDef("create_end_id", "创号结束序号", 10, "GLOBAL_SETTINGS")
-    val CREATE_PREFIX = SettingDef("create_prefix", "创号前缀", "紫孔雀", "GLOBAL_SETTINGS")
+    val CREATE_PREFIX = SettingDef("create_prefix", "创号前缀", "太阳", "GLOBAL_SETTINGS")
     val ADD_SUFFIX_SETTING = SettingDef("add_suffix_setting", "添加数字后缀", 0, "GLOBAL_SETTINGS")
     val CREATE_GEM_BUILD = SettingDef("create_gem_build", "创号时宝石秒建筑", 0, "GLOBAL_SETTINGS")
     val GEM_COUNT = SettingDef("gem_count", "宝石数量", "", "GLOBAL_SETTINGS")

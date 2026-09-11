@@ -14,12 +14,12 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 
 /**
- * 客户端入口点，通过 app_process 启动时主动连接到 ws://localhost:16839/zkq。
+ * 客户端入口点，通过 app_process 启动时主动连接到 ws://localhost:16839/sun。
  * 连接失败时每 2 秒重试，直到成功为止。
  */
 object AppProcessClient {
 
-    private const val SERVER_URL = "ws://localhost:16839/zkq"
+    private const val SERVER_URL = "ws://localhost:16839/sun"
     private const val RETRY_DELAY_MS = 2000L
 
     @JvmStatic

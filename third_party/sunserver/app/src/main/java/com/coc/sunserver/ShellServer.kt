@@ -22,7 +22,7 @@ import kotlinx.coroutines.runBlocking
 
 object ShellServer {
 
-    private const val CLIENT_TARGET_URL = "ws://localhost:16839/zkq"
+    private const val CLIENT_TARGET_URL = "ws://localhost:16839/sun"
     private const val CLIENT_RETRY_DELAY_MS = 2000L
 
     @JvmStatic
@@ -39,8 +39,8 @@ object ShellServer {
                 embeddedServer(CIO, port = 6839) {
                     routing {
                         // HTTP GET endpoint: all command parameters are passed as URL query parameters.
-                        // Example: GET /zkq?actionType=connection_test
-                        get("/zkq") {
+                        // Example: GET /sun?actionType=connection_test
+                        get("/sun") {
                             val params = call.request.queryParameters
 
                             // Build a JsonObject from all query parameters so existing handlers can reuse it directly

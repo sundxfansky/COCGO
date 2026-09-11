@@ -2,8 +2,8 @@ This documentation of the server.
 URL: localhost:6839
 Connect to the server via WebSocket **or** plain HTTP GET.
 
-WebSocket endpoint: `ws://localhost:6839/zkq`
-HTTP GET endpoint:  `http://localhost:6839/zkq`
+WebSocket endpoint: `ws://localhost:6839/sun`
+HTTP GET endpoint:  `http://localhost:6839/sun`
 
 
 ---
@@ -223,40 +223,40 @@ Used to test the connection to the server.
 
 All commands available over WebSocket are also accessible via plain HTTP GET requests. Parameters that would normally be JSON fields are passed as **URL query parameters**. The response body is the same JSON format as WebSocket.
 
-**Base URL:** `http://localhost:6839/zkq`
+**Base URL:** `http://localhost:6839/sun`
 
 All values must be URL-encoded when they contain special characters (e.g. `/` in file paths should be encoded as `%2F`, or the whole path passed URL-encoded).
 
 ### Connection Test
 
 ```
-GET /zkq?actionType=connection_test
+GET /sun?actionType=connection_test
 ```
 
 ### Touch Actions
 
 ```
-GET /zkq?actionType=touch_action&subAction=touchdown&x=500.0&y=500.0&id=1
-GET /zkq?actionType=touch_action&subAction=touchmove&x=600.0&y=600.0&id=1
-GET /zkq?actionType=touch_action&subAction=touchup&id=1
+GET /sun?actionType=touch_action&subAction=touchdown&x=500.0&y=500.0&id=1
+GET /sun?actionType=touch_action&subAction=touchmove&x=600.0&y=600.0&id=1
+GET /sun?actionType=touch_action&subAction=touchup&id=1
 ```
 
 ### File Actions
 
 ```
-GET /zkq?actionType=file_action&subAction=read&path=%2Fdata%2Fuser%2F0%2Fcom.coc.sunserver%2Ffiles%2Ftest.txt
+GET /sun?actionType=file_action&subAction=read&path=%2Fdata%2Fuser%2F0%2Fcom.coc.sunserver%2Ffiles%2Ftest.txt
 
-GET /zkq?actionType=file_action&subAction=write&path=%2Fdata%2F...%2Fnew_file.txt&content=Hello%2C%20world.
+GET /sun?actionType=file_action&subAction=write&path=%2Fdata%2F...%2Fnew_file.txt&content=Hello%2C%20world.
 
-GET /zkq?actionType=file_action&subAction=create&path=%2Fdata%2F...%2Fempty_file.txt
+GET /sun?actionType=file_action&subAction=create&path=%2Fdata%2F...%2Fempty_file.txt
 
-GET /zkq?actionType=file_action&subAction=delete&path=%2Fdata%2F...%2Fold_file.txt
+GET /sun?actionType=file_action&subAction=delete&path=%2Fdata%2F...%2Fold_file.txt
 
-GET /zkq?actionType=file_action&subAction=check_exists&path=%2Fdata%2F...%2Fmy_document.txt
+GET /sun?actionType=file_action&subAction=check_exists&path=%2Fdata%2F...%2Fmy_document.txt
 
-GET /zkq?actionType=file_action&subAction=copy&path=%2Fdata%2F...%2Fsource.txt&destPath=%2Fdata%2F...%2Fdestination.txt
+GET /sun?actionType=file_action&subAction=copy&path=%2Fdata%2F...%2Fsource.txt&destPath=%2Fdata%2F...%2Fdestination.txt
 
-GET /zkq?actionType=file_action&subAction=rename&path=%2Fdata%2F...%2Fold_name.txt&newPath=%2Fdata%2F...%2Fnew_name.txt
+GET /sun?actionType=file_action&subAction=rename&path=%2Fdata%2F...%2Fold_name.txt&newPath=%2Fdata%2F...%2Fnew_name.txt
 ```
 
 ### Notes
@@ -269,7 +269,7 @@ GET /zkq?actionType=file_action&subAction=rename&path=%2Fdata%2F...%2Fold_name.t
 
 ## 5. Client Mode (app_process)
 
-When launched via `app_process`, the app runs the embedded WebSocket/HTTP server **and** simultaneously connects as a WebSocket client to `ws://localhost:16839/zkq`. The standard entry point is `com.coc.sunserver.ShellServer`.
+When launched via `app_process`, the app runs the embedded WebSocket/HTTP server **and** simultaneously connects as a WebSocket client to `ws://localhost:16839/sun`. The standard entry point is `com.coc.sunserver.ShellServer`.
 
 ### Launch Command
 
@@ -281,7 +281,7 @@ A client-only entry point (no embedded server) is also available at `com.coc.sun
 
 ### Connection Behavior
 
-- On startup, the client attempts to connect to `ws://localhost:16839/zkq`.
+- On startup, the client attempts to connect to `ws://localhost:16839/sun`.
 - If the connection fails for any reason, it waits **2 seconds** and retries. This loop runs indefinitely until a connection is established.
 - Reconnection follows the same retry policy if the server drops the connection.
 
@@ -292,7 +292,7 @@ Immediately after the **first** successful connection, the client sends the foll
 ```json
 {
   "actionType": "client_connected",
-  "message": "ZKQserver connected"
+  "message": "SUNserver connected"
 }
 ```
 
