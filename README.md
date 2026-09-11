@@ -1,178 +1,173 @@
 # 太阳
 
-太阳是一款运行在 Root 权限 Android 环境下的部落冲突（Clash of Clans）自动化辅助软件，旨在为行动不便者、视觉障碍者等人群提供无障碍游玩能力。软件通过图色识别与模拟点击复现新手玩家的基本操作流程，不涉及内存读写、协议篡改或数据注入等作弊行为，也不会影响游戏内的对战公平性。
+太阳是一个跑在已获取 Root 权限的 Android 设备上的部落冲突（Clash of Clans）自动化工具。核心思路很简单：通过屏幕取色判断当前界面状态，再模拟触摸完成点击、滑动等操作，从而把日常重复性的操作（升级建筑、训练部队、领取奖励等）交给程序代劳。项目不读写游戏进程的内存，也不篡改网络协议，纯粹靠“看屏幕、模拟手指”的方式运作。
 
-若你认为太阳存在侵权问题，请携带版权证据与太阳联系，太阳将在第一时间处理。本软件仅限自用，禁止用于商业行为，禁止用于违反游戏服务条款的行为。
+如果你是版权方，认为项目中有内容侵犯了你的权益，请携带证明材料联系作者，会第一时间处理。本项目仅供个人学习和自用，不得用于商业用途，使用者需自行确保遵守游戏的服务条款。
 
 ## 目录
 
-- [整体架构](#整体架构)
-- [项目结构](#项目结构)
-- [核心机制](#核心机制)
-- [技术栈](#技术栈)
-- [本地开发](#本地开发)
-- [热重载小技巧](#热重载小技巧)
-- [致谢](#致谢)
+- [这是什么](#这是什么)
+- [目录结构](#目录结构)
+- [关键设计点](#关键设计点)
+- [用到的技术](#用到的技术)
+- [本地搭建](#本地搭建)
+- [脚本调试小技巧](#脚本调试小技巧)
+- [鸣谢](#鸣谢)
 - [免责声明](#免责声明)
 
-## 整体架构
+## 这是什么
 
-太阳的主 APK 本身只是一个很薄的宿主（host loader）：界面框架、权限申请、Root 环境准备、原生库加载等基础设施都在主 APK 里，而实际的游戏自动化逻辑（判断当前界面、决定点哪里、执行升级/训练/攻打等策略）被拆分成独立的源码子树，在构建时打包为一个 JAR，由宿主在运行时通过 `DexClassLoader` 动态加载。这样设计的好处是：自动化脚本逻辑可以独立于宿主 APK 更新（热更新），不需要用户重新安装整个应用。
+代码分为两层：一层是"壳"，也就是主 APK 里负责界面、权限申请、Root 环境搭建、常驻服务拉起这些和具体游戏逻辑无关的部分；另一层是"脑子"，也就是真正判断该点哪里、该做什么的自动化脚本代码，被单独放在 `app/src/main/java/com/coc/suncode/jar` 目录下。构建时脚本这部分会被打成一个独立的 JAR，运行时由壳通过 `DexClassLoader` 动态加载进来。这么拆分的原因是：脚本逻辑经常要跟着游戏版本调整，而壳几乎不用变——把两者分开之后，更新脚本不需要重新发一个 APK 给用户装，直接推一个新 JAR 让客户端下载替换就行，也就是项目里说的"热更新"。
 
-一次典型的启动流程大致是：
+启动之后大致会发生这些事：
 
-1. 主应用启动后检测 Root 权限（`CheckRoot.kt`），并申请悬浮窗、无障碍、通知、录屏等权限。
-2. Root 校验通过后，`ServerManager` 会把内置在 `assets/server.apk` 中的 Root 服务解压到私有目录，通过 `app_process` 以 `su` 权限拉起一个不依赖标准 Android `Context` 的常驻进程（`third_party/sunserver`），监听本机 `6839` 端口，对外提供触摸模拟、文件读写等能力。
-3. `Loadjar` 从 `assets` 目录中找到最新的插件 JAR（或者在开发调试时直接使用打包进主 APK 的插件类），通过 `DexClassLoader` 动态加载后展示脚本界面。
-4. 脚本运行过程中，对屏幕不在私有目录内的所有文件读写都必须经由 `6839` 端口的 WebSocket/HTTP 服务完成，而不是直接调用文件系统 API——这是因为脚本进程本身运行在受限的沙箱里，只有 Root 服务进程才有权限跨包读写游戏数据目录。
-5. 图色识别、多点触控模拟等对性能敏感的部分由 `rust_logic` 提供的 Rust 原生库通过 JNI 完成，Kotlin 侧只负责调用。
-6. `HotUpdateManager` 会定期检查服务器上是否有新版本的加密 JAR，下载校验后通过 `Loadjar` 重新加载，无需重启 APP 或重新安装。
-7. 若配置了云端配置服务（见下文 `backend/`、`web/`），`CloudConfigSync` 会在应用可见时定期轮询远端配置，实现多设备配置同步；未配置时应用完全离线运行，不受影响。
+- 检查设备是否有 Root（对应 `CheckRoot.kt`），并引导用户开启悬浮窗、无障碍、通知、录屏等权限。
+- Root 检查通过后，把内置在 `assets/server.apk` 里的一个小程序解压出来，用 `su` 权限通过 `app_process` 直接跑起来（这个程序不需要标准的 Android `Context`），它会监听本机 `6839` 端口，负责真正的触摸模拟和跨应用文件操作——这部分代码在 `third_party/sunserver`。
+- 主程序从 `assets` 里找最新的脚本 JAR 加载起来，找不到就用编译进主 APK 里的那份兜底。
+- 脚本要读写游戏本身数据目录下的文件时，不能直接用文件系统 API（脚本进程本身是被沙箱限制的），必须通过上面说的 `6839` 端口那个服务转一下。
+- 取色、多点触控这些跑得比较频繁、对性能敏感的操作放在 `rust_logic` 这个 Rust 库里，通过 JNI 调用。
+- 后台有个 `HotUpdateManager`，会定期问服务器有没有新的脚本 JAR，有就下载校验后原地替换、重新加载，不用重装 APP。
+- 如果配置了云端配置同步（见下面的 `backend/`、`web/`），`CloudConfigSync` 会在 APP 前台时轮询远端配置，方便多台设备共用同一份配置；不配置的话完全不影响离线使用。
 
-本分支已移除应用完整性校验、广告、用户登录/验证以及 Rust 反调试/反 Hook 逻辑，方便学习和自行构建。
+当前这个分支去掉了签名校验、广告、账号登录/鉴权，以及 Rust 那边的反调试/反 Hook 代码，方便阅读和自己编译。
 
-## 项目结构
+## 目录结构
 
 ```
 .
-├── app/                    主应用（Kotlin + Jetpack Compose）
+├── app/                    主 APK（Kotlin + Jetpack Compose）
 │   ├── src/main/java/com/coc/suncode/
-│   │   ├── core/           宿主基础设施：权限、Root、悬浮窗、无障碍服务、
-│   │   │                   截图/录屏、热更新、云配置同步、数据库
-│   │   ├── loadjar/        DexClassLoader 动态加载插件 JAR 的逻辑
-│   │   ├── nativehelper/   JNI 桥接层
-│   │   └── jar/            【动态模块】游戏自动化逻辑与界面，打包为 JAR 后
-│   │                       由宿主动态加载。构建/开发时视为独立单元。
-│   │       ├── code/       按主世界(mainbase)/夜世界(builderbase)/账号与
-│   │       │               颜色方案(auth, colorschema)/通用工具(universal)
-│   │       │               划分的自动化脚本逻辑
-│   │       └── ui/         配置项 Schema 与对应的 Compose 界面
-│   └── src/main/cpp/       JNI 原生层（C++），转发调用到 rust_logic
-├── rust_logic/             Rust 原生库源码，通过 cargo-ndk 编译为四种 ABI 的
-│                           .so，供图色识别、加解密等性能敏感逻辑使用
+│   │   ├── core/           壳的基础设施：权限申请、Root 检测、悬浮窗、
+│   │   │                   无障碍服务、截图/录屏、热更新、云配置同步、数据库
+│   │   ├── loadjar/        用 DexClassLoader 加载脚本 JAR 的代码
+│   │   ├── nativehelper/   JNI 调用的桥接层
+│   │   └── jar/            脚本代码所在目录，构建时单独打成 JAR 动态加载
+│   │       ├── code/       按主世界(mainbase)/夜世界(builderbase)/账号相关
+│   │       │               (auth)/配色(colorschema)/通用工具(universal) 分类
+│   │       │               的具体自动化逻辑
+│   │       └── ui/         配置项定义（Schema）和对应的 Compose 界面
+│   └── src/main/cpp/       JNI 层（C++），把调用转给 rust_logic
+├── rust_logic/             Rust 代码，用 cargo-ndk 编成四种 ABI 的 .so，
+│                           承担取色、加解密等计算量较大的部分
 ├── third_party/
-│   ├── sunserver/          Root 环境下常驻的 WebSocket/HTTP 服务，独立 Android
-│   │                       工程，构建产物内置为 app/src/main/assets/server.apk
-│   └── building_plugin/    可选的本地建筑检测 + OCR 推理服务，独立 Android 工程，
-│                           不是主应用启动的必需项
-├── backend/                可选的云端配置同步服务：Go + SQLite
-├── web/                    云端配置同步的管理网站：React + Vite
-├── scripts/setup_dev.sh    一键检测/安装本地开发环境并构建依赖服务
-└── docs/                   本地调试、云端部署等详细文档
+│   ├── sunserver/          常驻 Root 服务，独立的 Android 工程，编译产物
+│   │                       会被复制进 app/src/main/assets/server.apk
+│   └── building_plugin/    可选的建筑识别 + OCR 服务，独立 Android 工程，
+│                           不装也不影响主程序跑起来
+├── backend/                云端配置同步的后端，Go + SQLite，可选
+├── web/                    云端配置同步的管理页面，React + Vite，可选
+├── scripts/setup_dev.sh    本地环境一键检测/安装脚本
+└── docs/                   本地调试、云端部署相关的详细文档
 ```
 
-## 核心机制
+## 关键设计点
 
-### 宿主与动态 JAR
+### 脚本和壳是分开构建、分开加载的
 
-`app/src/main/java/com/coc/suncode/jar` 下的所有代码在构建时被视为一个独立单元，通过自定义 Gradle 任务（`buildJar`）用 `d8` 打包为 DEX 格式的 JAR，加密后放入 `assets`。宿主启动时优先加载 `assets` 中时间戳最新的 JAR；若找不到任何外部 JAR（例如首次调试构建），则直接使用打包进主 APK 的插件类作为兜底（`loadBundledPlugin`）。这套机制让脚本逻辑可以独立发布更新，而不必重新分发整个 APK。
+`app/src/main/java/com/coc/suncode/jar` 里的东西不参与主 APK 常规的类加载流程，而是被 Gradle 自定义任务 `buildJar` 单独用 `d8` 编译成 DEX、打包成 JAR、加密后塞进 `assets`。壳启动时会去 `assets` 目录找带时间戳的最新 JAR，没有的话就退回到编译进 APK 里的那一份（`loadBundledPlugin`）。这套机制的价值在于脚本更新和 APK 发布可以完全解耦。
 
-### JNI 与 Rust 原生库
+### 性能敏感的部分丢给 Rust
 
-`app/src/main/cpp/native-lib.cpp` 通过 JNI 暴露 `NativeTools`（`com/coc/suncode/nativehelper/NativeTools`）给 Kotlin 层调用，实际计算逻辑委托给 `rust_logic`（多点找色、加解密、动态 DEX 处理等）。原生库按 `arm64-v8a`、`armeabi-v7a`、`x86`、`x86_64` 四种 ABI 编译，由 Gradle 的 `rustBuild` 任务在 `mergeDebugJniLibFolders`/`mergeReleaseJniLibFolders` 之前自动触发。
+`app/src/main/cpp/native-lib.cpp` 用 JNI 把一个叫 `NativeTools` 的类暴露给 Kotlin，背后实际干活的是 `rust_logic`（找色、加解密、动态 DEX 相关处理）。这个库会分别编出 `arm64-v8a`、`armeabi-v7a`、`x86`、`x86_64` 四份 `.so`，Gradle 里配了 `rustBuild` 任务在合并 JNI 库那一步之前自动跑。
 
-### Root 常驻服务（sunserver）
+### 为什么需要一个独立的常驻服务
 
-`third_party/sunserver` 是一个不依赖标准 Android `Context` 的进程，通过 `app_process` 以 `su` 权限启动，内嵌 WebSocket/HTTP 服务器监听 `6839` 端口，对外提供触摸模拟（`touch_action`）与文件系统操作（`file_action`）等能力，同时可以作为 WebSocket 客户端反向连接控制端（`16839` 端口）。主应用与该服务之间的所有跨包 I/O（读写游戏本身的数据目录等）都必须经过这层，因为脚本 JAR 运行在受限的应用沙箱内，没有直接访问其他应用私有目录的权限。完整协议见 [`third_party/sunserver/README.md`](third_party/sunserver/README.md)。
+`third_party/sunserver` 单独存在的原因是：脚本进程运行在应用沙箱里，没权限碰其他 APP 的数据目录，但很多自动化操作（比如读写游戏本身的存档相关文件）恰恰需要跨包权限。所以专门起了一个不挂靠任何 Activity、用 `su` 直接跑起来的进程，通过本地 WebSocket/HTTP（监听 `6839`）把触摸模拟和文件操作包装成接口暴露出来，同时它还能反过来作为客户端连接一个控制端（`16839`）。协议细节写在 [`third_party/sunserver/README.md`](third_party/sunserver/README.md)。
 
-### 热更新
+### 热更新怎么做到不用重装
 
-`HotUpdateManager` 会周期性向服务器查询最新加密 JAR 的版本号和 MD5，通过 PoW（工作量证明）挑战完成鉴权后下载、校验、原子替换本地文件，再调用 `Loadjar` 重新加载，全程无需重启应用或重新安装 APK。同时有一个看门狗协程：若开启了对应设置且 8 小时内没有收到脚本侧的更新信号，会强制触发一次检查，避免脚本卡死导致长期停留在旧版本。
+`HotUpdateManager` 会周期性去问服务器最新脚本 JAR 的版本号和 MD5，用一次 PoW 挑战验证身份后下载、校验哈希、原子性替换本地文件，再交给 `Loadjar` 重新加载进程内的实例。另外还有一个看门狗：如果开了对应选项而且 8 小时没收到脚本那边发来的心跳信号，会强制触发一次检查，防止脚本卡死之后一直停在旧版本上。
 
-### 云端配置同步（可选）
+### 云端配置同步是完全可选的附加件
 
-`backend/`（Go + SQLite）与 `web/`（React + Vite）组成一套独立、可选的云端配置服务：在网页上登录后编辑 JSON 配置并发布，Android 客户端的 `CloudConfigSync` 会在应用处于前台时基于 `ETag`/`If-None-Match` 定期轮询，只有版本号变化时才拉取并覆盖本地配置，从而实现多设备配置同步。未配置 `BASE_URL` 或未登录时，客户端完全离线运行，不受影响。部署步骤和完整 API 说明见 [`docs/CLOUD_DEPLOYMENT.md`](docs/CLOUD_DEPLOYMENT.md)。
+`backend/`（Go + SQLite）配 `web/`（React + Vite）构成一套独立部署的配置管理服务：网页上登录、编辑一份 JSON 配置、点发布，客户端的 `CloudConfigSync` 在前台运行时按 `ETag`/`If-None-Match` 轮询，版本号变了才会把新配置拉下来覆盖本地。没配 `BASE_URL` 或者没登录，客户端该怎么跑还怎么跑，不受影响。部署方法和接口说明放在 [`docs/CLOUD_DEPLOYMENT.md`](docs/CLOUD_DEPLOYMENT.md)。
 
-### 可选的本地推理插件
+### 建筑识别插件
 
-`third_party/building_plugin` 是一个独立的本地 HTTP 推理服务，基于 ONNX 模型提供建筑检测与文字识别（OCR）能力，供脚本中的建筑升级判断等场景调用；未安装该插件时对应功能不可用，但不影响主应用的其他部分。
+`third_party/building_plugin` 是另一个独立进程，本地起一个 HTTP 服务，用 ONNX 模型做建筑检测和文字识别，脚本里判断建筑升级状态之类的场景会调它。不装这个插件的话相关判断功能用不了，其余部分照常运行。
 
-## 技术栈
+## 用到的技术
 
-| 层 | 技术 |
+| 部分 | 技术 |
 |----|------|
-| 主应用 UI | Kotlin, Jetpack Compose |
-| 原生层 | C++ (JNI), Rust (cargo-ndk 交叉编译) |
-| Root 服务 | Kotlin, Ktor (embeddedServer + WebSocket 客户端) |
-| 云端后端 | Go, SQLite (modernc.org/sqlite), bcrypt, HMAC token |
-| 云端前端 | React, Vite |
-| 构建系统 | Gradle (Kotlin DSL) + 自定义任务, Cargo |
+| 主 APK 界面 | Kotlin, Jetpack Compose |
+| 原生层 | C++（JNI）、Rust（用 cargo-ndk 交叉编译） |
+| 常驻 Root 服务 | Kotlin, Ktor（内嵌 HTTP 服务端 + WebSocket 客户端） |
+| 云配置后端 | Go, SQLite（modernc.org/sqlite）, bcrypt, HMAC token |
+| 云配置前端 | React, Vite |
+| 构建工具 | Gradle（Kotlin DSL）+ 一堆自定义任务, Cargo |
 
-## 本地开发
+## 本地搭建
 
-如果你想自己本地构建，可以参考下面的步骤。因为这个项目非常小，只有作者一个人在开发，所以一般会先在本地开发一段时间，然后再把代码上传。作者会尽量上传最新的代码，但不保证一定能确保代码是最新的。不过大家还是能从这个仓库里学到不少东西，比如怎么做不重启的热更新、怎么在安卓上跑 Rust 代码、怎么实现自动化操作之类的。
+这是个人业余维护的小项目，通常是攒够一段时间的改动之后再统一推上来，所以仓库里的代码不一定是作者本地最新的进度。如果你想自己编译跑一下，可以按下面的步骤来；顺带一提，这个仓库里能看到一些还算完整的实践，比如安卓上怎么做不重启的热更新、怎么把 Rust 塞进安卓项目里跑、以及一套简单的自动化点击是怎么搭起来的。
 
-本仓库已将以下依赖源码整合到 `third_party/`，无需再单独下载：
+`third_party/` 下面已经带了两个依赖的完整源码，不用额外去别的地方下：
 
-- `third_party/sunserver`：Root 环境下的 WebSocket/HTTP 操作服务。构建主应用前可运行其 `./gradlew assembleDebug`，再将生成的 APK 放入 `app/src/main/assets/server.apk`。
-- `third_party/building_plugin`：可选的本地建筑检测与 OCR 服务，包含 ONNX 模型和独立 Android 应用源码。它不属于主应用启动必需项。
+- `third_party/sunserver`：前面提到的常驻 Root 服务。构建主 APK 之前，可以先进这个目录跑 `./gradlew assembleDebug`，把产物覆盖到 `app/src/main/assets/server.apk`。
+- `third_party/building_plugin`：可选的建筑识别/OCR 服务，带 ONNX 模型和完整 Android 工程。不参与主程序的必要构建流程。
 
-1. **准备环境**
-   推荐直接运行一键脚本：`./scripts/setup_dev.sh`。脚本会检查并安装 Android SDK/NDK、Rust 和 `cargo-ndk`，同时构建依赖服务。完整参数和手动安装方式见 [`docs/LOCAL_DEBUG.md`](docs/LOCAL_DEBUG.md)。
-2. **构建依赖服务**
-   `third_party/sunserver` 和 `third_party/building_plugin` 都是独立 Android 工程，可在各自目录运行 `./gradlew assembleDebug`。主应用已附带可直接启动的 `server.apk`。
-3. **构建主应用**
-   运行 `./gradlew assembleDebug`。Gradle 会先调用 `rustBuild` 构建四种 ABI 的 Rust 原生库，再生成 APK。
-4. **运行**
-   将 `app/build/outputs/apk/debug/app-debug.apk` 安装到已获取 Root 权限的模拟器或设备。项目自带 `server.apk`，首次启动时会自动运行本地服务。
+1. **装环境**：直接跑 `./scripts/setup_dev.sh` 最省事，它会检查/安装 Android SDK、NDK、Rust 和 `cargo-ndk`，并顺手把依赖服务编译好。手动装的步骤和更多参数见 [`docs/LOCAL_DEBUG.md`](docs/LOCAL_DEBUG.md)。
+2. **编依赖服务**：`third_party/sunserver` 和 `third_party/building_plugin` 都各自是独立的安卓工程，分别进去跑 `./gradlew assembleDebug` 即可；不想自己编的话主 APK 里已经带了能直接用的 `server.apk`。
+3. **编主 APK**：仓库根目录跑 `./gradlew assembleDebug`，Gradle 会先跑 `rustBuild` 把四种 ABI 的 Rust 库编出来，再打主 APK。
+4. **装到设备上**：把 `app/build/outputs/apk/debug/app-debug.apk` 装到一台已经有 Root 的模拟器或真机上就能跑，内置的 `server.apk` 会在首次启动时自动拉起。
 
-完整的环境检查、模拟器启动、日志过滤和热加载流程见 [`docs/LOCAL_DEBUG.md`](docs/LOCAL_DEBUG.md)。常用快捷命令：
+模拟器怎么开、日志怎么过滤、脚本怎么热加载这些更细的流程写在 [`docs/LOCAL_DEBUG.md`](docs/LOCAL_DEBUG.md) 里，常用命令举例：
 
 ```sh
 ./gradlew -Pdevice=emulator-5554 runDebugOnDevice
 ./gradlew -Pdevice=emulator-5554 debugLogs
 ```
 
-首次配置也可以分步执行：
+也可以分步跑：
 
 ```sh
 ./scripts/setup_dev.sh --check-only
 ./scripts/setup_dev.sh --run --device emulator-5554
 ```
 
-## 热重载小技巧
+## 脚本调试小技巧
 
-本项目支持像按键精灵/懒人精灵那样一键运行脚本，不用启动界面。步骤如下：
+想要那种类似按键精灵/鼠标宏工具的体验——开机直接跑脚本，不进任何界面——可以这么做：
 
-1. 把 `app/src/main/java/com/coc/suncode/jar` 文件夹备份到别的地方，然后从项目里删掉。
-2. 构建项目，装到模拟器上。
-3. 把第一步备份的 jar 文件夹放回原来的位置。
-4. 运行 `deployAndReload`，就能一键跑脚本了。
+1. 把 `app/src/main/java/com/coc/suncode/jar` 整个文件夹挪到别处备份一下，原地删掉。
+2. 正常构建、装到模拟器/设备上。
+3. 把第 1 步备份的 jar 文件夹放回原来的位置。
+4. 跑一下 `deployAndReload` 这个 Gradle 任务，脚本就直接跑起来了，不用打开 APP 的界面。
 
-## 致谢
+## 鸣谢
 
-本项目的开发离不开以下开源项目和库的支持，在此表示感谢。
+以下开源项目和库对本项目帮助很大，在这里表示感谢。
 
-### 参考项目
+### 参考过的项目
 
-| 项目 | 作者 | 说明 | 许可证 |
+| 项目 | 作者 | 用在哪 | 许可证 |
 |------|------|------|--------|
-| [scrcpy](https://github.com/Genymobile/scrcpy) | Genymobile | 屏幕镜像与控制，本项目参考了其设计思路 | Apache 2.0 |
-| [libsu](https://github.com/topjohnwu/libsu) | topjohnwu | Android Root Shell 库 | Apache 2.0 |
-| [Reorderable](https://github.com/Calvin-LL/Reorderable) | Calvin Liang | Compose 拖拽排序组件，代码直接引用于本项目 | Apache 2.0 |
+| [scrcpy](https://github.com/Genymobile/scrcpy) | Genymobile | 屏幕镜像/控制部分参考了它的设计 | Apache 2.0 |
+| [libsu](https://github.com/topjohnwu/libsu) | topjohnwu | Android 上跑 Root Shell 命令 | Apache 2.0 |
+| [Reorderable](https://github.com/Calvin-LL/Reorderable) | Calvin Liang | Compose 里的拖拽排序组件，代码直接拿来用了 | Apache 2.0 |
 
-### 使用的开源库
+### 依赖的开源库
 
 #### Android / Kotlin
 
-| 库 | 作者 | 说明 |
+| 库 | 作者 | 用途 |
 |----|------|------|
-| [OkHttp](https://github.com/square/okhttp) | Square | HTTP 客户端 |
-| [Gson](https://github.com/google/gson) | Google | JSON 序列化/反序列化 |
-| [Ktor](https://github.com/ktorio/ktor) | JetBrains | 异步服务器框架（WebSocket 等） |
-| [Timber](https://github.com/JakeWharton/timber) | Jake Wharton | 日志工具 |
-| [ML Kit Text Recognition](https://developers.google.com/ml-kit) | Google | OCR 文字识别 |
+| [OkHttp](https://github.com/square/okhttp) | Square | HTTP 请求 |
+| [Gson](https://github.com/google/gson) | Google | JSON 序列化 |
+| [Ktor](https://github.com/ktorio/ktor) | JetBrains | 异步服务端框架（内嵌 HTTP/WebSocket） |
+| [Timber](https://github.com/JakeWharton/timber) | Jake Wharton | 日志 |
+| [ML Kit Text Recognition](https://developers.google.com/ml-kit) | Google | 文字识别 |
 
 #### Rust
 
-| 库 | 说明 |
+| 库 | 用途 |
 |----|------|
-| [jni](https://crates.io/crates/jni) | Rust 与 Java/Kotlin 的 JNI 交互 |
-| [android_logger](https://crates.io/crates/android_logger) | Android 平台日志输出 |
-| [libc](https://crates.io/crates/libc) | Android 底层系统调用绑定 |
+| [jni](https://crates.io/crates/jni) | 跟 Java/Kotlin 之间的 JNI 交互 |
+| [android_logger](https://crates.io/crates/android_logger) | 把日志输出到 Android 的 logcat |
+| [libc](https://crates.io/crates/libc) | 系统调用绑定 |
 
 ## 免责声明
 
-本项目已在 Gitee 平台开源，所有源代码公开透明，接受社区审查。本软件仅通过图色识别与模拟点击的方式，复现新手玩家的基本操作流程，不涉及任何内存读写、协议篡改或数据注入等违规/作弊行为。所有权限（即 Root 权限）均由用户手动授予，合法合规。本质原理和用户对游戏进行录屏，或者开鼠标宏操作一样，完全绿色安全。如果本软件违规，那么所有游戏录屏软件以及鼠标宏/安卓模拟器均违规。本软件无侵入性功能，不会对游戏内的对战环境产生任何影响，不影响游戏公平性。
+代码在 Gitee 上完全公开，任何人都可以看、可以审查。这个工具做的事情仅限于"看屏幕取色 + 模拟点击"，不读写游戏进程内存，不改任何网络协议或数据包，跟人手动点屏幕在效果上没有区别。用到的 Root 权限也是使用者自己主动开的。原理上跟录屏软件或者鼠标宏工具类似，不会干扰游戏内的对战环境，也不构成对其他玩家的不公平。
 
-严禁将本项目用于任何违反法律法规或游戏服务条款的用途。若因使用者自身行为导致任何法律纠纷或账号处罚，一切后果由使用者本人承担，与本项目开发者无关。
+请不要把这个项目用在任何违反法律法规或者游戏服务条款的地方。使用者自己的行为造成的任何法律责任或者账号处罚，都跟本项目的开发者没有关系。
