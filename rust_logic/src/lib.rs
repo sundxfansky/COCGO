@@ -33,7 +33,7 @@ pub extern "system" fn JNI_OnLoad(vm: JavaVM, _reserved: *mut c_void) -> jint {
         }
         out
     }
-    const ENC_CLASS: [u8; 38] = xor_bytes_jni(*b"com/coc/zkqcode/nativehelper/RustTools", K_JNI);
+    const ENC_CLASS: [u8; 38] = xor_bytes_jni(*b"com/coc/suncode/nativehelper/RustTools", K_JNI);
     let class_name: String = ENC_CLASS.iter().map(|&b| (b ^ K_JNI) as char).collect();
     let class = env.find_class(&class_name).expect("Class not found");
 

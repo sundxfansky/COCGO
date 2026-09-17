@@ -332,8 +332,48 @@ tasks.register<Exec>("rustBuild") {
     group = "build"
     description = "Build Rust logic using cargo-ndk"
     workingDir = file("../rust_logic")
+
+    // Android Studio launches Gradle with its own process environment, which does
+    // not source ~/.zshrc, so cargo/ANDROID_NDK_HOME must be resolved here instead
+    // of relying on an interactive shell having set them up first.
+    val home = System.getProperty("user.home")
+
+    val localProps = Properties().apply {
+        val f = rootProject.file("local.properties")
+        if (f.exists()) f.inputStream().use { load(it) }
+    }
+    val sdkRoot = localProps.getProperty("sdk.dir")
+        ?: System.getenv("ANDROID_SDK_ROOT")
+        ?: System.getenv("ANDROID_HOME")
+        ?: "$home/Library/Android/sdk"
+
+    val ndkHome = System.getenv("ANDROID_NDK_HOME")
+        ?: file("$sdkRoot/ndk").listFiles()
+            ?.filter { it.isDirectory }
+            ?.maxByOrNull { it.name }
+            ?.absolutePath
+        ?: throw GradleException("No Android NDK found under $sdkRoot/ndk. Install one via the SDK Manager.")
+
+    // rustup is a Homebrew keg-only formula, so its cargo/rustc shims are never
+    // symlinked onto the default PATH; resolve them directly instead.
+    val cargoExecutable = listOf(
+        "/opt/homebrew/opt/rustup/bin/cargo",
+        "/usr/local/opt/rustup/bin/cargo",
+        "$home/.cargo/bin/cargo"
+    ).firstOrNull { file(it).exists() } ?: "cargo"
+
+    environment("ANDROID_NDK_HOME", ndkHome)
+    environment(
+        "PATH",
+        listOfNotNull(
+            file(cargoExecutable).parentFile?.absolutePath,
+            "$home/.cargo/bin",
+            System.getenv("PATH")
+        ).joinToString(":")
+    )
+
     commandLine(
-        "cargo",
+        cargoExecutable,
         "ndk",
         "-t",
         "arm64-v8a",

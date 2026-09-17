@@ -10,6 +10,7 @@ import com.coc.suncode.core.util.basic.ShowMessage
 import com.coc.suncode.core.util.fileactions.LogHelper
 import com.coc.suncode.core.data.cloud.CloudConfigSync
 import com.coc.suncode.core.data.database.GlobalVars
+import com.topjohnwu.superuser.Shell
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
 
@@ -20,6 +21,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Shell.enableVerboseLogging = true
         projectionPermissionHelper = ProjectionPermissionHelper(this)
         ShowMessage.init(this)
         System.loadLibrary("rust_logic")
