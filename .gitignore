@@ -19,6 +19,7 @@ local.properties
 .vscode/
 /release/
 *.jar
+!/gradle/wrapper/gradle-wrapper.jar
 *app/release
 .kotlin
 rust_logic/target
