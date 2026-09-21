@@ -5,21 +5,39 @@ services:
     environment:
       HTTP_ADDR: :8080
       DB_PATH: /app/data/sun.db
-      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
-      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+      # Optional legacy values are imported only on the first upgraded start.
+      JWT_SECRET: ${JWT_SECRET:-}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-}
-    volumes: [sun-data:/app/data]
-    ports: ["8080:8080"]
+    volumes:
+      - sun-data:/app/data
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
     restart: unless-stopped
+
   web:
     image: ${WEB_IMAGE:-sun-web:local}
     build: ./web
-    depends_on: [backend]
-    ports: ["5173:80"]
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${PORT:-3280}:80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
     restart: unless-stopped
+
 volumes:
   sun-data:

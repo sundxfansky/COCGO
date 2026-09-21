@@ -39,3 +39,5 @@ web/dist/
 # Go backend build artifacts
 backend/sun-cloud
 backend/zkq-cloud
+backend/data/
+.env
