@@ -1,6 +1,7 @@
 package com.coc.suncode.core.util.fileactions
 
-import com.coc.suncode.core.data.websocket.ServerConnection
+import com.coc.suncode.core.data.websocket.ServerTransport
+import com.coc.suncode.core.util.basic.ShowMessage
 import com.google.gson.Gson
 import com.google.gson.JsonObject
 
@@ -11,7 +12,7 @@ object InitConfigs {
         val shouldCallback: Boolean = false
     )
 
-    fun sendStartupRequests(serverConnection: ServerConnection, baseDir: String, configPath: String) {
+    fun sendStartupRequests(serverConnection: ServerTransport, baseDir: String, configPath: String) {
         // Initial check for directory
         serverConnection.sendAction(
             mapOf(
@@ -46,12 +47,12 @@ object InitConfigs {
                         configJson = loadedJson
                         isLoaded = true
                     } catch (e: Exception) {
-                        println("Error parsing data as config: ${e.message}")
+                        ShowMessage("配置解析失败: ${e.message}", isChecking = false)
                     }
                 }
             }
-            // Always trigger callback after receiving a success response
-            shouldCallback = true
+            // Only a parsed config can initialize UI state; unrelated successes are ignored.
+            shouldCallback = isLoaded
         }
 
         if (response.has("status") && response.get("status")?.asString == "error") {

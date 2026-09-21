@@ -10,7 +10,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import com.coc.suncode.BuildConfig
-import com.coc.suncode.MainActivity
+import com.coc.suncode.core.data.cloud.CloudSyncManager
 import com.coc.suncode.jar.ui.components.CloudConfigInput
 import com.coc.suncode.jar.ui.components.CustomButton
 import com.coc.suncode.jar.ui.components.SettingSection
@@ -47,7 +47,7 @@ fun CloudSettings() {
                     .putString("base_url", endpoint.trimEnd('/'))
                     .putString("token", token.trim())
                     .apply()
-                (context as? MainActivity)?.restartCloudSync()
+                CloudSyncManager.restart(context)
                 message = if (token.isBlank()) "已保存，未启用云端同步" else "已保存，开始同步"
             }
         )

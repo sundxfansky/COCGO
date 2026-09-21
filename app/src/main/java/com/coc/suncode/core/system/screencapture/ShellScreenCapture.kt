@@ -1,6 +1,17 @@
 package com.coc.suncode.core.system.screencapture
 
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.coroutineScope
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -20,12 +31,15 @@ import java.nio.ByteOrder
  */
 object ShellScreenCapture {
 
-    private var process: Process? = null
+    @Volatile private var process: Process? = null
+    private val watchdog = Executors.newSingleThreadScheduledExecutor { task -> Thread(task, "capture-timeout").apply { isDaemon = true } }
     private var shellStdin: OutputStream? = null
     private var shellStdout: BufferedInputStream? = null
 
     private val connectionLock = Any()
     private val captureMutex = Mutex()
+
+    @Volatile private var captureDeadline = 0L
 
     private const val INIT_MARKER = "__SHELL_READY__"
     private const val STREAM_BUFFER_SIZE = 1024 * 1024 // 1MB read buffer
@@ -40,14 +54,20 @@ object ShellScreenCapture {
 
             try {
                 val pb = ProcessBuilder("su")
+                // Drain stderr independently; mixing it into stdout corrupts PNG framing.
                 pb.redirectErrorStream(false)
                 val proc = pb.start()
                 process = proc
+                Thread({ runCatching { proc.errorStream.use { input ->
+                    val discard = ByteArray(4096)
+                    while (input.read(discard) >= 0) { }
+                } } }, "capture-stderr").apply { isDaemon = true; start() }
                 shellStdin = proc.outputStream
                 shellStdout = BufferedInputStream(proc.inputStream, STREAM_BUFFER_SIZE)
 
                 // Drain any initial output (e.g. Magisk greeting) by sending a marker
-                drainUntilMarker()
+                val deadline = watchdog.schedule({ proc.destroy() }, 5, TimeUnit.SECONDS)
+                try { drainUntilMarker() } finally { deadline.cancel(false) }
 
             } catch (e: Exception) {
                 closeConnectionLocked()
@@ -69,8 +89,7 @@ object ShellScreenCapture {
 
         val lineBuffer = StringBuilder()
         while (true) {
-            val b = stdout.read()
-            if (b == -1) throw IOException("Shell closed during initialization")
+            val b = readExactly(stdout, 1)[0].toInt() and 255
             if (b == '\n'.code) {
                 if (lineBuffer.toString().trim() == INIT_MARKER) return
                 lineBuffer.clear()
@@ -81,9 +100,10 @@ object ShellScreenCapture {
     }
 
     private fun closeConnectionLocked() {
+        // Kill first so a blocked read releases its stream monitor before close waits for it.
+        runCatching { process?.destroy() }
         runCatching { shellStdin?.close() }
         runCatching { shellStdout?.close() }
-        runCatching { process?.destroy() }
         process = null
         shellStdin = null
         shellStdout = null
@@ -103,28 +123,49 @@ object ShellScreenCapture {
      * Thread-safe; only one capture runs at a time. Retries once on connection failure.
      */
     suspend fun capture(asBitmap: Boolean): Any? = captureMutex.withLock {
-        withContext(Dispatchers.IO) {
-            captureInternal(asBitmap)
+        coroutineScope {
+            suspendCancellableCoroutine { continuation ->
+                // Cancellation kills the current process without waiting on the connection lock.
+                continuation.invokeOnCancellation { process?.destroy() }
+                launch(Dispatchers.IO) {
+                    try {
+                        currentCoroutineContext().ensureActive()
+                        val result = captureInternal(asBitmap)
+                        continuation.resume(result) { _, abandoned, _ ->
+                            if (abandoned is Bitmap) abandoned.recycle()
+                        }
+                    } catch (error: Exception) {
+                        if (continuation.isActive) continuation.resumeWithException(error)
+                    }
+                }
+            }
         }
     }
 
-    private fun captureInternal(asBitmap: Boolean): Any? {
+    private suspend fun captureInternal(asBitmap: Boolean): Any? {
         // Retry once: first attempt may fail if the connection died between captures
         repeat(2) { attempt ->
             try {
+                currentCoroutineContext().ensureActive()
+                captureDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
                 ensureConnection()
                 val stdin = shellStdin ?: return null
                 val stdout = shellStdout ?: return null
 
-                val result = captureViaPng(stdin, stdout, asBitmap)
+                val currentProcess = process
+                val deadline = watchdog.schedule({ currentProcess?.destroy() }, 5, TimeUnit.SECONDS)
+                val result = try { captureViaPng(stdin, stdout, asBitmap) } finally { deadline.cancel(false) }
 
                 if (result != null) {
                     return result
                 }
 
                 return null
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 synchronized(connectionLock) { closeConnectionLocked() }
+                currentCoroutineContext().ensureActive()
                 if (attempt > 0) return null
             }
         }
@@ -192,6 +233,7 @@ object ShellScreenCapture {
             // Chunk header: 4-byte data length + 4-byte type
             val chunkHeader = readExactly(stream, 8)
             output.write(chunkHeader)
+            check(output.size() <= 64 * 1024 * 1024) { "PNG exceeds capture limit" }
 
             val length = ByteBuffer.wrap(chunkHeader, 0, 4).order(ByteOrder.BIG_ENDIAN).getInt()
             val type = String(chunkHeader, 4, 4, Charsets.US_ASCII)
@@ -200,6 +242,8 @@ object ShellScreenCapture {
                 throw IOException("PNG chunk '$type' has unreasonable length: $length")
             }
 
+            // Bound aggregate memory before allocating any chunk payload.
+            if (output.size().toLong() + length + 4 > 64L * 1024 * 1024) throw IOException("PNG exceeds capture limit")
             // Read chunk data
             if (length > 0) {
                 val data = readExactly(stream, length)
@@ -239,7 +283,15 @@ object ShellScreenCapture {
         val buf = ByteArray(size)
         var offset = 0
         while (offset < size) {
-            val read = stream.read(buf, offset, size - offset)
+            // Poll the pipe rather than entering an unbounded native read held by a surviving child.
+            if (System.nanoTime() >= captureDeadline) throw IOException("Screen capture timed out")
+            val available = stream.available()
+            if (available == 0) {
+                if (process?.let { isProcessAlive(it) } != true) throw IOException("Screen capture process closed")
+                Thread.sleep(5)
+                continue
+            }
+            val read = stream.read(buf, offset, minOf(size - offset, available))
             if (read == -1) throw IOException("Stream closed prematurely, read $offset/$size bytes")
             offset += read
         }

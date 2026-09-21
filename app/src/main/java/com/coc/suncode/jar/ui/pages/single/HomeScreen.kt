@@ -1,5 +1,6 @@
 package com.coc.suncode.jar.ui.pages.single
 
+import com.coc.suncode.core.data.cloud.CloudConfigInbox
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -103,8 +104,8 @@ fun HomeScreen(
     // Save configs and explicitly set the playing state before closing the config window
     val saveAndSetPlaying: (Boolean) -> Unit = { play ->
         scope.launch {
-            GlobalVars.isPlaying.value = play
             ConfigManager.saveAndRun {
+                GlobalVars.isPlaying.value = play
                 onSaveSuccess()
             }
         }
@@ -306,6 +307,13 @@ fun HomeScreen(
                 .fillMaxWidth()
                 .padding(bottom = 4.dp)
         ) {
+            CloudConfigInbox.pending?.let { pending ->
+                Text("云端有新配置 v${pending.version}，当前修改尚未被覆盖")
+                Row {
+                    CustomButton(text = "应用云端配置", onClick = { scope.launch { CloudConfigInbox.applyRemote() } })
+                    CustomButton(text = "保留本地修改", onClick = { CloudConfigInbox.keepLocal() })
+                }
+            }
             Row {
                 CustomButton(
                     text = "保存并运行", onClick = {
@@ -339,7 +347,6 @@ fun HomeScreen(
                     }
                     TextButton(onClick = {
                         showExitConfirmation = false
-                        AppStateManager.setMode(AppMode.Run)
                         scope.launch {
                             ConfigManager.saveAndRun {
                                 AppExitHelper.exitApplication(context)

@@ -4,20 +4,20 @@ import android.os.Environment
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import com.coc.suncode.core.data.database.GlobalVars
-import com.coc.suncode.core.util.fileactions.FileHelper
+import com.coc.suncode.core.util.basic.ShowMessage
 import com.coc.suncode.core.util.fileactions.InitConfigs
-import com.coc.suncode.core.util.fileactions.LogHelper.showDebugInfo
 import com.google.gson.Gson
 import com.google.gson.JsonObject
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withTimeout
-
+import kotlinx.coroutines.withTimeoutOrNull
+import java.io.IOException
 
 class ServerActions(
-    private val serverConnection: ServerConnection,
+    private val serverConnection: ServerTransport,
+    private val baseDir: String = "${Environment.getExternalStorageDirectory().path}/sunFiles/",
     private val onConfigLoaded: (() -> Unit)? = null
 ) {
     private val gson = Gson()
@@ -26,105 +26,151 @@ class ServerActions(
     var isLoading by mutableStateOf(true)
         private set
 
-    //    private val connectionMutex = Mutex()
     private val actionMutex = Mutex()
+    private val configMutex = Mutex()
+    private val stateLock = Any()
     private var actionDeferred: CompletableDeferred<JsonObject>? = null
-
-
-    fun getValue(key: String): String? {
-        return if (configJson.has(key)) configJson.get(key)?.asString else null
-    }
-
-    private val baseDir = "${Environment.getExternalStorageDirectory().path}/sunFiles/"
+    private var startup = CompletableDeferred<Unit>()
+    private var generation = 0L
+    private var closed = false
     private val configPath = "${baseDir}sun_config.json"
 
-    init {
-        performConnect()
-    }
+    init { performConnect() }
 
-    private fun performConnect() {
-        // Server is already started by ServerManager; this method only connects as a client
+    fun getValue(key: String): String? = configJson.get(key)
+        ?.takeIf { it.isJsonPrimitive }?.asString
+
+    private fun performConnect() = synchronized(stateLock) {
+        if (closed) return@synchronized
+        val current = ++generation
+        val ready = CompletableDeferred<Unit>()
+        startup = ready
+        isLoading = true
+        var startupResponses = 0
         serverConnection.connect(
-            // Do not modify these logics. This is designed for an ultra-fast config loading.
-            // This will send two messages to the server, if the config file exists, then we will discard the check_exists response, and only load the config from read response.
-            // If the config does not exist, then check_exists will return an error, so that we know the config does not exist.
             onOpen = {
-                InitConfigs.sendStartupRequests(serverConnection, baseDir, configPath)
-            },
-            onMessage = onMessage@{ message ->
-                try {
-                    val response = gson.fromJson(message, JsonObject::class.java)
-
-                    // Handle connection test response (legacy or if we still want it specific)
-                    // But now we use actionDeferred for everything
-                    actionDeferred?.complete(response)
-
-                    if (response.has("status") && response.get("status").asString == "success" &&
-                        response.has("data") && response.get("data").asString == "connected"
-                    ) {
-                        return@onMessage
+                synchronized(stateLock) {
+                    if (current == generation && !closed) {
+                        // Keep both startup requests pipelined; their responses precede normal actions.
+                        InitConfigs.sendStartupRequests(serverConnection, baseDir, configPath)
                     }
-
-                    // Route all responses to specific handlers if needed
-
-                    val initResult = InitConfigs.handleStartupResponse(response, gson)
-                    if (initResult.configJson != null) {
-                        configJson = initResult.configJson
-                    }
-                    if (initResult.isLoaded) {
-                        isLoading = false
-                    }
-                    if (initResult.shouldCallback) {
-                        onConfigLoaded?.invoke()
-                    }
-                } catch (e: Exception) {
-                    showDebugInfo("Error parsing message: ${e.message}")
-                    isLoading = false
                 }
             },
-            onFailure = { t ->
-                showDebugInfo("Connection failed: ${t.message}")
-                isLoading = false
-                actionDeferred?.completeExceptionally(t)
+            onMessage = { message ->
+                synchronized(stateLock) {
+                    if (current == generation && !closed) {
+                        try {
+                            val response = gson.fromJson(message, JsonObject::class.java)
+                                ?: throw IOException("Empty server response")
+                            if (startupResponses < 2) {
+                                startupResponses++
+                                // The first reply checks the directory; only the second reads config.
+                                if (startupResponses == 2) {
+                                    val result = InitConfigs.handleStartupResponse(response, gson)
+                                    result.configJson?.let { configJson = it }
+                                    isLoading = false
+                                    ready.complete(Unit)
+                                    if (result.shouldCallback) onConfigLoaded?.invoke()
+                                }
+                            } else {
+                                actionDeferred?.complete(response)
+                            }
+                        } catch (e: Exception) {
+                            isLoading = false
+                            ready.completeExceptionally(e)
+                            actionDeferred?.completeExceptionally(e)
+                            ShowMessage("读取服务器响应失败: ${e.message}", isChecking = false)
+                        }
+                    }
+                }
+            },
+            onFailure = { error ->
+                synchronized(stateLock) {
+                    if (current == generation && !closed) {
+                        isLoading = false
+                        ready.completeExceptionally(error)
+                        actionDeferred?.completeExceptionally(error)
+                    }
+                }
             }
         )
     }
 
     suspend fun writeToConfigFile(key: String, content: String) {
-        configJson.addProperty(key, content)
-        FileHelper.writeJson(configPath, gson.toJson(configJson))
+        configMutex.withLock {
+            val updated = configJson.deepCopy().apply { addProperty(key, content) }
+            check(persistConfigLocked(updated)) { "配置写入失败" }
+        }
     }
 
+    /** Persist external data through the root server before publishing it to readers. */
+    suspend fun persistConfig(newJson: JsonObject): Boolean = configMutex.withLock { persistConfigLocked(newJson) }
 
-    suspend fun sendActionSync(action: Any, timeout: Long = 5000L): JsonObject? {
-        return actionMutex.withLock {
-            val deferred = CompletableDeferred<JsonObject>()
-            actionDeferred = deferred
-            serverConnection.sendAction(action)
-            try {
-                withTimeout(timeout) {
-                    deferred.await()
+    private suspend fun persistConfigLocked(newJson: JsonObject): Boolean {
+        val snapshot = newJson.deepCopy()
+        val response = sendActionSync(mapOf(
+            "actionType" to "file_action", "subAction" to "write",
+            "path" to configPath, "content" to gson.toJson(snapshot)
+        ))
+        if (response?.get("status")?.asString != "success") return false
+        updateConfig(snapshot)
+        return true
+    }
+
+    suspend fun sendActionSync(action: Any, timeout: Long = 5000L): JsonObject? = actionMutex.withLock {
+        val deferred = CompletableDeferred<JsonObject>()
+        var sent = false
+        try {
+            withTimeoutOrNull(timeout) {
+                val ready = synchronized(stateLock) {
+                    check(!closed) { "ServerActions is closed" }
+                    startup
                 }
-            } catch (e: Exception) {
-                showDebugInfo("Action timeout or error: ${e.message}")
-                reconnect()
-                null
-            } finally {
-                actionDeferred = null
+                ready.await()
+                synchronized(stateLock) {
+                    check(!closed) { "ServerActions is closed" }
+                    actionDeferred = deferred
+                    sent = serverConnection.sendAction(action)
+                    if (!sent) throw IOException("WebSocket send failed")
+                }
+                deferred.await()
+            }.also { response ->
+                if (response == null) {
+                    reconnect()
+                    ShowMessage("服务器请求超时", isChecking = false)
+                }
+            }
+        } catch (e: CancellationException) {
+            // A cancelled in-flight request must not donate its late reply to the next caller.
+            if (sent) reconnect()
+            throw e
+        } catch (e: Exception) {
+            reconnect()
+            ShowMessage("服务器请求失败: ${e.message}", isChecking = false)
+            null
+        } finally {
+            synchronized(stateLock) {
+                if (actionDeferred === deferred) actionDeferred = null
             }
         }
     }
 
-    private fun reconnect() {
-        serverConnection.close()
-        performConnect()
+    private fun reconnect() = synchronized(stateLock) {
+        if (!closed) {
+            serverConnection.close()
+            performConnect()
+        }
     }
 
-    fun updateConfig(newJson: JsonObject) {
-        configJson = newJson
-    }
+    fun updateConfig(newJson: JsonObject) { configJson = newJson.deepCopy() }
 
-    fun close() {
+    fun close() = synchronized(stateLock) {
+        closed = true
+        generation++
+        val error = IOException("ServerActions closed")
+        startup.completeExceptionally(error)
+        actionDeferred?.completeExceptionally(error)
+        isLoading = false
         serverConnection.close()
     }
 }

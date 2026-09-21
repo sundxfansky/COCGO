@@ -8,6 +8,8 @@ import com.coc.suncode.MainActivity
 import com.coc.suncode.core.data.websocket.ServerActions
 import com.coc.suncode.core.ui.floatingwindows.NotificationHelper
 import com.coc.suncode.core.data.websocket.ServerConnection
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -19,6 +21,7 @@ class DaemonService : Service() {
 
     private val scope = CoroutineScope(Dispatchers.IO)
     private var serverActions: ServerActions? = null
+    private var startJob: Job? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -27,7 +30,8 @@ class DaemonService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        scope.launch {
+        if (startJob?.isActive == true || serverActions != null) return START_NOT_STICKY
+        startJob = scope.launch {
             // 1. Initialize Shell
             println("start daemon service")
             
@@ -75,9 +79,7 @@ class DaemonService : Service() {
         val startTime = System.currentTimeMillis()
         while (System.currentTimeMillis() - startTime < timeoutMs) {
             try {
-                val socket = Socket()
-                socket.connect(InetSocketAddress("localhost", port), 200)
-                socket.close()
+                Socket().use { it.connect(InetSocketAddress("127.0.0.1", port), 200) }
                 return true
             } catch (_: Exception) {
                 // Ignore and retry
@@ -85,6 +87,14 @@ class DaemonService : Service() {
             }
         }
         return false
+    }
+
+    override fun onDestroy() {
+        // A completed or stopped boot probe must not retain its socket and coroutine scope.
+        scope.cancel()
+        serverActions?.close()
+        serverActions = null
+        super.onDestroy()
     }
 
     override fun onBind(intent: Intent?): IBinder? {

@@ -16,6 +16,7 @@ function App() {
   const [mode, setMode] = useState('login');
   const [config, setConfig] = useState('{}');
   const [version, setVersion] = useState(0);
+  const [conflict, setConflict] = useState(null);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -23,6 +24,7 @@ function App() {
   const [passwordSet, setPasswordSet] = useState(false);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const dirty = useRef(false);
+  const configRevision = useRef(0);
 
   async function request(path, options = {}) {
     const response = await fetch(API + path, {
@@ -30,7 +32,7 @@ function App() {
       headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...options.headers },
     });
     const body = await response.json();
-    if (!response.ok) throw Error(body.error || '请求失败');
+    if (!response.ok) { const error = Error(body.error || '请求失败'); error.status = response.status; throw error; }
     return body;
   }
 
@@ -55,13 +57,17 @@ function App() {
     dirty.current = false;
   }
 
-  function logout() {
+  async function logout() {
+    // Revoke the server session before forgetting the local credential.
+    try { await request('/auth/logout', { method: 'POST' }); }
+    catch (error) { if (error.status !== 401) throw error; }
     localStorage.removeItem('token');
     setToken('');
     setIsAdmin(false);
     setSettingsLoaded(false);
     setConfig('{}');
     setVersion(0);
+    setConflict(null);
     setMode('login');
     dirty.current = false;
   }
@@ -77,9 +83,10 @@ function App() {
     if (!token) return undefined;
     let cancelled = false;
     async function loadConfig() {
+      const revision = configRevision.current;
       const body = await request('/config');
-      // Polling must not overwrite a draft while the user edits the JSON.
-      if (!cancelled && !dirty.current) {
+      // Ignore polls started before a local edit or save completed.
+      if (!cancelled && !dirty.current && revision === configRevision.current) {
         setConfig(JSON.stringify(body.config, null, 2));
         setVersion(body.version);
       }
@@ -165,18 +172,34 @@ function App() {
 
   return (
     <main>
-      <header><div><h1>配置中心</h1><p>配置保存在远端数据库，客户端会自动同步。</p></div><button onClick={logout}>退出</button></header>
+      <header><div><h1>配置中心</h1><p>配置保存在远端数据库，客户端会自动同步。</p></div><button disabled={busy} onClick={() => perform(logout)}>退出</button></header>
       <p className="notice" role="status">{message}</p>
       <section>
         <div className="bar"><span>当前版本 v{version}</span><button disabled={busy} onClick={() => perform(async () => {
+          const revision = configRevision.current;
           const parsed = JSON.parse(config);
           if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object' || Object.values(parsed).some((value) => typeof value !== 'string')) throw Error('配置必须是键和值均为字符串的 JSON 对象');
-          const body = await request('/config', { method: 'PUT', body: JSON.stringify({ config: parsed }) });
+          let body;
+          try {
+            body = await request('/config', { method: 'PUT', headers: { 'If-Match': String(version) }, body: JSON.stringify({ config: parsed }) });
+          } catch (error) {
+            if (error.status === 409) setConflict(await request('/config'));
+            throw error;
+          }
+          setConflict(null);
           setVersion(body.version);
-          dirty.current = false;
-          setMessage('配置已下发');
+          // A newer draft must remain dirty even when the earlier save succeeds.
+          dirty.current = configRevision.current !== revision;
+          configRevision.current++;
+          setMessage(dirty.current ? '已下发保存时的配置；新修改尚未保存' : '配置已下发');
         })}>保存并下发</button></div>
-        <textarea aria-label="客户端配置 JSON" value={config} onChange={(event) => { dirty.current = true; setConfig(event.target.value); }} spellCheck="false" />
+        {conflict && <div role="alert">
+          <p>云端已更新为 v{conflict.version}。你的草稿已保留，请对照下方内容合并。</p>
+          <pre>{JSON.stringify(conflict.config, null, 2)}</pre>
+          <button disabled={busy} onClick={() => { setVersion(conflict.version); setConflict(null); }}>已手动合并，使用此版本再次保存</button>
+          <button disabled={busy} onClick={() => { setConfig(JSON.stringify(conflict.config, null, 2)); setVersion(conflict.version); dirty.current = false; configRevision.current++; setConflict(null); }}>用云端内容替换当前草稿</button>
+        </div>}
+        <textarea aria-label="客户端配置 JSON" value={config} onChange={(event) => { dirty.current = true; configRevision.current++; setConfig(event.target.value); }} spellCheck="false" />
       </section>
       {isAdmin && settingsLoaded && <section className="settings">
         <h2>部署设置</h2>

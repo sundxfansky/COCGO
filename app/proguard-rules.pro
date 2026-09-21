@@ -29,11 +29,11 @@
 # ==========================================================
 # 1. 保护你自己的所有代码 (保持现状)
 # ==========================================================
--keep class com.coc.zkqcode.interfaces.** { *; }
--keep class com.coc.zkqcode.core.** { *; }
--keep class com.coc.zkqcode.nativehelper.** { *; }
--keep class com.coc.zkqcode.statehelper.** { *; }
--keep class com.coc.zkqcode.MainActivity { *; }
+-keep class com.coc.suncode.interfaces.** { *; }
+-keep class com.coc.suncode.core.** { *; }
+-keep class com.coc.suncode.nativehelper.** { *; }
+-keep class com.coc.suncode.statehelper.** { *; }
+-keep class com.coc.suncode.MainActivity { *; }
 
 # ==========================================================
 # 2. Google ML Kit 专用规则 (解决找不到类的问题)
@@ -86,3 +86,6 @@
 # 预防元数据解析错误 (如果你的模型包含 Metadata)
 -keepattributes RuntimeVisibleAnnotations, RuntimeInvisibleAnnotations
 -keep class org.tensorflow.lite.annotations.** { *; }
+
+# Preserve the plugin entry point used by DexClassLoader and bundled fallback.
+-keep class com.coc.suncode.jar.ui.EnterMainCode { *; }

@@ -17,6 +17,7 @@ import android.view.WindowManager
 import androidx.activity.result.ActivityResultLauncher
 import androidx.core.graphics.createBitmap
 import com.coc.suncode.core.system.accessibility.MyAccessibilityService
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import java.nio.ByteBuffer
@@ -268,8 +269,7 @@ object ScreenCaptureManager {
         imageReader?.close()
         imageReader = null
 
-        // Recycle cached bitmap to free native pixel memory before clearing
-        cachedBitmap?.recycle()
+        // Cache references are private; GC releases them once concurrent copies finish.
         cachedBitmap = null
         cachedCaptureResult = null
         lastFrameTimestamp = 0
@@ -356,17 +356,14 @@ object ScreenCaptureManager {
                                         pendingBitmap = it
                                     }
                                 }
-                                // Recycle the previous cached bitmap to free native memory
-                                val oldBitmap = cachedBitmap
+                                // Keep a private cache; callers own independent bitmap copies.
                                 cachedBitmap = finalBitmap
-                                if (oldBitmap != null && oldBitmap != finalBitmap) {
-                                    oldBitmap.recycle()
-                                }
                                 // Successfully cached; clear pending tracker
                                 pendingBitmap = null
                                 lastFrameTimestamp = System.currentTimeMillis()
 
-                                if (cont.isActive) cont.resume(finalBitmap)
+                                val ownedCopy = finalBitmap.copy(Bitmap.Config.ARGB_8888, false)
+                                cont.resume(ownedCopy) { _, abandoned, _ -> abandoned?.recycle() }
                             } else {
                                 val capacity = buffer.capacity()
                                 val directCopy = ByteBuffer.allocateDirect(capacity)
@@ -446,7 +443,7 @@ object ScreenCaptureManager {
 
                 if (isCacheValid) {
                     if (asBitmap && cachedBitmap != null) {
-                        cachedBitmap
+                        cachedBitmap?.copy(Bitmap.Config.ARGB_8888, false)
                     } else if (!asBitmap && cachedCaptureResult != null) {
                         cachedCaptureResult
                     } else {
@@ -463,6 +460,9 @@ object ScreenCaptureManager {
                     }
                 }
             }
+        } catch (e: CancellationException) {
+            // Stopping the script must not permanently switch capture to the shell fallback.
+            throw e
         } catch (e: Exception) {
             LogHelper.showDebugInfo("capture: MediaProjection capture failed: ${e.message}")
             null

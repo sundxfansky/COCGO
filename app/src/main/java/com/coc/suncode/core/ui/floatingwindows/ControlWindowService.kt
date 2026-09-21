@@ -44,6 +44,7 @@ import timber.log.Timber
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -54,7 +55,6 @@ class ControlWindowService : Service(), LifecycleOwner, SavedStateRegistryOwner 
     private lateinit var windowManager: WindowManager
     private var controlComposeView: ComposeView? = null
     private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
-    private var botJob: Job? = null
 
     private val lifecycleRegistry = LifecycleRegistry(this)
     override val lifecycle: Lifecycle = lifecycleRegistry
@@ -81,18 +81,9 @@ class ControlWindowService : Service(), LifecycleOwner, SavedStateRegistryOwner 
             snapshotFlow { AppStateManager.currentMode }
                 .collect { mode ->
                     if (mode == AppMode.Run) {
-                        if (botJob == null || !botJob!!.isActive) {
-                            botJob = serviceScope.launch(Dispatchers.IO) {
-                                GlobalVars.pluginUI?.runBot()
-                            }
-                        }
+                        BotRuntime.start(serviceScope) { GlobalVars.pluginUI?.runBot() }
                     } else {
-                        botJob?.cancel()
-                        botJob = null
-                        // Release any stuck touch pointers when bot stops
-                        launch(Dispatchers.IO) {
-                            TouchActions.releaseAllPointers()
-                        }
+                        BotRuntime.stop()
                     }
                 }
         }

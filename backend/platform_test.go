@@ -33,7 +33,7 @@ func testServer(test *testing.T) *server {
 	return instance
 }
 
-func callAPI(test *testing.T, instance *server, method, path, token string, payload any) *httptest.ResponseRecorder {
+func callAPI(test *testing.T, instance *server, method, path, token string, payload any, headers ...map[string]string) *httptest.ResponseRecorder {
 	test.Helper()
 	encoded, err := json.Marshal(payload)
 	if err != nil {
@@ -42,6 +42,11 @@ func callAPI(test *testing.T, instance *server, method, path, token string, payl
 	request := httptest.NewRequest(method, path, bytes.NewReader(encoded))
 	if token != "" {
 		request.Header.Set("Authorization", "Bearer "+token)
+	}
+	for _, values := range headers {
+		for key, value := range values {
+			request.Header.Set(key, value)
+		}
 	}
 	response := httptest.NewRecorder()
 	instance.routes().ServeHTTP(response, request)

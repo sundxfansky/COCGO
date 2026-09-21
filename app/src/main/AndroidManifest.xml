@@ -80,7 +80,8 @@
 
         <receiver
             android:name=".core.system.daemon.DebugReloadReceiver"
-            android:enabled="true"
+            android:enabled="${debugReloadEnabled}"
+            android:permission="android.permission.DUMP"
             android:exported="true">
             <intent-filter>
                 <action android:name="com.coc.suncode.SUN_RELOAD" />

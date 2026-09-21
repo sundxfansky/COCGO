@@ -9,7 +9,9 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -56,25 +58,42 @@ func newServer(db *sql.DB) (*server, error) {
 	if _, err := db.Exec(`INSERT INTO settings(key,value) VALUES('platform',?) ON CONFLICT(key) DO NOTHING`, string(encoded)); err != nil {
 		return nil, err
 	}
+	// Give existing signed tokens one bounded migration window, never extended on restart.
+	if _, err := db.Exec(`INSERT INTO settings(key,value) VALUES('legacy_token_deadline',?) ON CONFLICT(key) DO NOTHING`, strconv.FormatInt(time.Now().Add(7*24*time.Hour).Unix(), 10)); err != nil {
+		return nil, err
+	}
 	return &server{db: db, secret: []byte(secret)}, nil
 }
 
 func (s *server) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.health)
+	mux.HandleFunc("POST /api/v1/plugins", s.uploadPlugin)
+	mux.HandleFunc("GET /api/v1/plugins/latest", s.latestPlugin)
+	mux.HandleFunc("GET /api/v1/plugins/{version}", s.downloadPlugin)
 	mux.HandleFunc("GET /api/v1/setup", s.setupStatus)
 	mux.HandleFunc("POST /api/v1/setup", s.setup)
 	mux.HandleFunc("POST /api/v1/auth/register", s.register)
 	mux.HandleFunc("POST /api/v1/auth/verify", s.verify)
 	mux.HandleFunc("POST /api/v1/auth/login", s.login)
 	mux.HandleFunc("GET /api/v1/auth/me", s.me)
+	mux.HandleFunc("POST /api/v1/auth/logout", s.logout)
 	mux.HandleFunc("/api/v1/config", s.config)
 	mux.HandleFunc("GET /api/v1/settings", s.settings)
 	mux.HandleFunc("PUT /api/v1/settings", s.settings)
 	mux.HandleFunc("POST /api/v1/settings/test-email", s.testEmail)
 	return cors(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
-		r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+		limit := int64(1 << 20)
+		if r.URL.Path == "/api/v1/plugins" && r.Method == http.MethodPost {
+			limit = 90 << 20
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, limit)
+		if strings.HasPrefix(r.URL.Path, "/api/v1/auth/") || (r.URL.Path == "/api/v1/setup" && r.Method == http.MethodPost) {
+			if !s.allowSource(w, r) {
+				return
+			}
+		}
 		mux.ServeHTTP(w, r)
 	}))
 }
@@ -162,7 +181,12 @@ func (s *server) setup(w http.ResponseWriter, r *http.Request) {
 		jsonOut(w, 500, map[string]string{"error": "初始化失败，请重试"})
 		return
 	}
-	jsonOut(w, 201, map[string]any{"token": s.token(id), "email": email, "isAdmin": true})
+	token := s.token(id)
+	if token == "" {
+		jsonOut(w, 500, map[string]string{"error": "创建会话失败，请登录"})
+		return
+	}
+	jsonOut(w, 201, map[string]any{"token": token, "email": email, "isAdmin": true})
 }
 
 func (s *server) me(w http.ResponseWriter, r *http.Request) {

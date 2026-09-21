@@ -13,8 +13,8 @@ import java.util.concurrent.ConcurrentHashMap
 
 object GlobalVars {
     // --- Volatile fields (no Compose reactivity, thread-safe reads/writes) ---
-    @Volatile
-    var pluginUI: MainCode? = null
+    // A new plugin must invalidate the currently composed UI after a successful reload.
+    var pluginUI by mutableStateOf<MainCode?>(null)
 
     @Volatile
     var serverPath: String = ""

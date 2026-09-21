@@ -2,6 +2,7 @@ package com.coc.suncode.jar.code.universal.smalltools
 
 import android.annotation.SuppressLint
 import android.os.Environment
+import com.coc.suncode.core.util.fileactions.SavePath
 import com.coc.suncode.core.data.database.GlobalVars
 import com.coc.suncode.core.util.basic.ShowMessage
 import com.coc.suncode.core.util.fileactions.LogHelper.logAndRestart
@@ -9,7 +10,7 @@ import com.coc.suncode.jar.code.universal.GameVersion
 import com.coc.suncode.jar.code.universal.InGamesVars
 import com.coc.suncode.jar.ui.schema.Schema
 import com.coc.suncode.jar.ui.schema.Schema.ACCOUNT_SETTINGS
-import com.topjohnwu.superuser.Shell
+import com.coc.suncode.core.util.basic.ServerShell
 
 // Helper function: quickly get config value, trigger logAndRestart if empty
 fun getConfigOrStop(key: String): String {
@@ -43,11 +44,13 @@ fun getGameFilePath(): String {
 suspend fun writeGameFilesCore(
     packageName: String, savePathName: String, folderName: String, subDirs: List<String>, killGame: Boolean = true
 ): Boolean {
+    // Validate the archive component before passing any command to the root server.
+    if (!SavePath.isValid(savePathName)) { ShowMessage("存档名无效"); return false }
     val sdPath = Environment.getExternalStorageDirectory().path
     val sourceDir = "$sdPath/sunFiles/$folderName/$savePathName"
 
     // Verify that the archive directory exists before attempting to write
-    if (!Shell.cmd("[ -d \"$sourceDir\" ]").exec().isSuccess) {
+    if (!ServerShell.exec("[ -d \"$sourceDir\" ]").isSuccess) {
         ShowMessage("存档文件不存在：$sourceDir\n即将跳过当前账号")
         return false
     }
@@ -55,9 +58,9 @@ suspend fun writeGameFilesCore(
     if (killGame) killGame()
     subDirs.forEach { subDir ->
         val destPath = "/data/data/$packageName/$subDir"
-        Shell.cmd("rm -rf \"$destPath\"/*").exec()
-        Shell.cmd("cp -r \"$sourceDir/$subDir/\"* \"$destPath/\"").exec()
-        Shell.cmd("chmod -R 777 \"$destPath\"").exec()
+        ServerShell.exec("rm -rf \"$destPath\"/*")
+        ServerShell.exec("cp -r \"$sourceDir/$subDir/\"* \"$destPath/\"")
+        ServerShell.exec("chmod -R 777 \"$destPath\"")
     }
     return true
 }

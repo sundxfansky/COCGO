@@ -1,181 +1,104 @@
-@file:Suppress("SameParameterValue")
-
 package com.coc.suncode.loadjar
 
 import android.content.Context
-import androidx.compose.foundation.background
+import android.util.Base64
 import androidx.compose.foundation.layout.Column
-import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import com.coc.suncode.interfaces.MainCode
+import com.coc.suncode.BuildConfig
 import com.coc.suncode.core.data.database.GlobalVars
+import com.coc.suncode.core.data.websocket.ServerActions
+import com.coc.suncode.core.system.daemon.ServerApkInstaller
+import com.coc.suncode.core.ui.localcomponents.LocalCustomButton
+import com.coc.suncode.core.util.basic.ShowMessage
+import com.coc.suncode.interfaces.MainCode
 import com.coc.suncode.statehelper.AppMode
 import com.coc.suncode.statehelper.AppStateManager
-import dalvik.system.DexClassLoader
-import com.coc.suncode.jar.ui.EnterMainCode
 import java.io.File
+import java.security.MessageDigest
 
 class Loadjar(private val context: Context) {
-
+    companion object { private const val ENTRY = "com.coc.suncode.jar.ui.EnterMainCode" }
     private var pluginUI: MainCode? = null
 
-    /**
-     * Main composable function that handles all loading logic and displays the UI
-     */
-    @Composable
-    fun LoadAndShowUI(loadStatus: String, onClose: () -> Unit) {
+    @Composable fun LoadAndShowUI(loadStatus: String, onClose: () -> Unit) {
         if (loadStatus == "Plugin loaded successfully") {
-            // Load the UI from jar
-            pluginUI?.ShowMainUI(context, onClose)
-        } else {
-            Column(modifier = Modifier.background(Color.White)) {
-                Text(text = loadStatus)
-                Button(onClick = {
-                    AppStateManager.setMode(AppMode.Run)
-                    onClose()
-                }) {
-                    Text(text = "关闭悬浮窗")
-                }
-            }
+            (GlobalVars.pluginUI ?: pluginUI)?.ShowMainUI(context, onClose)
+        } else Column {
+            Text(loadStatus)
+            LocalCustomButton(text = "关闭悬浮窗", onClick = { AppStateManager.setMode(AppMode.Run); onClose() })
         }
     }
 
-    /**
-     * Start the plugin loading process
-     */
     fun startLoading(assetFileName: String = "code.jar", onStatusChange: (String) -> Unit) {
         onStatusChange("加载中...")
-        // Create assets folder and extract assets (skipping existing .jar files)
-        extractAllAssets()
-
-        val assetsDir = File(context.filesDir, "assets")
-        val assetList = assetsDir.list() ?: emptyArray()
-
-        // Find the unencrypted jar with the highest timestamp number (latest build, dev/debug)
-        val timestampJar = assetList
-            .filter { it.endsWith(".jar") && it.removeSuffix(".jar").toLongOrNull() != null }
-            .maxByOrNull { it.removeSuffix(".jar").toLong() }
-
-        val success = if (timestampJar != null) {
-            loadPluginFromAssets(timestampJar)
-        } else if (assetList.contains(assetFileName)) {
-            loadPluginFromAssets(assetFileName)
-        } else {
-            // Development builds include the plugin classes in the main APK.
-            loadBundledPlugin()
+        val directory = File(context.filesDir, "assets").apply { mkdirs() }
+        // APK assets are trusted by the platform signature and copied atomically into private storage.
+        context.assets.list("").orEmpty().filter { it.endsWith(".jar") || it.endsWith(".jar.sig") || it.endsWith(".tflite") }.forEach { name ->
+            runCatching { ServerApkInstaller.install(File(directory, name)) { context.assets.open(name) } }
+                .onFailure { ShowMessage("资源安装失败: $name / ${it.message}", isChecking = false) }
         }
-
-        val finalStatus = if (success) {
-            "Plugin loaded successfully"
-        } else {
-            "Failed to load plugin"
+        val candidates = directory.listFiles().orEmpty().filter { PluginPackage.version(it.name) != null }
+            .sortedByDescending { PluginPackage.version(it.name) }
+        val fallback = File(directory, assetFileName).takeIf { it.exists() }
+        val loaded = (candidates + listOfNotNull(fallback)).any { loadFile(it) }
+        val success = when {
+            loaded -> true
+            GlobalVars.pluginUI != null -> { pluginUI = GlobalVars.pluginUI; true }
+            else -> loadBundled()
         }
-        onStatusChange(finalStatus)
+        onStatusChange(if (success) "Plugin loaded successfully" else "插件加载失败，已保留原版本")
     }
 
-    /**
-     * Extract jar/dex from assets to private directory and load the plugin UI
-     */
-    private fun loadPluginFromAssets(assetFileName: String): Boolean {
-
-        return try {
-            // Get private directory for extracted files
-            val privateDir = File(context.filesDir, "assets")
-            val dexOutputDir = context.codeCacheDir
-
-            // Load jar from the assets directory in filesDir
-            val jarFile = File(privateDir, assetFileName)
-
-            if (!jarFile.exists()) {
-                // File not found in private directory
-                return false
-            }
-
-            // Android 16+ requires DEX files to be non-writable
-            jarFile.setReadOnly()
-
-            // Load the jar using DexClassLoader
-            val classLoader = DexClassLoader(
-                jarFile.absolutePath, dexOutputDir.absolutePath, null, context.classLoader
-            )
-
-            // Load the plugin implementation class
-            val pluginClass = classLoader.loadClass("com.coc.suncode.jar.ui.EnterMainCode")
-            val instance = pluginClass.getDeclaredConstructor().newInstance() as MainCode
-            pluginUI = instance
-            GlobalVars.pluginUI = instance
-
-            true
-        } catch (e: Exception) {
-            e.printStackTrace()
-            false
+    /** Load a specific verified candidate; publish only after ABI and configuration initialization succeed. */
+    fun loadFile(file: File, requireSignature: Boolean = !BuildConfig.DEBUG): Boolean = try {
+        require(file.parentFile?.canonicalFile == File(context.filesDir, "assets").canonicalFile)
+        require(file.length() in 1..(64L*1024*1024)) { "Invalid plugin size" }
+        val bytes = file.readBytes()
+        val signature = File(file.path + ".sig")
+        if (requireSignature || signature.exists()) {
+            require(signature.exists() && BuildConfig.HOT_UPDATE_PUBLIC_KEY.isNotBlank()) { "Missing trusted plugin signature/key" }
+            require(PluginPackage.verify(file.name.toByteArray() + byteArrayOf(0) + bytes, signature.readBytes(), Base64.decode(BuildConfig.HOT_UPDATE_PUBLIC_KEY, Base64.DEFAULT))) { "Invalid plugin signature" }
         }
+        val dex = if (file.name.startsWith("encrypted_")) PluginPackage.decrypt(bytes, BuildConfig.LEGACY_JAR_KEY) else bytes
+        PluginPackage.requireDexJar(dex)
+        val hash = MessageDigest.getInstance("SHA-256").digest(dex).joinToString("") { "%02x".format(it) }
+        val installed = File(context.codeCacheDir, "plugin-$hash.jar")
+        ServerApkInstaller.install(installed) { dex.inputStream() }
+        val loader = PluginClassLoader(installed.path, context.codeCacheDir.path, context.classLoader)
+        publish(loader.loadClass(ENTRY).getDeclaredConstructor().newInstance() as MainCode)
+        true
+    } catch (error: Exception) {
+        ShowMessage("插件加载失败，保留原版本: ${error.message}", isChecking = false); false
+    } catch (error: LinkageError) {
+        ShowMessage("插件接口不兼容，保留原版本: ${error.message}", isChecking = false); false
     }
 
-    private fun loadBundledPlugin(): Boolean {
-        return try {
-            val instance = EnterMainCode()
-            pluginUI = instance
-            GlobalVars.pluginUI = instance
-            true
-        } catch (e: Exception) {
-            e.printStackTrace()
-            false
-        }
-    }
-
-    /**
-     * Create assets folder and extract assets into it, skipping .jar files that already exist
-     */
-    private fun extractAllAssets(): File {
-        val privateDir = context.filesDir
-        val assetsDir = File(privateDir, "assets")
-
-        if (!assetsDir.exists()) {
-            assetsDir.mkdirs()
-        }
-
+    private fun publish(instance: MainCode) {
+        // Validate the host ABI without resetting an open settings draft.
+        require(instance.javaClass.getMethod("refreshConfigs", ServerActions::class.java).declaringClass != MainCode::class.java)
+        val wasLoaded = GlobalVars.isConfigLoaded
         try {
-            val assetList = context.assets.list("") ?: emptyArray()
-            for (assetName in assetList) {
-
-                // --- MODIFIED FILTER RULE ---
-                // Only proceed if the file ends with .jar or .tflite (case-insensitive)
-                if (!assetName.endsWith(".jar", ignoreCase = true) && !assetName.endsWith(".tflite", ignoreCase = true)) {
-                    continue
-                }
-                // ----------------------------
-
-                try {
-                    val outputFile = File(assetsDir, assetName)
-                    // If it's a jar, and it already exists, don't overwrite it
-                    if (assetName.endsWith(".jar", ignoreCase = true) && outputFile.exists()) {
-                        // Ensure existing JARs are read-only (required by Android 16+)
-                        outputFile.setReadOnly()
-                        continue
-                    }
-
-                    context.assets.open(assetName).use { input ->
-                        outputFile.outputStream().use { output ->
-                            input.copyTo(output)
-                        }
-                    }
-                    // Make newly extracted JARs read-only (required by Android 16+)
-                    if (assetName.endsWith(".jar", ignoreCase = true)) {
-                        outputFile.setReadOnly()
-                    }
-                } catch (e: Exception) {
-                    // This handles cases where .jar might be a directory name (unlikely but safe)
-                    println("Failed to copy asset: $assetName, error: $e")
-                }
+            withConfigRollback(GlobalVars.configStates) {
+                val actions = GlobalVars.serverActions
+                if (actions != null && !actions.isLoading) instance.refreshConfigs(actions)
+                else GlobalVars.isConfigLoaded = false
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
+        } catch (error: Throwable) {
+            // Failed plugin initialization must not leave a partial Schema in the shared host state.
+            GlobalVars.isConfigLoaded = wasLoaded
+            throw error
         }
+        pluginUI = instance
+        GlobalVars.pluginUI = instance
+    }
 
-        return assetsDir
+    private fun loadBundled(): Boolean = try {
+        // Reflection keeps the host independent of plugin implementation classes.
+        publish(context.classLoader.loadClass(ENTRY).getDeclaredConstructor().newInstance() as MainCode)
+        true
+    } catch (error: Exception) {
+        ShowMessage("内置插件加载失败: ${error.message}", isChecking = false)
+        GlobalVars.pluginUI != null
     }
 }

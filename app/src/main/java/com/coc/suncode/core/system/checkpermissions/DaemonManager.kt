@@ -4,10 +4,12 @@ import android.content.Context
 import com.topjohnwu.superuser.Shell
 import kotlinx.coroutines.delay
 import java.io.File
+import com.coc.suncode.core.util.basic.ShowMessage
+import kotlinx.coroutines.CancellationException
 
 
 suspend fun setupAndRunDaemon(context: Context) {
-    val scriptPath = "/data/local/tmp/sun_daemon.sh"
+    val scriptPath = File(context.filesDir, "sun_daemon.sh").absolutePath
     val pkg = context.packageName
 
     val scriptContent = listOf(
@@ -22,23 +24,8 @@ suspend fun setupAndRunDaemon(context: Context) {
     )
 
     try {
-        // 1. Create the script directory if it doesn't exist
-        val scriptFile = File(scriptPath)
-        val scriptDir = scriptFile.parentFile
-        if (scriptDir != null && !scriptDir.exists()) {
-            Shell.cmd("mkdir -p ${scriptDir.absolutePath}").exec()
-            Shell.cmd("chmod 777 ${scriptDir.absolutePath}").exec()
-        }
-
-        // 2. Clear existing content and write the script lines
-        Shell.cmd("echo \"\" > $scriptPath").exec()
-        for (line in scriptContent) {
-            // Wrap content in single quotes to prevent shell parsing of special characters
-            Shell.cmd("echo '${line}' >> $scriptPath").exec()
-        }
-
-        // 3. Grant execution permissions
-        Shell.cmd("chmod 755 $scriptPath").exec()
+        // Private storage is available before the WebSocket service starts.
+        File(scriptPath).writeText(scriptContent.joinToString("\n") + "\n")
 
         // 4. Identify and kill existing daemon processes
         // We search for the script path in the process list, excluding the 'grep' command itself
@@ -60,10 +47,11 @@ suspend fun setupAndRunDaemon(context: Context) {
         // Use nohup and setsid for enhanced fault tolerance
         val cmdStart = "nohup sh $scriptPath > /dev/null 2>&1 &"
         Shell.cmd(cmdStart).exec()
-        val cmdStartSetsid = "setsid sh -c 'sh $scriptPath' > /dev/null 2>&1 &"
-        Shell.cmd(cmdStartSetsid).exec()
+        // Start one daemon only; starting both nohup and setsid duplicated work.
 
+    } catch (e: CancellationException) {
+        throw e
     } catch (e: Exception) {
-        e.printStackTrace()
+        ShowMessage("守护进程启动失败: ${e.message}", isChecking = false)
     }
 }

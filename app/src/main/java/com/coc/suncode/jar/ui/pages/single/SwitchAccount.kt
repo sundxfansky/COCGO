@@ -3,6 +3,7 @@ package com.coc.suncode.jar.ui.pages.single
 import android.content.Context
 import android.graphics.BitmapFactory
 import android.os.Environment
+import com.coc.suncode.core.util.fileactions.SavePath
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -45,7 +46,7 @@ import com.coc.suncode.jar.ui.components.SettingInputRow
 import com.coc.suncode.jar.ui.schema.Schema.GLOBAL_SETTINGS
 import com.coc.suncode.statehelper.AppMode
 import com.coc.suncode.statehelper.AppStateManager
-import com.topjohnwu.superuser.Shell
+import com.coc.suncode.core.util.basic.ServerShell
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -176,12 +177,17 @@ fun SwitchAccount(onClose: () -> Unit) {
                                 val sdPath = Environment.getExternalStorageDirectory().path
                                 // Use accountNumber directly as the save path name
                                 val savePathName = accNum
+                                if (!SavePath.isValid(savePathName)) {
+                                    ShowMessage("存档名无效", isChecking = false)
+                                    GlobalVars.isSwitchingAccount = false
+                                    return@launch
+                                }
 
                                 if (version == 0) {
                                     // CN Version
                                     val sourceDir = "$sdPath/sunFiles/zkqCNGameSave/$savePathName"
                                     // Check existence
-                                    if (!Shell.cmd("[ -d \"$sourceDir\" ]").exec().isSuccess) {
+                                    if (!ServerShell.exec("[ -d \"$sourceDir\" ]").isSuccess) {
                                         ShowMessage("存档文件不存在！\n请仔细检查存档路径以及游戏版本！")
                                         GlobalVars.isSwitchingAccount = false
                                         return@launch
@@ -200,7 +206,7 @@ fun SwitchAccount(onClose: () -> Unit) {
                                     val sourceDir = "$sdPath/sunFiles/zkqGlobalGameSave/$savePathName"
 
                                     // Check existence
-                                    if (!Shell.cmd("[ -d \"$sourceDir\" ]").exec().isSuccess) {
+                                    if (!ServerShell.exec("[ -d \"$sourceDir\" ]").isSuccess) {
                                         ShowMessage("存档文件不存在！\n请仔细检查存档路径以及游戏版本！")
                                         GlobalVars.isSwitchingAccount = false
                                         return@launch

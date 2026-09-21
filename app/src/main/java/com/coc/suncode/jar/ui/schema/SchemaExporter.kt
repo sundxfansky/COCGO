@@ -83,21 +83,14 @@ object SchemaExporter {
         keys: List<String> = SchemaRegistry.ALL_MODULES.map { it.name },
         accountCount: Int = 0,
         configCount: Int = 0
-    ) {
+    ): Boolean {
         val jsonContent = exportSchemasToJson(keys = keys, accountCount = accountCount, configCount = configCount)
         val fullPath =
             if (directory.endsWith("/")) "$directory$fileName" else "$directory/$fileName"
-        FileHelper.writeJson(fullPath, jsonContent)
-
-        // Update local configJson to keep it in sync
-        GlobalVars.serverActions?.let { actions ->
-            try {
-                val gson = Gson()
-                val newJson = gson.fromJson(jsonContent, JsonObject::class.java)
-                actions.updateConfig(newJson)
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
+        // Keep memory consistent with disk and leave the editor open when the write fails.
+        if (!FileHelper.writeJson(fullPath, jsonContent)) return false
+        val newJson = Gson().fromJson(jsonContent, JsonObject::class.java)
+        GlobalVars.serverActions?.updateConfig(newJson)
+        return true
     }
 }

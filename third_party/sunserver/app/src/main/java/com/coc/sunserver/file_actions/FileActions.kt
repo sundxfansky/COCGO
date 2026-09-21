@@ -1,5 +1,6 @@
 package com.coc.sunserver.file_actions
 
+import java.io.FileOutputStream
 import java.io.File
 import java.io.IOException
 
@@ -23,8 +24,14 @@ object FileActions {
     fun writeFile(path: String, content: String): Int {
         val file = File(path)
         file.parentFile?.let { if (!it.exists()) it.mkdirs() }
-        file.writeText(content, Charsets.UTF_8)
-        return content.toByteArray(Charsets.UTF_8).size
+        val bytes = content.toByteArray(Charsets.UTF_8)
+        // Commit complete writes atomically so disk-full errors preserve the previous config.
+        val temporary = File.createTempFile("sun-write-", ".tmp", file.absoluteFile.parentFile)
+        try {
+            FileOutputStream(temporary).use { output -> output.write(bytes); output.fd.sync() }
+            if (!temporary.renameTo(file)) throw IOException("Cannot replace file: $path")
+        } finally { temporary.delete() }
+        return bytes.size
     }
 
     /**

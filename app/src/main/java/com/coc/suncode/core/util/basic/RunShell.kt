@@ -1,6 +1,6 @@
 package com.coc.suncode.core.util.basic
 
-import com.topjohnwu.superuser.Shell
+
 
 /**
  * Utility for running shell commands.
@@ -14,7 +14,7 @@ object RunShell {
         if (isCheckIsPlaying) {
             waitForPlay()
         }
-        return Shell.cmd(cmd).exec().out
+        return ServerShell.exec(cmd).out
     }
 
     /**
@@ -25,7 +25,7 @@ object RunShell {
         if (isCheckIsPlaying) {
             waitForPlay()
         }
-        Shell.cmd(cmd).exec()
+        ServerShell.exec(cmd)
     }
 
     /**

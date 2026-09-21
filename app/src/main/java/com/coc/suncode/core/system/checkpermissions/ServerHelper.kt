@@ -4,6 +4,7 @@ import com.google.gson.JsonParser
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
+import com.coc.suncode.core.system.daemon.RootServerAuth
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.WebSocket
@@ -13,7 +14,7 @@ object ServerHelper {
     private val client = OkHttpClient()
 
     suspend fun waitForServerResponse(): String? {
-        val request = Request.Builder().url("ws://localhost:6839/sun").build()
+        val request = Request.Builder().url("ws://localhost:6839/sun").header("Authorization", "Bearer ${RootServerAuth.token}").build()
         val deferred = CompletableDeferred<String?>()
 
         val socket = client.newWebSocket(request, object : WebSocketListener() {

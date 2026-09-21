@@ -8,7 +8,14 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO as ClientCIO
 import io.ktor.client.plugins.websocket.WebSockets as ClientWebSockets
 import io.ktor.client.plugins.websocket.webSocket
+import io.ktor.http.HttpStatusCode
 import io.ktor.http.ContentType
+import io.ktor.server.application.call
+import io.ktor.server.application.ApplicationCallPipeline
+import java.security.MessageDigest
+import com.coc.sunserver.command_handlers.ShellHandler
+import kotlinx.coroutines.CancellationException
+import io.ktor.client.request.header
 import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.embeddedServer
@@ -19,6 +26,8 @@ import io.ktor.server.websocket.WebSockets
 import io.ktor.server.websocket.webSocket
 import io.ktor.websocket.Frame
 import io.ktor.websocket.readText
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -30,7 +39,9 @@ object ShellServer {
 
     @JvmStatic
     fun main(args: Array<String>) {
-        println("--- Kotlin WebSocket Tool Started ---")
+        // Refuse to expose root commands without a credential supplied by the host.
+        val token = System.getenv("SUN_SERVER_TOKEN")?.takeIf { it.length >= 32 }
+            ?: error("SUN_SERVER_TOKEN is required")
 
         val httpClient = HttpClient(ClientCIO) {
             install(ClientWebSockets)
@@ -39,14 +50,21 @@ object ShellServer {
         runBlocking {
             // Launch the embedded WebSocket/HTTP server in a concurrent coroutine
             launch {
-                embeddedServer(CIO, port = 6839) {
+                embeddedServer(CIO, host = "127.0.0.1", port = System.getenv("SUN_SERVER_PORT")?.toIntOrNull() ?: 6839) {
                     install(WebSockets)
+                    intercept(ApplicationCallPipeline.Plugins) {
+                        val supplied = call.request.headers["Authorization"].orEmpty()
+                        if (!MessageDigest.isEqual(supplied.toByteArray(), "Bearer $token".toByteArray())) {
+                            call.respondText("Unauthorized", status = HttpStatusCode.Unauthorized)
+                            finish()
+                        }
+                    }
                     routing {
                         // Keep the host's WebSocket protocol alongside the HTTP endpoint.
                         webSocket("/sun") {
                             for (frame in incoming) {
                                 if (frame is Frame.Text) {
-                                    val response = dispatchClientMessage(frame.readText())
+                                    val response = withContext(Dispatchers.IO) { dispatchClientMessage(frame.readText()) }
                                     if (response != null) {
                                         send(Frame.Text(response))
                                     }
@@ -84,7 +102,8 @@ object ShellServer {
 
             // Launch the outbound WebSocket client in a concurrent coroutine
             launch {
-                connectAsClient(httpClient)
+                // Outbound control is opt-in and uses the same authenticated protocol.
+                if (System.getenv("SUN_CONTROLLER_URL") != null) connectAsClient(httpClient)
             }
         }
 
@@ -104,7 +123,7 @@ object ShellServer {
             try {
                 println("正在尝试连接到 $CLIENT_TARGET_URL ...")
 
-                client.webSocket(CLIENT_TARGET_URL) {
+                client.webSocket(System.getenv("SUN_CONTROLLER_URL") ?: CLIENT_TARGET_URL, request = { header("Authorization", "Bearer ${System.getenv("SUN_SERVER_TOKEN")}") }) {
                     println("已成功连接到 $CLIENT_TARGET_URL")
 
                     // Send the announcement message only on the very first connection
@@ -122,7 +141,7 @@ object ShellServer {
                     for (frame in incoming) {
                         if (frame is Frame.Text) {
                             val text = frame.readText()
-                            val response = dispatchClientMessage(text)
+                            val response = withContext(Dispatchers.IO) { dispatchClientMessage(text) }
                             if (response != null) {
                                 send(Frame.Text(response))
                             }
@@ -131,6 +150,8 @@ object ShellServer {
 
                     println("与 $CLIENT_TARGET_URL 的连接已断开")
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 println("客户端连接失败: ${e.message}，${CLIENT_RETRY_DELAY_MS}ms 后重试...")
             }
@@ -154,6 +175,7 @@ object ShellServer {
                     addProperty("status", "success")
                     addProperty("data", "connected")
                 }.toString()
+                "shell_action" -> ShellHandler.handle(jsonElement.asJsonObject)
                 "file_action" -> FileHandler.handle(text)
                 else -> TouchHandler.handle(text)
             }

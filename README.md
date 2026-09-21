@@ -62,6 +62,7 @@ Root 环境下运行的部落冲突（Clash of Clans）自动化客户端：Kotl
 | `runDebugOnDevice` | 安装并启动应用 |
 | `debugLogs` | 输出过滤后的应用与原生日志 |
 | `stopDebugServer` | 停止设备上的 Root 常驻服务 |
+| `buildJar` | 构建独立插件到 app/build/plugin/code.jar，不修改 assets |
 | `deployAndReload` | 单独构建脚本模块 JAR 并推送到设备热重载，无需重装 APK |
 
 ## 技术栈
@@ -91,3 +92,5 @@ Root 环境下运行的部落冲突（Clash of Clans）自动化客户端：Kotl
 ## License
 
 见 [LICENSE](LICENSE)。
+
+签名热更新、会话迁移与 Root 服务认证见 [发布与迁移指南](docs/PLUGIN_RELEASE.md)。

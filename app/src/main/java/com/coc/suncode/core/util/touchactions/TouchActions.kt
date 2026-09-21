@@ -4,6 +4,10 @@ import com.coc.suncode.core.data.database.GlobalVars
 import com.coc.suncode.core.util.basic.delayWithMultiplier
 import com.coc.suncode.core.util.basic.waitForPlay
 import com.coc.suncode.core.util.fileactions.LogHelper.logAndRestart
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import com.coc.suncode.core.util.basic.ShowMessage
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -13,6 +17,8 @@ import kotlin.math.sqrt
 
 object TouchActions {
     private val activePointers = mutableSetOf<Int>()
+    // Serialize pointer state changes with their server acknowledgments.
+    private val pointerMutex = Mutex()
 
     private fun getDelayMultiplier(): Float {
         return GlobalVars.configStates["delay_multiplier"]?.value?.toFloat()
@@ -21,7 +27,7 @@ object TouchActions {
 
     private fun getServerActions() = GlobalVars.serverActions ?: logAndRestart("Server actions not found")
 
-    suspend fun touchDown(x: Float, y: Float, id: Int) {
+    suspend fun touchDown(x: Float, y: Float, id: Int) = pointerMutex.withLock {
         activePointers.add(id)
         getServerActions().sendActionSync(
             mapOf(
@@ -34,7 +40,7 @@ object TouchActions {
         )
     }
 
-    suspend fun touchMove(x: Float, y: Float, id: Int, isJitter: Boolean = true) {
+    suspend fun touchMove(x: Float, y: Float, id: Int, isJitter: Boolean = true) = pointerMutex.withLock {
         var finalX = x
         var finalY = y
         if (isJitter) {
@@ -52,26 +58,22 @@ object TouchActions {
         )
     }
 
-    suspend fun touchUp(id: Int) {
-        activePointers.remove(id)
-        getServerActions().sendActionSync(
-            mapOf(
-                "actionType" to "touch_action",
-                "subAction" to "touchup",
-                "id" to id
-            )
-        )
+    suspend fun touchUp(id: Int) = pointerMutex.withLock { touchUpLocked(id) }
+
+    private suspend fun touchUpLocked(id: Int) {
+        val response = getServerActions().sendActionSync(mapOf(
+            "actionType" to "touch_action", "subAction" to "touchup", "id" to id
+        ))
+        // Retain failed releases so cleanup can retry them.
+        if (response?.get("status")?.asString == "success") activePointers.remove(id)
     }
 
-    suspend fun releaseAllPointers() {
-        val pointersCopy = activePointers.toSet()
-        for (id in pointersCopy) {
-            try {
-                touchUp(id)
-            } catch (_: Exception) {
-            }
+    suspend fun releaseAllPointers() = pointerMutex.withLock {
+        for (id in activePointers.toList()) {
+            try { touchUpLocked(id) }
+            catch (e: CancellationException) { throw e }
+            catch (e: Exception) { ShowMessage("释放触点失败: ${e.message}", isChecking = false) }
         }
-        activePointers.clear()
     }
 
     suspend fun moveSmoothly(

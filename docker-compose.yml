@@ -5,6 +5,7 @@ services:
     environment:
       HTTP_ADDR: :8080
       DB_PATH: /app/data/sun.db
+      PLUGIN_PUBLIC_KEY: ${PLUGIN_PUBLIC_KEY:-}
       # Optional legacy values are imported only on the first upgraded start.
       JWT_SECRET: ${JWT_SECRET:-}
       SMTP_HOST: ${SMTP_HOST:-}

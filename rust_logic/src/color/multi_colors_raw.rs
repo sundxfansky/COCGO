@@ -1,3 +1,4 @@
+use crate::color::buffer_layout::valid_rgba_layout;
 use crate::color::find_multi_colors_internal;
 use jni::objects::{JByteBuffer, JIntArray, JObject};
 use jni::sys::{jint, jintArray};
@@ -38,13 +39,21 @@ pub extern "system" fn find_multi_colors_raw(
         return std::ptr::null_mut();
     }
 
+    // JNI direct buffers may be undersized or sliced at an unaligned byte offset.
+    let capacity = match env.get_direct_buffer_capacity(&byte_buffer) {
+        Ok(capacity) => capacity,
+        Err(_) => return std::ptr::null_mut(),
+    };
+    if !valid_rgba_layout(width, height, stride, capacity) {
+        return std::ptr::null_mut();
+    }
     let stride_usize = stride as usize;
 
     let get_pixel = |x: i32, y: i32| {
         let offset = (y as usize * stride_usize) + (x as usize * 4);
         unsafe {
             let p = src_buf.add(offset) as *const u32;
-            *p
+            p.read_unaligned()
         }
     };
 

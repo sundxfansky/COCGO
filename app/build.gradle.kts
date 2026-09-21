@@ -1,4 +1,10 @@
 import java.util.Properties
+import java.io.File
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+import java.util.zip.ZipFile
+import java.util.jar.JarOutputStream
+import java.util.jar.JarEntry
 
 plugins {
     alias(libs.plugins.android.application)
@@ -17,6 +23,18 @@ android {
         }
     }
     val baseUrl: String = localProperties.getProperty("BASE_URL") ?: ""
+    fun quoted(value: String) = "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r") + "\""
+    // Recover the legacy packaging key without keeping the unused C++ library in APKs.
+    val legacySource = file("src/main/cpp/security/keys.cpp").readText()
+    fun keyPart(name: String): List<Int> {
+        val body = Regex("$name\\[32]\\s*=\\s*\\{([^}]+)}").find(legacySource)?.groupValues?.get(1)
+            ?: error("Missing legacy key component")
+        return Regex("0x[0-9a-fA-F]+").findAll(body).map { it.value.substring(2).toInt(16) }.toList().also { require(it.size == 32) }
+    }
+    val legacyKey = keyPart("KEY_MASK").zip(keyPart("OBFUSCATED_KEY")).joinToString("") { (a,b) -> "%02x".format(a xor b) }
+    val updatePublicKey = localProperties.getProperty("HOT_UPDATE_PUBLIC_KEY") ?: System.getenv("HOT_UPDATE_PUBLIC_KEY").orEmpty()
+    val requestedAbis = providers.gradleProperty("abis").orNull?.split(",") ?: listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
+    require(requestedAbis.all { it in listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64") })
 
     defaultConfig {
         applicationId = "com.coc.suncode"
@@ -26,11 +44,15 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField("String", "BASE_URL", "\"$baseUrl\"")
+        buildConfigField("String", "BASE_URL", quoted(baseUrl))
+        buildConfigField("String", "LEGACY_JAR_KEY", quoted(legacyKey))
+        buildConfigField("String", "HOT_UPDATE_PUBLIC_KEY", quoted(updatePublicKey))
+        ndk { abiFilters += requestedAbis }
     }
 
     buildTypes {
         release {
+            manifestPlaceholders["debugReloadEnabled"] = "false"
             isMinifyEnabled = true
             isDebuggable = false
             proguardFiles(
@@ -38,7 +60,10 @@ android {
                 "proguard-rules.pro"
             )
         }
-        debug { isDebuggable = true }
+        debug {
+            manifestPlaceholders["debugReloadEnabled"] = "true"
+            isDebuggable = true
+        }
     }
     packaging {
         jniLibs {
@@ -53,12 +78,8 @@ android {
         compose = true
         buildConfig = true
     }
-    externalNativeBuild {
-        cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
-        }
-    }
+    // Keep the historical C++ sources in the repository without shipping their unused library.
+
 }
 
 kotlin {
@@ -66,167 +87,55 @@ kotlin {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11
     }
 }
-// Clean old jar class files before recompilation
-tasks.register("cleanJarClasses") {
-    group = "custom"
-    description = "Remove previously built jar class files to avoid stale classes"
-
-//    val workingDir = project.projectDir.absolutePath
-//    val possibleClassDirs = listOf(
-//        file("$workingDir/build/tmp/kotlin-classes/debug"),
-//        file("$workingDir/build/intermediates/built_in_kotlinc/debug/compileDebugKotlin/classes"),
-//        file("$workingDir/build/intermediates/javac/debug/classes")
-//    )
-//
-//    doLast {
-//        possibleClassDirs.forEach { dir ->
-//            val jarClassDir = File(dir, "com/coc/suncode/jar")
-//            if (jarClassDir.exists()) {
-//                jarClassDir.deleteRecursively()
-//                println("Cleaned old classes from: ${jarClassDir.absolutePath}")
-//            }
-//        }
-//    }
-}
-
-// Make assembleDebug depend on cleanJarClasses so old classes are removed before compilation
-tasks.configureEach {
-    if (name == "assembleDebug") {
-        dependsOn("cleanJarClasses")
-    }
-}
-
-// Define a standalone task for deployment
-tasks.register<Exec>("buildJar") {
+// Compile the plugin once, then dex only its package in a temporary directory.
+val buildJarTask = tasks.register("buildJar") {
     group = "build"
-    description = "Compile and package UI plugin into the Assets directory"
-
-    // Ensure the latest class files are compiled before running this task
-    dependsOn("assembleDebug")
-
-    // --- Path configuration ---
-    val workingDir = project.projectDir.absolutePath
-    val sdkDir = "C:/Users/Azikaban/AppData/Local/Android/Sdk"
-
-    // Auto-detect the highest installed Build-Tools version (e.g. 36.1.0)
-    val buildToolsDir = file("$sdkDir/build-tools")
-    val highestBuildTools = buildToolsDir.listFiles()
-        ?.filter { it.isDirectory && it.name.contains(".") }
-        ?.maxByOrNull { versionFile ->
-            versionFile.name.split(".").mapNotNull { it.toIntOrNull() }.let { parts ->
-                // Convert version string to a comparable number, e.g. [36, 1, 0]
-                parts.fold(0) { acc, i -> acc * 100 + i }
-            }
-        }
-
-    val d8Path = if (highestBuildTools != null) {
-        "${highestBuildTools.absolutePath}/d8.bat"
-    } else {
-        // Fallback to a known version if auto-detection fails
-        "$sdkDir/build-tools/36.1.0/d8.bat"
-    }
-
-    // Use the android platform jar as library reference
-    val sdkPlatform = "$sdkDir/platforms/android-36/android.jar"
-    // Use current timestamp (seconds since epoch minus offset) as the jar name
-    val timestamp = System.currentTimeMillis() / 1000 - 1770000000
-    val outputJar = "$workingDir/src/main/assets/$timestamp.jar"
-    val flagFile = file("$workingDir/build/tmp/d8_flags.txt")
-
-    // Set the executable
-    executable = d8Path
-
-    doFirst {
-        // Delete all old .jar files from the assets directory before building
-        val assetsPath = file("$workingDir/src/main/assets")
-        assetsPath.listFiles()?.filter { it.extension == "jar" }?.forEach {
-            it.delete()
-            println("Deleted old jar: ${it.name}")
-        }
-
-        // --- Prepare files for conversion ---
-        val dependencyFiles = configurations.getByName("debugRuntimeClasspath").files
-
-        // Search for class files in all possible output directories
-        val possibleClassDirs = listOf(
-            file("$workingDir/build/tmp/kotlin-classes/debug"),
-            file("$workingDir/build/intermediates/built_in_kotlinc/debug/compileDebugKotlin/classes"),
-            file("$workingDir/build/intermediates/javac/debug/classes")
-        )
-
-        val classFiles = mutableListOf<String>()
-        possibleClassDirs.forEach { dir ->
-            if (dir.exists()) {
-                val files = fileTree(dir) {
-                    include("com/coc/suncode/jar/**/*.class")
-                }.files.map { it.absolutePath }
-                classFiles.addAll(files)
-                println("Found ${files.size} class files in ${dir.absolutePath}")
-            }
-        }
-
-        // Clean old output artifact
-        val jarFile = file(outputJar)
-        if (jarFile.exists()) jarFile.delete()
-
-        if (classFiles.isEmpty()) {
-            throw GradleException("No class files found for conversion. Check paths: ${possibleClassDirs.joinToString(", ")}")
-        }
-
-        // Build D8 argument list
-        val content = mutableListOf<String>()
-        content.add("--release")
-        content.add("--min-api")
-        content.add("24")
-        content.add("--lib")
-        content.add(sdkPlatform)
-        content.add("--output")
-        content.add(outputJar)
-
-        // Add dependency libraries (jars only)
-        dependencyFiles.forEach { file ->
-            if (file.extension == "jar") {
-                content.add("--classpath")
-                content.add(file.absolutePath)
-            }
-        }
-
-        // Add our own class files
-        classFiles.forEach {
-            content.add(it)
-        }
-
-        // Write args to a flag file to avoid command-line length and encoding issues
-        flagFile.parentFile.mkdirs()
-        flagFile.writeText(content.joinToString("\n"), Charsets.UTF_8)
-
-        println("--------------------------------------------------")
-        println("Using D8 from: ${highestBuildTools?.name ?: "Default Path"}")
-        println("Target Output: $outputJar")
-        println("Found ${classFiles.size} class files to convert.")
-        println("--------------------------------------------------")
-    }
-
-    // Use @ syntax to let d8 read args from the flag file
-    args("@${flagFile.absolutePath}")
-
+    description = "Build a portable standalone plugin without modifying APK assets"
+    dependsOn("compileDebugKotlin", "compileDebugJavaWithJavac")
+    val output = layout.buildDirectory.file("plugin/code.jar")
+    outputs.file(output)
+    inputs.files(provider { fileTree(layout.buildDirectory.dir("intermediates/built_in_kotlinc/debug/compileDebugKotlin/classes")) })
+    inputs.files(configurations.named("debugRuntimeClasspath"))
     doLast {
-        val outFile = file(outputJar)
-        if (outFile.exists()) {
-            println("--- SUCCESS: JAR built at ${outFile.name} ---")
-
-            // Encrypt the JAR using conda base Python
-            val pythonExe = "C:/Users/Azikaban/anaconda3/python.exe"
-            val scriptPath = file("encrypt_jar.py").absolutePath
-            val proc = ProcessBuilder(pythonExe, scriptPath, outFile.absolutePath)
-                .inheritIO().start()
-            val exitCode = proc.waitFor()
-            if (exitCode != 0) {
-                throw GradleException("JAR encryption failed with exit code $exitCode")
+        val sdk = androidComponents.sdkComponents.sdkDirectory.get().asFile
+        val buildTools = File(sdk, "build-tools/${android.buildToolsVersion}")
+        val d8 = File(buildTools, if (System.getProperty("os.name").startsWith("Windows")) "d8.bat" else "d8")
+        require(d8.isFile) { "D8 not installed: $d8" }
+        val classRoots = listOf("tmp/kotlin-classes/debug", "intermediates/built_in_kotlinc/debug/compileDebugKotlin/classes", "intermediates/javac/debug/compileDebugJavaWithJavac/classes").map { layout.buildDirectory.dir(it).get().asFile }
+        val classes = classRoots.flatMap { dir -> fileTree(dir) { include("com/coc/suncode/jar/**/*.class") }.files }.distinct()
+        check(classes.isNotEmpty()) { "No plugin classes were compiled" }
+        val stage = layout.buildDirectory.dir("plugin/staging").get().asFile.apply { deleteRecursively(); mkdirs() }
+        val arguments = mutableListOf("--release", "--min-api", "24", "--lib", File(sdk, "platforms/android-36/android.jar").path, "--output", File(stage, "code.jar").path)
+        configurations.getByName("debugRuntimeClasspath").files.forEachIndexed { index, dependency ->
+            if (dependency.extension == "jar") arguments.addAll(listOf("--classpath", dependency.path))
+            if (dependency.extension == "aar") ZipFile(dependency).use { archive ->
+                archive.entries().asSequence().filter { it.name.endsWith(".jar") }.forEachIndexed { nested, entry ->
+                    val extracted = File(stage, "dependency-$index-$nested.jar")
+                    archive.getInputStream(entry).use { input -> extracted.outputStream().use { input.copyTo(it) } }
+                    arguments.addAll(listOf("--classpath", extracted.path))
+                }
             }
-        } else {
-            println("--- ERROR: Output file was not generated ---")
         }
+        val hostJar = File(stage, "host.jar")
+        val added = mutableSetOf<String>()
+        JarOutputStream(hostJar.outputStream()).use { jar ->
+            classRoots.filter { it.exists() }.forEach { directory ->
+                fileTree(directory) { include("**/*.class"); exclude("com/coc/suncode/jar/**") }.forEach { source ->
+                    val entry = source.relativeTo(directory).invariantSeparatorsPath
+                    if (added.add(entry)) { jar.putNextEntry(JarEntry(entry)); source.inputStream().use { it.copyTo(jar) }; jar.closeEntry() }
+                }
+            }
+        }
+        arguments.addAll(listOf("--classpath", hostJar.path))
+        arguments.addAll(classes.map { it.path })
+        val flags = File(stage, "d8.args")
+        // D8 reads one literal argument per line; shell quoting would become part of the path.
+        flags.writeText(arguments.joinToString("\n"))
+        val log = File(stage, "d8.log")
+        val exit = ProcessBuilder(d8.path, "@${flags.path}").redirectErrorStream(true).redirectOutput(log).start().waitFor()
+        check(exit == 0) { "D8 failed; previous plugin remains intact:\n${log.readText().takeLast(12000)}" }
+        val target = output.get().asFile.apply { parentFile.mkdirs() }
+        Files.move(File(stage, "code.jar").toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
     }
 }
 
@@ -266,65 +175,37 @@ tasks.named("buildJar") {
     mustRunAfter("validateUploadJarGuard")
 }
 
-// Upload the encrypted JAR to the hot update server
+// Signing and upload configuration is explicit; private keys are never stored in the repository.
 tasks.register("uploadJar") {
     group = "build"
-    description = "Build, encrypt, and upload the JAR to the hot update server"
-    dependsOn("validateUploadJarGuard")
-    dependsOn("buildJar")
-
+    dependsOn("validateUploadJarGuard", "buildJar")
     doLast {
-        val assetsPath = file("${project.projectDir.absolutePath}/src/main/assets")
-        val encryptedJar = assetsPath.listFiles()
-            ?.firstOrNull { it.name.startsWith("encrypted_") && it.extension == "jar" }
-            ?: throw GradleException("No encrypted jar found in assets directory")
-
-        val pythonExe = "C:/Users/Azikaban/anaconda3/python.exe"
-        val scriptPath = file("upload_jar.py").absolutePath
-
-        println("Uploading ${encryptedJar.name} to hot update server...")
-        val proc = ProcessBuilder(pythonExe, scriptPath, encryptedJar.absolutePath)
-            .inheritIO().start()
-        val exitCode = proc.waitFor()
-        if (exitCode != 0) {
-            throw GradleException("JAR upload failed with exit code $exitCode")
-        }
-        println("--- Upload complete ---")
+        val key = providers.gradleProperty("signingKey").orNull ?: error("Pass -PsigningKey=/private/key.pem")
+        val url = providers.gradleProperty("uploadUrl").orNull ?: error("Pass -PuploadUrl=https://host/api/v1")
+        val python = providers.gradleProperty("python").orElse("python3").get()
+        val command = listOf(python, rootProject.file("scripts/release_plugin.py").path, "--input", layout.buildDirectory.file("plugin/code.jar").get().asFile.path, "--key", key, "--url", url)
+        check(ProcessBuilder(command).inheritIO().start().waitFor() == 0) { "Plugin publication failed" }
     }
 }
 
 tasks.register("deployAndReload") {
     group = "custom"
-    description = "Build JAR, push to device, and trigger debug reload"
     dependsOn("buildJar")
-
     doLast {
-        // Dynamically find the built jar in assets directory
-        val assetsPath = file("${project.projectDir.absolutePath}/src/main/assets")
-        val jarFile = assetsPath.listFiles()?.firstOrNull { it.extension == "jar" }
-            ?: throw GradleException("No jar found in assets directory")
-        val devicePath = "/data/data/com.coc.suncode/files/assets/${jarFile.name}"
-
-        // 1. Remove stale jar files from /sdcard before pushing
-        ProcessBuilder("adb", "shell", "rm", "-f", "/sdcard/*.jar")
-            .inheritIO().start().waitFor()
-
-        // 2. Push JAR to sdcard first (adb push can't write to /data/data directly)
-        ProcessBuilder("adb", "push", jarFile.absolutePath, "/sdcard/${jarFile.name}")
-            .inheritIO().start().waitFor()
-
-        // 3. Copy to private app dir with root
-        ProcessBuilder("adb", "shell", "su", "-c",
-            "'cp /sdcard/${jarFile.name} $devicePath && chmod 644 $devicePath'")
-            .inheritIO().start().waitFor()
-        println("--- Pushed ${jarFile.name} to device ---")
-
-        // 4. Send reload broadcast
-        ProcessBuilder("adb", "shell", "am", "broadcast",
-            "-a", "com.coc.suncode.SUN_RELOAD",
-            "-n", "com.coc.suncode/.core.system.daemon.DebugReloadReceiver")
-            .inheritIO().start().waitFor()
-        println("--- deployAndReload complete ---")
+        val sdk = androidComponents.sdkComponents.sdkDirectory.get().asFile
+        val adb = File(sdk, "platform-tools/" + if (System.getProperty("os.name").startsWith("Windows")) "adb.exe" else "adb").path
+        val prefix = mutableListOf(adb)
+        providers.gradleProperty("device").orNull?.let { prefix.addAll(listOf("-s", it)) }
+        fun run(vararg args: String) { check(ProcessBuilder(prefix + args).inheritIO().start().waitFor() == 0) { "adb failed: ${args.firstOrNull()}" } }
+        val version = System.currentTimeMillis() / 1000 - 1770000000L
+        val name = "$version.jar"
+        val temporary = "/data/local/tmp/sun-plugin-$version.jar"
+        // Only this task's exact temporary artifact is removed, even on failure.
+        try {
+            run("push", layout.buildDirectory.file("plugin/code.jar").get().asFile.path, temporary)
+            run("shell", "su", "-c", "mkdir -p /data/data/com.coc.suncode/files/assets && cp $temporary /data/data/com.coc.suncode/files/assets/$name && chmod 444 /data/data/com.coc.suncode/files/assets/$name")
+            run("shell", "am", "broadcast", "-a", "com.coc.suncode.SUN_RELOAD", "-n", "com.coc.suncode/.core.system.daemon.DebugReloadReceiver")
+        } finally { run("shell", "rm", "-f", temporary) }
     }
 }
 
@@ -372,23 +253,18 @@ tasks.register<Exec>("rustBuild") {
         ).joinToString(":")
     )
 
-    commandLine(
-        cargoExecutable,
-        "ndk",
-        "-t",
-        "arm64-v8a",
-        "-t",
-        "armeabi-v7a",
-        "-t",
-        "x86",
-        "-t",
-        "x86_64",
-        "-o",
-        "../app/src/main/jniLibs",
-        "build",
-        "--release"
-    )
+    val abis = providers.gradleProperty("abis").orNull?.split(",") ?: listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
+    val rustOutput = layout.buildDirectory.dir("rustJni").get().asFile
+    inputs.files(fileTree("../rust_logic/src"), file("../rust_logic/Cargo.toml"), file("../rust_logic/Cargo.lock"))
+    inputs.property("abis", abis)
+    inputs.property("ndk", ndkHome)
+    inputs.property("cargo", cargoExecutable)
+    outputs.dir(rustOutput)
+    doFirst { rustOutput.deleteRecursively(); rustOutput.mkdirs() }
+    commandLine(listOf(cargoExecutable, "ndk") + abis.flatMap { listOf("-t", it) } + listOf("-o", rustOutput.path, "build", "--release", "--locked"))
 }
+
+android.sourceSets.getByName("main").jniLibs.setSrcDirs(listOf(layout.buildDirectory.dir("rustJni")))
 
 tasks.configureEach {
     if (name == "mergeDebugJniLibFolders" || name == "mergeReleaseJniLibFolders") {

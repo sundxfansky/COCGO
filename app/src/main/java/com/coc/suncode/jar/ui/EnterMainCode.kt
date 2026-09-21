@@ -19,6 +19,7 @@ import androidx.navigation.compose.rememberNavController
 import com.coc.suncode.core.data.database.GlobalVars
 import com.coc.suncode.core.util.basic.RunShell
 import com.coc.suncode.interfaces.MainCode
+import com.coc.suncode.core.data.websocket.ServerActions
 import com.coc.suncode.jar.code.runMainScript
 import com.coc.suncode.jar.ui.components.CustomButton
 import com.coc.suncode.jar.ui.pages.mainbase.MainBaseUpgradePriority
@@ -36,6 +37,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 
 class EnterMainCode : MainCode {
+    override fun refreshConfigs(actions: ServerActions) {
+        ConfigManager.initializeAllConfigs(actions)
+        GlobalVars.isConfigLoaded = true
+    }
+
     @Composable
     override fun ShowMainUI(context: Context, onClose: () -> Unit) {
         // Initialize states from Schema

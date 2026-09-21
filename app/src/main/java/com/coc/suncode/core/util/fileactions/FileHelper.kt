@@ -61,6 +61,8 @@ object FileHelper {
             "path" to path
         )
         val response = serverActions.sendActionSync(checkExistsAction)
-        return response?.has("status") == true && response.get("status").asString == "success"
+        // A successful query can still report that the requested file does not exist.
+        return response?.get("status")?.asString == "success" &&
+            response.get("data")?.asString == "true"
     }
 }

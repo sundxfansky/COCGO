@@ -3,6 +3,7 @@
 package com.coc.suncode.jar.ui.pages.single
 
 import android.os.Environment
+import com.coc.suncode.core.util.fileactions.SavePath
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
@@ -23,7 +24,7 @@ import com.coc.suncode.core.data.database.GlobalVars
 import com.coc.suncode.jar.ui.components.SettingInputRow
 import com.coc.suncode.jar.ui.schema.Schema
 import com.coc.suncode.jar.ui.schema.Schema.GLOBAL_SETTINGS
-import com.topjohnwu.superuser.Shell
+import com.coc.suncode.core.util.basic.ServerShell
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -79,6 +80,8 @@ fun ExtractGameSaveContent() {
     fun performExtract(variant: GameVariant) {
         coroutineScope.launch(Dispatchers.IO) {
             val suffix = GlobalVars.configStates[variant.settingKey]!!.value
+            // Reject traversal and command interpolation before touching saved games.
+            if (!SavePath.isValid(suffix)) { showMsg("存档名只能包含文字、数字、点、横线和下划线"); return@launch }
             val sdPath = Environment.getExternalStorageDirectory().path
 
             // [Modification] Base directory added a layer of sunFiles
@@ -90,7 +93,7 @@ fun ExtractGameSaveContent() {
 
             // 1. Check if save already exists (use Shell to check shared_prefs folder)
             val checkExistCmd = "[ -d \"$targetSaveDir/shared_prefs\" ]"
-            if (Shell.cmd(checkExistCmd).exec().isSuccess) {
+            if (ServerShell.exec(checkExistCmd).isSuccess) {
                 showMsg("提取失败，存档已存在")
                 return@launch
             }
@@ -99,21 +102,21 @@ fun ExtractGameSaveContent() {
 
             // 2. Ensure directory structure exists
             // mkdir -p will recursively create directories: if sunFiles doesn't exist it will be created, if zkqCNGameSave doesn't exist it will also be created
-            Shell.cmd("mkdir -p \"$gameRootDir\"").exec()
+            ServerShell.exec("mkdir -p \"$gameRootDir\"")
 
             // Create directory for this save
-            Shell.cmd("mkdir -p \"$targetSaveDir\"").exec()
+            ServerShell.exec("mkdir -p \"$targetSaveDir\"")
 
             // 3. Iterate and copy directories
             variant.targetSubDirs.forEach { dir ->
                 val destPath = "$targetSaveDir/$dir"
                 // Create target subdirectory
-                Shell.cmd("mkdir -p \"$destPath\"").exec()
+                ServerShell.exec("mkdir -p \"$destPath\"")
 
                 // 使用 Root 权限复制文件
                 // 路径加引号防止空格问题
                 val cmd = "cp -r /data/data/${variant.packageName}/$dir/* \"$destPath\""
-                Shell.cmd(cmd).exec()
+                ServerShell.exec(cmd)
             }
 
             showMsg("提取成功！")
@@ -124,6 +127,8 @@ fun ExtractGameSaveContent() {
     fun performDelete(variant: GameVariant) {
         coroutineScope.launch(Dispatchers.IO) {
             val suffix = GlobalVars.configStates[variant.settingKey]!!.value
+            // Reject traversal and command interpolation before touching saved games.
+            if (!SavePath.isValid(suffix)) { showMsg("存档名只能包含文字、数字、点、横线和下划线"); return@launch }
 
             if (suffix.isEmpty()) {
                 showMsg("错误：未获取到路径序号")
@@ -136,7 +141,7 @@ fun ExtractGameSaveContent() {
 
             // 使用 Shell 检查目录是否存在
             val checkExistCmd = "[ -d \"$targetPath\" ]"
-            if (!Shell.cmd(checkExistCmd).exec().isSuccess) {
+            if (!ServerShell.exec(checkExistCmd).isSuccess) {
                 showMsg("删除失败，存档不存在")
                 return@launch
             }
@@ -144,7 +149,7 @@ fun ExtractGameSaveContent() {
             showMsg("删除中...")
 
             // 执行删除
-            val result = Shell.cmd("rm -rf \"$targetPath\"").exec()
+            val result = ServerShell.exec("rm -rf \"$targetPath\"")
 
             if (result.isSuccess) {
                 showMsg("删除成功！")

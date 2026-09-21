@@ -12,7 +12,7 @@ import com.coc.suncode.jar.code.universal.smalltools.killGame
 import com.coc.suncode.jar.code.universal.smalltools.runGame
 import com.coc.suncode.jar.code.universal.tutorial.AllTutorials
 import com.coc.suncode.jar.ui.schema.Schema
-import com.topjohnwu.superuser.Shell
+import com.coc.suncode.core.util.basic.ServerShell
 
 @SuppressLint("SdCardPath")
 suspend fun batchCreateAccounts() {
@@ -35,7 +35,7 @@ suspend fun batchCreateAccounts() {
             while (!tutorialPassed) {
                 // Kill game and clear save data to force a fresh account
                 killGame()
-                Shell.cmd("rm -rf \"/data/data/$globalPackageName/shared_prefs\"/*").exec()
+                ServerShell.exec("rm -rf \"/data/data/$globalPackageName/shared_prefs\"/*")
 
                 // Launch the global version game
                 runGame()
@@ -48,8 +48,8 @@ suspend fun batchCreateAccounts() {
             }
 
             // Extract game files to the save directory
-            Shell.cmd("mkdir -p \"$path/shared_prefs\"").exec()
-            Shell.cmd("cp -r /data/data/$globalPackageName/shared_prefs/* \"$path/shared_prefs/\"").exec()
+            ServerShell.exec("mkdir -p \"$path/shared_prefs\"")
+            ServerShell.exec("cp -r /data/data/$globalPackageName/shared_prefs/* \"$path/shared_prefs/\"")
             ShowMessage("账号$i 创建成功，存档已保存至 $path")
         }
     }
