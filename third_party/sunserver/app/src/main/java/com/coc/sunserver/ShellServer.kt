@@ -9,11 +9,14 @@ import io.ktor.client.engine.cio.CIO as ClientCIO
 import io.ktor.client.plugins.websocket.WebSockets as ClientWebSockets
 import io.ktor.client.plugins.websocket.webSocket
 import io.ktor.http.ContentType
+import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
+import io.ktor.server.websocket.WebSockets
+import io.ktor.server.websocket.webSocket
 import io.ktor.websocket.Frame
 import io.ktor.websocket.readText
 import kotlinx.coroutines.delay
@@ -37,7 +40,19 @@ object ShellServer {
             // Launch the embedded WebSocket/HTTP server in a concurrent coroutine
             launch {
                 embeddedServer(CIO, port = 6839) {
+                    install(WebSockets)
                     routing {
+                        // Keep the host's WebSocket protocol alongside the HTTP endpoint.
+                        webSocket("/sun") {
+                            for (frame in incoming) {
+                                if (frame is Frame.Text) {
+                                    val response = dispatchClientMessage(frame.readText())
+                                    if (response != null) {
+                                        send(Frame.Text(response))
+                                    }
+                                }
+                            }
+                        }
                         // HTTP GET endpoint: all command parameters are passed as URL query parameters.
                         // Example: GET /sun?actionType=connection_test
                         get("/sun") {

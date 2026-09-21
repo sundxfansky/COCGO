@@ -255,6 +255,9 @@ fun HomeScreen(
                         }
                     }
                     item {
+                        CloudSettings()
+                    }
+                    item {
                         SettingSection {
                             BatchCreateAccount()
                         }

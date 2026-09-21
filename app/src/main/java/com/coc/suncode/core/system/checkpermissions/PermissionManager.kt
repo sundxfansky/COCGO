@@ -4,11 +4,11 @@ import android.content.Context
 import android.provider.Settings
 import androidx.core.app.NotificationManagerCompat
 import com.coc.suncode.core.system.daemon.ServerManager
+import com.coc.suncode.core.util.basic.ShowMessage
 import com.topjohnwu.superuser.Shell
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
-import com.coc.suncode.core.util.fileactions.LogHelper
 
 object PermissionManager {
     /**
@@ -19,9 +19,8 @@ object PermissionManager {
         onStatusChange: (RootStatus) -> Unit
     ): RootStatus =
         withContext(Dispatchers.IO) {
-            val shell = Shell.getShell()
-            // 1. Check Root permission first
-            if (!shell.isRoot) {
+            // Refresh a cached non-root shell before deciding that access was denied.
+            if (RootShellProvider.getRootShell() == null) {
                 return@withContext RootStatus.ROOT_DENIED
             }
             // 2. If Root is available, try to grant permissions silently
@@ -60,8 +59,8 @@ object PermissionManager {
                 while (response == null && attempts < 10) {
                     response = ServerHelper.waitForServerResponse()
                     if (response == null) {
-                        LogHelper.showDebugInfo("Server not responding, retrying... (Attempt ${attempts + 1})")
-                        ServerManager.startServer(context)
+                        // Retry the handshake without killing a server that is still starting.
+                        ShowMessage("等待 Root 服务响应，第 ${attempts + 1} 次重试", isChecking = false)
                         delay(1000)
                         attempts++
                     }

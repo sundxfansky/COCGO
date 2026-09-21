@@ -10,9 +10,12 @@ import com.coc.suncode.core.util.basic.ShowMessage
 import com.coc.suncode.core.util.fileactions.LogHelper
 import com.coc.suncode.core.data.cloud.CloudConfigSync
 import com.coc.suncode.core.data.database.GlobalVars
+import com.coc.suncode.jar.ui.schema.ConfigManager
 import com.topjohnwu.superuser.Shell
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private lateinit var projectionPermissionHelper: ProjectionPermissionHelper
@@ -48,11 +51,35 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        startCloudSyncIfReady()
+    }
+
+    /** Starts cloud synchronization after the root WebSocket client is ready. */
+    fun restartCloudSync() {
+        cloudSync?.stop()
+        cloudSync = null
+        startCloudSyncIfReady()
+    }
+
+    private fun startCloudSyncIfReady() {
         // The website/token are optional; a missing token keeps the app fully offline.
         val token = getSharedPreferences("cloud", MODE_PRIVATE).getString("token", "") ?: ""
         val actions = GlobalVars.serverActions
-        if (cloudSync == null && actions != null && BuildConfig.BASE_URL.isNotBlank() && token.isNotBlank()) {
-            cloudSync = CloudConfigSync(BuildConfig.BASE_URL.trimEnd('/') + "/api/v1", token, actions)
+        val defaultEndpoint = BuildConfig.BASE_URL
+            .takeIf { it.isNotBlank() }
+            ?.trimEnd('/')
+            ?.plus("/api/v1")
+            .orEmpty()
+        val endpoint = getSharedPreferences("cloud", MODE_PRIVATE)
+            .getString("base_url", defaultEndpoint)?.trimEnd('/') ?: defaultEndpoint
+        if (cloudSync == null && actions != null && endpoint.isNotBlank() && token.isNotBlank()) {
+            cloudSync = CloudConfigSync(endpoint, token, actions) {
+                cloudScope.launch(Dispatchers.Main.immediate) {
+                    // Rebuild Compose states so remote values are visible immediately.
+                    ConfigManager.initializeAllConfigs(actions)
+                    GlobalVars.isConfigLoaded = true
+                }
+            }
             cloudSync?.start(cloudScope)
         }
     }

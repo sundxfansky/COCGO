@@ -216,6 +216,36 @@ fun SettingInputRow(key: String, afterChange: ((String) -> Unit)? = null) {
     }
 }
 
+/** Renders a text input that is not part of the bot configuration schema. */
+@Composable
+fun CloudConfigInput(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.padding(end = 8.dp),
+            style = MaterialTheme.typography.labelMedium
+        )
+        BasicTextField(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = Modifier
+                .weight(1f)
+                .background(Color.White, RoundedCornerShape(4.dp))
+                .border(1.dp, Color.Gray, RoundedCornerShape(4.dp))
+                .padding(4.dp)
+        )
+    }
+}
+
 // Variant of SettingInputRow that appends a suffix text after the input field,
 // allowing sentence-style labels such as: 持续检测 [xx] 秒钟
 @Composable

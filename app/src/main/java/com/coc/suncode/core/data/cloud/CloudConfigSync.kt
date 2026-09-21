@@ -14,7 +14,12 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 
 /** Polls the cloud config endpoint and forwards newer JSON to the local config server. */
-class CloudConfigSync(private val endpoint: String, private val token: String, private val actions: ServerActions) {
+class CloudConfigSync(
+    private val endpoint: String,
+    private val token: String,
+    private val actions: ServerActions,
+    private val onConfigUpdated: (() -> Unit)? = null
+) {
     private val client = OkHttpClient()
     private val gson = Gson()
     private var job: Job? = null
@@ -32,7 +37,11 @@ class CloudConfigSync(private val endpoint: String, private val token: String, p
                             val body = response.body?.string() ?: return@use
                             val root = gson.fromJson(body, JsonObject::class.java)
                             val next = root.get("version")?.asInt ?: version
-                            if (next > version && root.has("config")) { actions.updateConfig(root.getAsJsonObject("config")); version = next }
+                            if (next > version && root.has("config")) {
+                                actions.updateConfig(root.getAsJsonObject("config"))
+                                version = next
+                                onConfigUpdated?.invoke()
+                            }
                         }
                     }
                 } catch (e: Exception) { ShowMessage("云端配置同步失败: ${e.message}") }

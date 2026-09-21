@@ -2,7 +2,7 @@ package com.coc.suncode.core.system.daemon
 
 import android.content.Context
 import com.coc.suncode.core.data.database.GlobalVars
-import com.coc.suncode.core.util.fileactions.LogHelper.showDebugInfo
+import com.coc.suncode.core.util.basic.ShowMessage
 import com.topjohnwu.superuser.Shell
 import java.io.File
 import java.net.InetSocketAddress
@@ -10,33 +10,30 @@ import java.net.Socket
 
 object ServerManager {
 
+    @Synchronized
     fun startServer(context: Context): Boolean {
         return try {
-            // Reuse a healthy local server to make app restarts fast and idempotent.
-            if (isServerAvailable()) return true
             val serverFile = File(context.filesDir, "server.apk")
-            if (!serverFile.exists()) {
-                context.assets.open("server.apk").use { input ->
-                    serverFile.outputStream().use { output ->
-                        input.copyTo(output)
-                    }
-                }
-            }
-            // Android 14+ rejects dynamically loaded APK/DEX files that remain writable.
-            if (!serverFile.setReadOnly()) {
-                Shell.cmd("chmod 444 '${serverFile.absolutePath}'").exec()
+            val serverUpdated = ServerApkInstaller.install(serverFile) {
+                context.assets.open("server.apk")
             }
             GlobalVars.serverPath = serverFile.absolutePath
+
+            // Reuse only the current asset; an app update must restart an outdated server.
+            if (!serverUpdated && isServerAvailable()) return true
 
             // Kill any stale ShellServer processes to free port 6839 before starting a new one
             Shell.cmd("pkill -f com.coc.sunserver.ShellServer").exec()
 
             // Start the server in a detached session so it survives parent process termination
-            Shell.cmd("setsid sh -c 'export CLASSPATH=${GlobalVars.serverPath}; exec app_process /system/bin com.coc.sunserver.ShellServer' > /dev/null 2>&1 &")
+            val result = Shell.cmd("setsid sh -c 'export CLASSPATH=${GlobalVars.serverPath}; exec app_process /system/bin com.coc.sunserver.ShellServer' < /dev/null > /dev/null 2>&1 &")
                 .exec()
-            true
+            if (!result.isSuccess) {
+                ShowMessage("Root 服务启动命令失败：${result.err.joinToString("\n")}", isChecking = false)
+            }
+            result.isSuccess
         } catch (e: Exception) {
-            e.printStackTrace()
+            ShowMessage("Root 服务启动失败：${e.message}", isChecking = false)
             false
         }
     }
