@@ -41,7 +41,7 @@ object FileHelper {
         }
     }
 
-    // Delete a file at the given path via the WebSocket server
+    // Keep script calls stable while the host executes privileged I/O through its private pipe.
     suspend fun deleteJson(path: String): Boolean {
         val serverActions = GlobalVars.serverActions ?: logAndRestart("Server actions not found")
         val deleteAction = mapOf(

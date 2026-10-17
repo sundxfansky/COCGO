@@ -1,6 +1,7 @@
 package com.coc.suncode.jar.code
 
 import android.graphics.Bitmap
+import android.util.Log
 import com.coc.suncode.core.system.screencapture.ScreenCaptureManager
 import com.coc.suncode.core.util.basic.ShowMessage
 import com.coc.suncode.core.util.basic.delayWithMultiplier
@@ -43,7 +44,7 @@ suspend fun takeScreenShotForUpgradeCost() {
                                 croppedBitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
                             }
                         } catch (e: Exception) {
-                            e.printStackTrace()
+                            ShowMessage.record("Failed to save the test screenshot", Log.ERROR, throwable = e)
                         } finally {
                             croppedBitmap.recycle()
                         }

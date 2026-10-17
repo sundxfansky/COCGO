@@ -15,6 +15,7 @@ gson = "2.13.2"
 webkit = "1.15.0"
 timber = "5.0.1"
 text-recognition-chinese = "16.0.1"
+onnxRuntime = "1.28.0"
 
 
 
@@ -43,6 +44,7 @@ kotlin-reflect = { group = "org.jetbrains.kotlin", name = "kotlin-reflect", vers
 androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version = "2.9.7" }
 timber = { group = "com.jakewharton.timber", name = "timber", version.ref = "timber" }
 mlkit-text-recognition-chinese = { group = "com.google.mlkit", name = "text-recognition-chinese", version.ref = "text-recognition-chinese" }
+onnx-runtime = { group = "com.microsoft.onnxruntime", name = "onnxruntime-android", version.ref = "onnxRuntime" }
 mlkit-text-recognition = { group = "com.google.mlkit", name = "text-recognition", version = "16.0.1" }
 
 

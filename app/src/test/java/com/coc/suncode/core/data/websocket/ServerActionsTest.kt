@@ -129,4 +129,36 @@ class ServerActionsTest {
             assertEquals("original", actions.getValue("saved"))
         } finally { GlobalVars.serverActions = previous }
     }
+
+    @Test
+    fun missingConfigUsesDefaultsButIoFailureDoesNot() = runBlocking {
+        val missing = FakeTransport()
+        val defaults = ServerActions(missing, baseDir = "/test/")
+        missing.reply("false")
+        missing.listeners.last()("{\"status\":\"error\",\"code\":\"NOT_FOUND\",\"message\":\"Missing sun_config.json\"}")
+        assertTrue(defaults.awaitReady())
+        assertEquals(0, defaults.configJson.size())
+        defaults.close()
+
+        val denied = FakeTransport()
+        val unreadable = ServerActions(denied, baseDir = "/test/")
+        denied.reply("true")
+        denied.listeners.last()("{\"status\":\"error\",\"code\":\"FILE_ERROR\",\"message\":\"sun_config.json: permission denied\"}")
+        assertFalse(unreadable.awaitReady())
+        unreadable.close()
+    }
+
+    @Test
+    fun invalidConfigPreventsReadyAndUnfinishedStartupTimesOut() = runBlocking {
+        val invalid = FakeTransport()
+        val actions = ServerActions(invalid, baseDir = "/test/")
+        invalid.reply("true")
+        invalid.reply("not-json")
+        assertFalse(actions.awaitReady())
+        actions.close()
+
+        val pending = ServerActions(FakeTransport(), baseDir = "/test/")
+        assertFalse(pending.awaitReady(timeout = 20))
+        pending.close()
+    }
 }

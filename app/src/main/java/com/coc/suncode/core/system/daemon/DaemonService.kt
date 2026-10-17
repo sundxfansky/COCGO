@@ -6,17 +6,17 @@ import android.content.Intent
 import android.os.IBinder
 import com.coc.suncode.MainActivity
 import com.coc.suncode.core.data.websocket.ServerActions
+import com.coc.suncode.core.system.checkpermissions.RootShellProvider
 import com.coc.suncode.core.ui.floatingwindows.NotificationHelper
-import com.coc.suncode.core.data.websocket.ServerConnection
+import com.coc.suncode.core.util.basic.ShowMessage
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.net.InetSocketAddress
-import java.net.Socket
-//Used for start on deivce boot
+
+// Read the local startup setting when the device boots.
 class DaemonService : Service() {
 
     private val scope = CoroutineScope(Dispatchers.IO)
@@ -30,67 +30,43 @@ class DaemonService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (startJob?.isActive == true || serverActions != null) return START_NOT_STICKY
+        if (startJob?.isActive == true) return START_NOT_STICKY
         startJob = scope.launch {
-            // 1. Initialize Shell
-            println("start daemon service")
-            
-            // 2. Ensure Server is Running
-            // Try to start server multiple times if needed, or ensuring it's up
-            ServerManager.startServer(this@DaemonService)
-
-            // 3. Wait for Server Port to be Open
-            if (waitForServerPort(6839, 15000)) {
-                 println("Server port is open, connecting...")
-                 
-                 // 4. Connect to WebSocket & Read Config
-                val serverConnection = ServerConnection("ws://localhost:6839/sun")
-                serverActions = ServerActions(serverConnection) {
-                    // Callback when config is loaded
-                    val configJson = serverActions?.configJson
-                    if (configJson != null) {
-                        val autoStart = if (configJson.has("auto_start")) {
-                            try {
-                                configJson.get("auto_start").asInt
-                            } catch (_: Exception) {
-                                0
-                            }
-                        } else {
-                            0 
-                        }
-
-                        if (autoStart == 1) {
-                             val i = Intent(this@DaemonService, MainActivity::class.java)
-                             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                             startActivity(i)
-                        }
-                    }
-                    stopSelf() // Work done
+            ShowMessage.record("读取本地开机启动配置")
+            try {
+                if (RootShellProvider.getRootShell() == null) {
+                    ShowMessage.record("开机启动检查未获得 Root 权限")
+                    return@launch
                 }
-            } else {
-                println("Server failed to start within timeout.")
-                stopSelf()
+                // This short-lived reader must not take ownership of the UI's shared backend.
+                val actions = ServerActions()
+                serverActions = actions
+                if (!actions.awaitReady()) {
+                    ShowMessage.record("开机启动配置读取失败")
+                    return@launch
+                }
+                val autoStart = runCatching { actions.getValue("auto_start")?.toInt() }
+                    .getOrNull() ?: 0
+                if (autoStart == 1) {
+                    val activityIntent = Intent(this@DaemonService, MainActivity::class.java)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    startActivity(activityIntent)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                ShowMessage.record("开机启动检查失败：${e.message}", throwable = e)
+            } finally {
+                serverActions?.close()
+                serverActions = null
+                stopSelf(startId)
             }
         }
         return START_NOT_STICKY
     }
 
-    private suspend fun waitForServerPort(port: Int, timeoutMs: Long): Boolean {
-        val startTime = System.currentTimeMillis()
-        while (System.currentTimeMillis() - startTime < timeoutMs) {
-            try {
-                Socket().use { it.connect(InetSocketAddress("127.0.0.1", port), 200) }
-                return true
-            } catch (_: Exception) {
-                // Ignore and retry
-                delay(500)
-            }
-        }
-        return false
-    }
-
     override fun onDestroy() {
-        // A completed or stopped boot probe must not retain its socket and coroutine scope.
+        // A completed or stopped boot check must release its backend and coroutine scope.
         scope.cancel()
         serverActions?.close()
         serverActions = null

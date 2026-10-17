@@ -1,6 +1,6 @@
 package com.coc.suncode.core.data.websocket
 
-/** Transport boundary keeps request ordering testable without an Android device. */
+/** Stable plugin boundary; production uses private local pipes, with no network listener. */
 interface ServerTransport {
     fun connect(onOpen: () -> Unit, onMessage: (String) -> Unit, onFailure: (Throwable) -> Unit)
     fun sendAction(action: Any): Boolean

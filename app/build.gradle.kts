@@ -197,7 +197,9 @@ tasks.register("deployAndReload") {
         val prefix = mutableListOf(adb)
         providers.gradleProperty("device").orNull?.let { prefix.addAll(listOf("-s", it)) }
         fun run(vararg args: String) { check(ProcessBuilder(prefix + args).inheritIO().start().waitFor() == 0) { "adb failed: ${args.firstOrNull()}" } }
-        val version = System.currentTimeMillis() / 1000 - 1770000000L
+        // Use the raw Unix timestamp (not an offset from it) so this always outranks any
+        // leftover plugin file on the device, no matter how large its version number is.
+        val version = System.currentTimeMillis() / 1000
         val name = "$version.jar"
         val temporary = "/data/local/tmp/sun-plugin-$version.jar"
         // Only this task's exact temporary artifact is removed, even on failure.
@@ -303,23 +305,12 @@ tasks.register<Exec>("runDebugOnDevice") {
 
 tasks.register<Exec>("debugLogs") {
     group = "debug"
-    description = "Show only application and local server logs"
+    description = "Show application and native runtime logs"
     val serial = providers.gradleProperty("device").orNull
     commandLine(buildList {
         add("adb")
         if (!serial.isNullOrBlank()) addAll(listOf("-s", serial))
         addAll(listOf("logcat", "sun_debug:V", "sun_rust:V", "AndroidRuntime:E", "*:S"))
-    })
-}
-
-tasks.register<Exec>("stopDebugServer") {
-    group = "debug"
-    description = "Stop the Root ShellServer on the selected adb device"
-    val serial = providers.gradleProperty("device").orNull
-    commandLine(buildList {
-        add("adb")
-        if (!serial.isNullOrBlank()) addAll(listOf("-s", serial))
-        addAll(listOf("shell", "su", "-c", "pkill -f com.coc.sunserver.ShellServer"))
     })
 }
 
@@ -332,6 +323,7 @@ dependencies {
     implementation(libs.timber)
     implementation(libs.mlkit.text.recognition.chinese)
     implementation(libs.mlkit.text.recognition)
+    implementation(libs.onnx.runtime)
     implementation(libs.kotlin.reflect)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

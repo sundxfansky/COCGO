@@ -23,7 +23,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.toSize
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
@@ -191,9 +192,19 @@ class ControlWindowService : Service(), LifecycleOwner, SavedStateRegistryOwner 
         var componentSize by remember { mutableStateOf(Size.Zero) }
         var isAtRightSide by remember { mutableStateOf(true) }
 
-        val windowInfo = LocalWindowInfo.current
-        val screenWidth = windowInfo.containerSize.width
-        val screenHeight = windowInfo.containerSize.height
+        // The controls use WRAP_CONTENT; their window size is not the display size.
+        val configuration = LocalConfiguration.current
+        val screenSize = remember(configuration) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                val bounds = windowManager.currentWindowMetrics.bounds
+                IntSize(bounds.width(), bounds.height())
+            } else {
+                val metrics = resources.displayMetrics
+                IntSize(metrics.widthPixels, metrics.heightPixels)
+            }
+        }
+        val screenWidth = screenSize.width
+        val screenHeight = screenSize.height
 
         var isDragging by remember { mutableStateOf(false) }
 

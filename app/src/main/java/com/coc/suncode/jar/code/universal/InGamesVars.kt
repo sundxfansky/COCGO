@@ -1,5 +1,7 @@
 package com.coc.suncode.jar.code.universal
 
+import com.coc.suncode.core.util.touchactions.TouchActions
+
 /**
  * Represents the target game version/server type, carrying all package and launch metadata.
  * Use [fromId] to convert the integer stored in config to a [GameVersion].
@@ -27,5 +29,14 @@ object InGamesVars {
 
     @Volatile
     var currentGameVersion: GameVersion = GameVersion.CN
+        set(value) {
+            // The host owns input; the dynamic module only selects the intended application.
+            TouchActions.selectTargetPackage(value.packageName)
+            field = value
+        }
     var adTime: Int = 15
+
+    init {
+        TouchActions.selectTargetPackage(currentGameVersion.packageName)
+    }
 }

@@ -28,6 +28,11 @@ suspend fun mainBaseAttack(): Boolean {
         delayWithMultiplier(1000)
         runGame()
     } else {
+        val speedUpEnabled = getBooleanConfigRuntime(Schema.MAIN_BASE_SETTINGS.SPEED_UP_BATTLE.key)
+        // The speed toggle only appears later in the battle (e.g. once the opponent's defenses
+        // are mostly cleared), not right after deployment, so this is polled every pass alongside
+        // the end-battle check rather than attempted once up front.
+        var speedUpTapsRemaining = if (speedUpEnabled) 2 else 0
         while (true) {
             val elapsed = System.currentTimeMillis() - startTime
 
@@ -47,6 +52,14 @@ suspend fun mainBaseAttack(): Boolean {
                 delayWithMultiplier(1000)
                 TouchActions.tap(640, 610, delayTime = 1500)
                 break
+            }
+
+            if (speedUpTapsRemaining > 0) {
+                val speedButton = findMultiColors(schema = MyColors.SpeedUpButton)
+                if (speedButton != null) {
+                    TouchActions.tap(speedButton.x, speedButton.y, delayTime = 500)
+                    speedUpTapsRemaining--
+                }
             }
 
             delay(500) // Poll every second to avoid busy-waiting

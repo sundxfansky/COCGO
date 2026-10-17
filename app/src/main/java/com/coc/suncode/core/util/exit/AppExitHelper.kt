@@ -2,23 +2,27 @@ package com.coc.suncode.core.util.exit
 
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import com.coc.suncode.core.data.database.GlobalVars
 import com.coc.suncode.core.system.daemon.DaemonService
 import com.coc.suncode.core.ui.floatingwindows.ControlWindowService
 import com.coc.suncode.core.ui.floatingwindows.MessageBoxService
 import com.coc.suncode.core.ui.floatingwindows.UIWindowService
-import com.coc.suncode.core.system.accessibility.MyAccessibilityService
 import com.coc.suncode.core.system.screencapture.ScreenCaptureManager
+import com.coc.suncode.core.system.input.RootTouchClient
+import com.coc.suncode.core.util.basic.ShowMessage
 import com.topjohnwu.superuser.Shell
 import kotlin.system.exitProcess
 
 object AppExitHelper {
 
     fun exitApplication(context: Context) {
+        RootTouchClient.close()
+        GlobalVars.serverActions?.close()
+        GlobalVars.serverActions = null
         restoreDefaultInputMethod()
         stopDaemonProcess()
         stopAllServices(context)
-        stopShellServer()
         // Kill the current process
         exitProcess(0)
     }
@@ -27,16 +31,6 @@ object AppExitHelper {
         val defaultIme = GlobalVars.defaultInputMethod
         if (!defaultIme.isNullOrBlank()) {
             Shell.cmd("ime set $defaultIme").exec()
-        }
-    }
-
-    private fun stopShellServer() {
-        try {
-            // 使用 pkill -f 匹配包含指定类名的全路径进程
-            // com.coc.sunserver.ShellServer 是你在 app_process 中启动的类名
-            Shell.cmd("pkill -f com.coc.sunserver.ShellServer").exec()
-        } catch (e: Exception) {
-            e.printStackTrace()
         }
     }
 
@@ -57,7 +51,7 @@ object AppExitHelper {
                 }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            ShowMessage.record("Failed to stop the daemon process", Log.ERROR, throwable = e)
         }
     }
 
@@ -71,7 +65,7 @@ object AppExitHelper {
             // Release screen capture resources
             ScreenCaptureManager.releaseAll()
         } catch (e: Exception) {
-            e.printStackTrace()
+            ShowMessage.record("Failed to stop application services", Log.ERROR, throwable = e)
         }
     }
 }

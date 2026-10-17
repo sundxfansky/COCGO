@@ -16,6 +16,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import com.coc.suncode.core.util.fileactions.LogHelper
 import java.io.BufferedInputStream
 import java.io.ByteArrayOutputStream
 import java.io.IOException
@@ -64,12 +65,14 @@ object ShellScreenCapture {
                 } } }, "capture-stderr").apply { isDaemon = true; start() }
                 shellStdin = proc.outputStream
                 shellStdout = BufferedInputStream(proc.inputStream, STREAM_BUFFER_SIZE)
+                LogHelper.showDebugInfo("ShellScreenCapture: started root shell")
 
                 // Drain any initial output (e.g. Magisk greeting) by sending a marker
                 val deadline = watchdog.schedule({ proc.destroy() }, 5, TimeUnit.SECONDS)
                 try { drainUntilMarker() } finally { deadline.cancel(false) }
 
             } catch (e: Exception) {
+                LogHelper.showDebugInfo("ShellScreenCapture: root shell startup failed: ${e.message}")
                 closeConnectionLocked()
                 throw e
             }
@@ -157,13 +160,16 @@ object ShellScreenCapture {
                 val result = try { captureViaPng(stdin, stdout, asBitmap) } finally { deadline.cancel(false) }
 
                 if (result != null) {
+                    if (attempt > 0) LogHelper.showDebugInfo("ShellScreenCapture: capture recovered after reconnect")
                     return result
                 }
 
+                LogHelper.showDebugInfo("ShellScreenCapture: screencap returned no image")
                 return null
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                LogHelper.showDebugInfo("ShellScreenCapture: capture attempt ${attempt + 1} failed: ${e.message}")
                 synchronized(connectionLock) { closeConnectionLocked() }
                 currentCoroutineContext().ensureActive()
                 if (attempt > 0) return null

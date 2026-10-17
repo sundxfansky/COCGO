@@ -7,6 +7,13 @@ import android.os.Handler
 import android.os.Looper
 
 object MessageBoxHelper {
+    /** Hide an existing transient message without starting a new service. */
+    fun dismissFloatingMessage() {
+        if (MessageBoxService.isRunning.get()) {
+            MessageBoxService.messageFlow.tryEmit(MessageData("", 0, 0, 9f, 0L))
+        }
+    }
+
     fun showFloatingMessage(
         context: Context,
         text: String,

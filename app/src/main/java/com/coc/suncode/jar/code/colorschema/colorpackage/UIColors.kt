@@ -34,6 +34,7 @@ interface IUIColors {
     val MorePointCoupon: ColorSchema
     val TencentChildProtection: ColorSchema
     val CollectElixirCartTutorial: ColorSchema
+    val ChestRewardContinue: ColorSchema
 }
 
 object UIColors : IUIColors {
@@ -134,5 +135,11 @@ object UIColors : IUIColors {
     )
     override val CollectElixirCartTutorial = ColorSchema.parse(
         618, 461, 658, 542, "02A5FE", "8|0|00A8FD,16|0|00A9FD,24|0|00A9FD,32|0|00A5FD,0|41|22AFFF,8|41|21B8FF,16|41|21BDFF,24|41|21BBFF,32|41|22B2FF", 0, 0.9, "领圣水车教程"
+    )
+
+    // "继续" button on the single-reward reveal screen shown after opening a chest
+    // (e.g. elixir/gold/dark elixir bottle with its amount, one reward per screen).
+    override val ChestRewardContinue = ColorSchema.parse(
+        560, 620, 750, 690, "3AD48B", "20|10|3AD48B,90|0|3AD48B,-15|10|3AD48B,100|10|3AD48B,-20|-5|75E4AF,120|-5|75E4AF", 0, 0.9, "宝箱奖励继续"
     )
 }

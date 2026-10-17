@@ -44,8 +44,6 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.coc.suncode.MainActivity
 import com.coc.suncode.core.data.database.GlobalVars
-import com.coc.suncode.core.data.websocket.ServerActions
-import com.coc.suncode.core.data.websocket.ServerConnection
 import com.coc.suncode.core.ui.floatingwindows.UIWindowService
 import com.coc.suncode.core.ui.localcomponents.LocalCustomButton
 import com.coc.suncode.statehelper.AppMode
@@ -60,7 +58,7 @@ fun CheckRootScreen() {
     var checkRequest by remember { mutableIntStateOf(0) }
     val retryRootCheck by rememberUpdatedState(newValue = {
         // Update status immediately to prevent duplicate checks from resume and button events.
-        if (status == RootStatus.ROOT_DENIED) {
+        if (status == RootStatus.ROOT_DENIED || status == RootStatus.LOCAL_ERROR) {
             status = RootStatus.CHECKING
             checkRequest++
         }
@@ -129,16 +127,23 @@ fun CheckRootScreen() {
             }
         }
 
-        RootStatus.WAITING_FOR_SERVER -> {
-            FullScreenMessage("等待Root服务器启动...")
+        RootStatus.INITIALIZING_LOCAL -> {
+            FullScreenMessage("正在加载本地配置...")
         }
 
-        RootStatus.SERVER_ERROR -> {
-            FullScreenMessage("连接到Root服务器失败")
+        RootStatus.LOCAL_ERROR -> {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                FullScreenMessage("本地配置初始化失败，请查看日志后重试。")
+                LocalCustomButton(text = "重新加载配置", onClick = retryRootCheck)
+            }
         }
 
         RootStatus.GRANTED -> {
-            // Initialize ServerActions and Configs once Root is GRANTED
+            // Permissions and the internal backend are ready before starting overlay services.
             LaunchedEffect(Unit) {
                 // Get and store default IME
                 if (GlobalVars.defaultInputMethod == null) {
@@ -148,13 +153,8 @@ fun CheckRootScreen() {
                     }
                 }
 
-                if (GlobalVars.serverActions == null) {
-                    val serverConnection = ServerConnection("ws://localhost:6839/sun")
-                    GlobalVars.serverActions = ServerActions(serverConnection)
-                }
                 (context as? MainActivity)?.restartCloudSync()
 
-                // Start the floating window service AFTER serverActions is ready
                 val serviceIntent = Intent(context, UIWindowService::class.java)
                 context.startService(serviceIntent)
                 (context as? MainActivity)?.requestMediaProjection()

@@ -79,6 +79,9 @@ fun LazyListScope.MainBaseConfig(
                     key = "${MAIN_BASE_SETTINGS.WAIT_FOR_BATTLE.key}_c$index", explain = "勾选后，如果当前处于对战冷却时间，辅助会一直等待到冷却结束。"
                 )
                 SettingSwitchIcon(
+                    key = "${MAIN_BASE_SETTINGS.SPEED_UP_BATTLE.key}_c$index", explain = "勾选后，下兵完成进入对战等待阶段时，辅助会点击对战画面右下角的倍速按钮切到4倍速。仅对主世界对战有效，且与\"部署后重启游戏\"同时开启时不生效。"
+                )
+                SettingSwitchIcon(
                     key = "${MAIN_BASE_SETTINGS.RESTART_GAME.key}_c$index", explain = "勾选后，部署完所有部队后，辅助会重启游戏。仅对主世界对战有效。"
                 )
                 SettingSwitchIcon(

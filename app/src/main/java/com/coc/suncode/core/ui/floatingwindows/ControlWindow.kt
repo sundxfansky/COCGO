@@ -15,8 +15,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -87,6 +89,26 @@ fun ControlWindow(
     var internalInteractionCount by remember { mutableIntStateOf(0) }
     var isPlaying by remember { GlobalVars.isPlaying }
     var showExitConfirmation by remember { mutableStateOf(false) }
+    var showLogs by remember { mutableStateOf(false) }
+    var logInteractionEnabled by remember { mutableStateOf(false) }
+    val logLines by ShowMessage.logLines.collectAsState()
+
+    LaunchedEffect(isPlaying) {
+        // Resuming automation always returns the log window to touch-through mode.
+        if (isPlaying) logInteractionEnabled = false
+    }
+    // Viewing logs must not pause automation or duplicate its temporary messages.
+    DisposableEffect(showLogs) {
+        ShowMessage.setLogOverlayVisible(showLogs)
+        onDispose { ShowMessage.setLogOverlayVisible(false) }
+    }
+
+    val pauseForInteraction = {
+        if (isPlaying && !GlobalVars.isAdPlaying) {
+            isPlaying = false
+            ShowMessage("辅助已暂停，为节省资源，暂停5分钟后会自动退出。", false)
+        }
+    }
 
     LaunchedEffect(internalInteractionCount, externalInteractionCount) {
         delay(2500)
@@ -171,17 +193,10 @@ fun ControlWindow(
                 modifier = (if (controlState == ControlState.HIDDEN) hiddenIconModifier else normalIconModifier)
                     .then(dragModifier)
                     .clickable {
-                        // Pause when expanding from COLLAPSED
-                        val wasCollapsed = controlState == ControlState.COLLAPSED
                         controlState = when (controlState) {
                             ControlState.HIDDEN -> ControlState.COLLAPSED
                             ControlState.COLLAPSED -> ControlState.EXPANDED
                             ControlState.EXPANDED -> ControlState.COLLAPSED
-                        }
-                        // Skip auto-pause when ad is playing
-                        if (wasCollapsed && isPlaying && !GlobalVars.isAdPlaying) {
-                            ShowMessage("检测到悬浮窗展开，辅助已自动暂停，避免干扰用户操作\n为节省资源，暂停5分钟后会自动退出。", false)
-                            isPlaying = false
                         }
                         internalInteractionCount++
                     }
@@ -201,6 +216,7 @@ fun ControlWindow(
                                 AppExitHelper.exitApplication(context)
                                 return@clickable
                             }
+                            pauseForInteraction()
                             showExitConfirmation = true
                         }
                 )
@@ -214,6 +230,7 @@ fun ControlWindow(
                             // Disable setting icon when ad is playing
                             if (GlobalVars.isAdPlaying) return@clickable
                             internalInteractionCount++
+                            pauseForInteraction()
                             AppStateManager.setMode(AppMode.Main)
                             restoreDefaultInputMethod()
                             onOpenMainUI()
@@ -229,11 +246,23 @@ fun ControlWindow(
                             // Disable switch account icon when ad is playing
                             if (GlobalVars.isAdPlaying) return@clickable
                             internalInteractionCount++
+                            pauseForInteraction()
                             AppStateManager.setMode(AppMode.SwitchAccount)
                             restoreDefaultInputMethod()
                             onSwitchAccount()
                         }
                 )
+                FloatingLogButton(iconSize = iconSize, selected = showLogs) {
+                    internalInteractionCount++
+                    showLogs = !showLogs
+                    logInteractionEnabled = false
+                }
+                if (showLogs) {
+                    FloatingLogHistoryButton(iconSize = iconSize, selected = logInteractionEnabled) {
+                        internalInteractionCount++
+                        logInteractionEnabled = !logInteractionEnabled
+                    }
+                }
                 Image(
                     bitmap = if (isPlaying) pauseIcon else playIcon,
                     contentDescription = if (isPlaying) "Pause" else "Play",
@@ -274,6 +303,17 @@ fun ControlWindow(
                             }
                         }
                 )
+                FloatingLogButton(iconSize = iconSize, selected = showLogs) {
+                    internalInteractionCount++
+                    showLogs = !showLogs
+                    logInteractionEnabled = false
+                }
+                if (showLogs) {
+                    FloatingLogHistoryButton(iconSize = iconSize, selected = logInteractionEnabled) {
+                        internalInteractionCount++
+                        logInteractionEnabled = !logInteractionEnabled
+                    }
+                }
                 Image(
                     bitmap = switchAccountIcon,
                     contentDescription = "Switch",
@@ -284,6 +324,7 @@ fun ControlWindow(
                             // Disable switch account icon when ad is playing
                             if (GlobalVars.isAdPlaying) return@clickable
                             internalInteractionCount++
+                            pauseForInteraction()
                             AppStateManager.setMode(AppMode.SwitchAccount)
                             restoreDefaultInputMethod()
                             onSwitchAccount()
@@ -299,6 +340,7 @@ fun ControlWindow(
                             // Disable setting icon when ad is playing
                             if (GlobalVars.isAdPlaying) return@clickable
                             internalInteractionCount++
+                            pauseForInteraction()
                             AppStateManager.setMode(AppMode.Main)
                             restoreDefaultInputMethod()
                             onOpenMainUI()
@@ -317,6 +359,7 @@ fun ControlWindow(
                                 AppExitHelper.exitApplication(context)
                                 return@clickable
                             }
+                            pauseForInteraction()
                             showExitConfirmation = true
                         }
                 )
@@ -329,22 +372,26 @@ fun ControlWindow(
                 modifier = (if (controlState == ControlState.HIDDEN) hiddenIconModifier else normalIconModifier)
                     .then(dragModifier)
                     .clickable {
-                        // Pause when expanding from COLLAPSED
-                        val wasCollapsed = controlState == ControlState.COLLAPSED
                         controlState = when (controlState) {
                             ControlState.HIDDEN -> ControlState.COLLAPSED
                             ControlState.COLLAPSED -> ControlState.EXPANDED
                             ControlState.EXPANDED -> ControlState.COLLAPSED
                         }
-                        // Skip auto-pause when ad is playing
-                        if (wasCollapsed && isPlaying && !GlobalVars.isAdPlaying) {
-                            ShowMessage("检测到悬浮窗展开，辅助已自动暂停，避免干扰用户操作\n为节省资源，暂停5分钟后会自动退出。", false)
-                            isPlaying = false
-                        }
                         internalInteractionCount++
                     }
             )
         }
+    }
+
+    if (showLogs) {
+        FloatingLogOverlay(
+            logLines = logLines,
+            screenWidth = screenWidth,
+            screenHeight = screenHeight,
+            interactive = logInteractionEnabled,
+            onClear = ShowMessage::clearLogs,
+            onDismiss = { showLogs = false }
+        )
     }
 
     if (showExitConfirmation) {

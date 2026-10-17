@@ -2,6 +2,7 @@ package com.coc.suncode.jar.code.universal.colors
 
 import android.graphics.Bitmap
 import android.graphics.Point
+import android.util.Log
 import com.coc.suncode.core.system.screencapture.ScreenCaptureManager
 import com.coc.suncode.core.data.database.GlobalVars
 import com.coc.suncode.core.util.basic.ShowMessage
@@ -94,7 +95,7 @@ suspend fun findMultiColors(
             }
         }
     } catch (e: Exception) {
-        e.printStackTrace()
+        ShowMessage.record("Failed to find matching colors", Log.ERROR, throwable = e)
     }
 
     // No explicit recycle needed for ByteBuffer as it is GC'd (direct buffer).

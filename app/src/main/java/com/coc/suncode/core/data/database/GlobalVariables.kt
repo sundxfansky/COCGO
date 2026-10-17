@@ -17,9 +17,6 @@ object GlobalVars {
     var pluginUI by mutableStateOf<MainCode?>(null)
 
     @Volatile
-    var serverPath: String = ""
-
-    @Volatile
     var isConfigLoaded: Boolean = false
 
     @Volatile
@@ -46,6 +43,7 @@ object GlobalVars {
     val updateCheckSignal = MutableSharedFlow<CompletableDeferred<Unit>>(extraBufferCapacity = 1)
 
     // --- Compose-reactive fields (observed by UI for recomposition) ---
+    // Keep the host/plugin ABI while the implementation executes actions inside this app.
     var serverActions by mutableStateOf<ServerActions?>(null)
     var isAutoRunEnabled by mutableStateOf(true)
     var autoRunTimer by mutableIntStateOf(60)

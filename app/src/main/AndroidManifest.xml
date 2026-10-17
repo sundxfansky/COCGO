@@ -19,7 +19,14 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
+    <queries>
+        <package android:name="com.tencent.tmgp.supercell.clashofclans" />
+        <package android:name="com.supercell.clashofclans" />
+        <package android:name="com.atrasis.original" />
+    </queries>
+
     <application
+        android:name=".SunApplication"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"

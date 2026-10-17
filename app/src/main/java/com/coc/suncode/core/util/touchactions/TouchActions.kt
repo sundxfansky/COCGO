@@ -1,6 +1,9 @@
 package com.coc.suncode.core.util.touchactions
 
 import com.coc.suncode.core.data.database.GlobalVars
+import com.coc.suncode.core.system.input.RootTouchClient
+import com.coc.suncode.core.system.input.TouchInputException
+import com.coc.suncode.core.ui.floatingwindows.LogOverlayCaptureGuard
 import com.coc.suncode.core.util.basic.delayWithMultiplier
 import com.coc.suncode.core.util.basic.waitForPlay
 import com.coc.suncode.core.util.fileactions.LogHelper.logAndRestart
@@ -17,27 +20,42 @@ import kotlin.math.sqrt
 
 object TouchActions {
     private val activePointers = mutableSetOf<Int>()
-    // Serialize pointer state changes with their server acknowledgments.
+    // Keep a gesture pinned to one target even when the plugin changes accounts.
     private val pointerMutex = Mutex()
+    @Volatile private var targetPackage: String? = null
+    private var gestureTarget: String? = null
+
+    fun selectTargetPackage(packageName: String) {
+        require(packageName.matches(Regex("[A-Za-z0-9_]+(?:\\.[A-Za-z0-9_]+)+")))
+        targetPackage = packageName
+    }
 
     private fun getDelayMultiplier(): Float {
         return GlobalVars.configStates["delay_multiplier"]?.value?.toFloat()
             ?: logAndRestart("Failed to get delayMultiplier")
     }
 
-    private fun getServerActions() = GlobalVars.serverActions ?: logAndRestart("Server actions not found")
-
     suspend fun touchDown(x: Float, y: Float, id: Int) = pointerMutex.withLock {
-        activePointers.add(id)
-        getServerActions().sendActionSync(
-            mapOf(
-                "actionType" to "touch_action",
-                "subAction" to "touchdown",
-                "x" to x,
-                "y" to y,
-                "id" to id
-            )
-        )
+        val selected = targetPackage ?: throw TouchInputException("尚未选择目标应用")
+        if (activePointers.isNotEmpty() && gestureTarget != selected) {
+            throw TouchInputException("手势执行期间目标应用发生变化")
+        }
+        // Even interactive history must yield while an automated gesture is being injected.
+        try {
+            LogOverlayCaptureGuard.setInputActive(true)
+            RootTouchClient.down(selected, id, x, y)
+            gestureTarget = selected
+            activePointers.add(id)
+        } catch (error: Exception) {
+            withContext(NonCancellable) {
+                RootTouchClient.close()
+                activePointers.clear()
+                gestureTarget = null
+                LogOverlayCaptureGuard.setInputActive(false)
+            }
+            if (error is CancellationException || error is TouchInputException) throw error
+            throw TouchInputException("准备目标应用触摸失败：${error.message}", error)
+        }
     }
 
     suspend fun touchMove(x: Float, y: Float, id: Int, isJitter: Boolean = true) = pointerMutex.withLock {
@@ -47,32 +65,33 @@ object TouchActions {
             finalX += Random.nextInt(-1, 2).toFloat()
             finalY += Random.nextInt(-1, 2).toFloat()
         }
-        getServerActions().sendActionSync(
-            mapOf(
-                "actionType" to "touch_action",
-                "subAction" to "touchmove",
-                "x" to finalX,
-                "y" to finalY,
-                "id" to id
-            )
-        )
+        RootTouchClient.move(id, finalX, finalY)
     }
 
     suspend fun touchUp(id: Int) = pointerMutex.withLock { touchUpLocked(id) }
 
     private suspend fun touchUpLocked(id: Int) {
-        val response = getServerActions().sendActionSync(mapOf(
-            "actionType" to "touch_action", "subAction" to "touchup", "id" to id
-        ))
-        // Retain failed releases so cleanup can retry them.
-        if (response?.get("status")?.asString == "success") activePointers.remove(id)
+        if (id !in activePointers) return
+        RootTouchClient.up(id)
+        activePointers.remove(id)
+        if (activePointers.isEmpty()) {
+            gestureTarget = null
+            LogOverlayCaptureGuard.setInputActive(false)
+        }
     }
 
     suspend fun releaseAllPointers() = pointerMutex.withLock {
-        for (id in activePointers.toList()) {
-            try { touchUpLocked(id) }
-            catch (e: CancellationException) { throw e }
-            catch (e: Exception) { ShowMessage("释放触点失败: ${e.message}", isChecking = false) }
+        try {
+            RootTouchClient.cancel()
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            RootTouchClient.close()
+            ShowMessage.record("释放触点失败，已关闭输入进程：${error.message}", throwable = error)
+        } finally {
+            activePointers.clear()
+            gestureTarget = null
+            withContext(NonCancellable) { LogOverlayCaptureGuard.setInputActive(false) }
         }
     }
 
@@ -204,7 +223,6 @@ object TouchActions {
         isJitter: Boolean,
         vararg pointers: PointerMove
     ) {
-        GlobalVars.serverActions ?: logAndRestart("Server actions not found at performMove")
         val delayMultiplier = GlobalVars.configStates["delay_multiplier"]?.value?.toFloat()
             ?: logAndRestart("Failed to get delayMultiplier at performMove")
 

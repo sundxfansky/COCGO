@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.util.Log
 import com.coc.suncode.BuildConfig
+import com.coc.suncode.core.util.basic.LogHistory
 import com.coc.suncode.core.util.basic.ShowMessage
 import com.topjohnwu.superuser.Shell
 import timber.log.Timber
@@ -17,12 +18,16 @@ import java.util.concurrent.atomic.AtomicBoolean
 object LogHelper {
     // Re-entry guard to prevent recursive calls (e.g. ShowMessage -> logAndRestart -> ShowMessage)
     private val isRestarting = AtomicBoolean(false)
+    private var outputTree: Timber.Tree? = null
 
+    @Synchronized
     fun initTimber(context: Context) {
-        if (BuildConfig.DEBUG) {
-            Timber.plant(Timber.DebugTree())
-        } else {
-            Timber.plant(FileLoggingTree(context))
+        LogHistory.ensureInstalled()
+        if (outputTree == null) {
+            // The Application and recreated activities can safely share the same sinks.
+            val tree = if (BuildConfig.DEBUG) Timber.DebugTree() else FileLoggingTree(context.applicationContext)
+            Timber.plant(tree)
+            outputTree = tree
         }
     }
 
@@ -49,12 +54,26 @@ object LogHelper {
     }
 
     fun showDebugInfo(message: String) {
-        Timber.tag("sun_debug").d("Debug info: $message")
+        ShowMessage.record("Debug info: $message")
     }
 
     class FileLoggingTree(private val context: Context) : Timber.Tree() {
+        private val isWriting = ThreadLocal.withInitial { false }
+
         @SuppressLint("LogNotTimber")
         override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
+            // A file-write failure is recorded in history without recursively writing it.
+            if (isWriting.get() == true) return
+            isWriting.set(true)
+            try {
+                writeLog(priority, tag, message)
+            } finally {
+                isWriting.set(false)
+            }
+        }
+
+        @SuppressLint("LogNotTimber")
+        private fun writeLog(priority: Int, tag: String?, message: String) {
             val logDir = File(context.filesDir, "logs")
             if (!logDir.exists()) logDir.mkdirs()
 
@@ -79,7 +98,8 @@ object LogHelper {
                     }
                 }
             } catch (e: Exception) {
-                // Use standard Log to avoid infinite recursion if Timber fails
+                ShowMessage.record("Error writing to $fileName", Log.ERROR, "FileLoggingTree", e)
+                // Keep the original Logcat fallback when the private log file is unavailable.
                 Log.e("FileLoggingTree", "Error writing to $fileName", e)
             }
         }

@@ -55,13 +55,13 @@ python3 scripts/release_plugin.py \
 
 `deployAndReload` 使用 SDK 自带 adb、统一设备选择，检查每个子命令结果；只删除自己创建的临时文件。仅 Debug 接受未签名本地插件及调试重载广播。
 
-## Root 服务协议迁移
+## 内部 Root 后端迁移
 
-宿主通过私有 SharedPreferences 保存随机凭据，并在启动 Root 服务时传入 `SUN_SERVER_TOKEN`。客户端须携带 `Authorization: Bearer <token>`。服务仅监听 `127.0.0.1:6839`，HTTP 与 WebSocket 都验证凭据。原来的免认证工具不能继续连接。
+文件、配置、Shell 与触摸已迁移到宿主内部 Root 工作进程，直接加载当前安装的宿主 APK，并通过私有标准输入输出管道通信。不再需要构建或复制 sunserver APK，也不监听 `6839` 端口；旧 HTTP/WebSocket 工具不能再连接宿主执行 Root 操作。
 
-外部文件操作通过 `/sun` WebSocket：结构化 `file_action` 或兼容脚本的 `shell_action`。Shell RPC 返回 `status`、`exitCode`、`data`，有执行时间和输出容量上限。用于启动前的守护脚本改写到宿主私有目录。出站控制默认关闭，只有显式设置 `SUN_CONTROLLER_URL` 才启用。
+`ServerActions`、`FileHelper`、`ServerShell` 和 `RunShell` 保留现有脚本调用入口。`ServerActions` 保留原包名与宿主类型，确保动态 JAR 的 `MainCode.refreshConfigs(ServerActions)` 接口兼容。外部配置文件继续使用原路径，保存成功后才发布新的内存配置。
 
-更新服务源码后必须重新构建 `third_party/sunserver`，再将其 Debug APK 复制到 `app/src/main/assets/server.apk` 后构建宿主。本次已经同步了该资产。
+修改 Root 后端需更新宿主 APK。触摸目标选择还要求匹配的动态插件，更新时应同时构建宿主与插件。Android 悬浮窗 Service 和可选云同步不受此迁移影响。
 
 ## 会话与配置兼容性
 
@@ -75,7 +75,6 @@ python3 scripts/release_plugin.py \
 
 ```sh
 ./gradlew :app:testDebugUnitTest :app:buildJar :app:assembleDebug :app:assembleRelease
-(cd third_party/sunserver && ./gradlew :app:testDebugUnitTest :app:assembleDebug)
 go -C backend test -race ./...
 go -C backend vet ./...
 python3 -m unittest discover -s scripts -p 'test_*.py'
@@ -84,4 +83,4 @@ python3 scripts/smoke_root.py --device <serial>
 python3 scripts/smoke_cloud.py
 ```
 
-设备 smoke 使用独立临时目录、独立 app_process 进程、独立端口和临时凭据（默认 shell 身份；shell 已获 Root 授权时可增加 --root），不安装、停止或启动用户应用。它验证两版插件与宿主同名类的隔离、宿主接口身份、真实插件入口、HTTP 拒绝匿名访问，以及已认证的 WebSocket 文件/命令操作。结束时只清理自己的进程、端口转发与文件。
+设备 smoke 使用独立临时目录和 app_process 进程，不安装、停止或启动用户应用。它验证两版插件与宿主同名类的隔离、宿主接口身份及真实插件入口，结束时只清理自己的文件。内部 Root 文件、Shell、配置与触摸通过宿主 Android 设备测试验证，测试包须使用实际宿主的 Root 授权；运行前应停止辅助。

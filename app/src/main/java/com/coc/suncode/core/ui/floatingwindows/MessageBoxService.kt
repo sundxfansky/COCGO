@@ -63,6 +63,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 import com.coc.suncode.core.ui.localcomponents.LocalCustomButton
+import com.coc.suncode.core.util.basic.ShowMessage
 import com.coc.suncode.core.util.exit.AppExitHelper
 import timber.log.Timber
 import java.util.concurrent.atomic.AtomicBoolean
@@ -179,7 +180,8 @@ class MessageBoxService : Service(), LifecycleOwner, SavedStateRegistryOwner {
         messageY = msg.y
         messageFontSize = msg.fontSize.sp
         messageDuration = msg.duration
-        isVisible = true
+        // Also check at delivery time: a cold-start Intent may predate opening the log window.
+        isVisible = msg.text.isNotEmpty() && !ShowMessage.isLogWindowVisible()
         showTrigger++
         resetInactivityTimer()
     }

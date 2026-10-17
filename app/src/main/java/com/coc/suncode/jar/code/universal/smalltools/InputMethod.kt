@@ -1,6 +1,7 @@
 package com.coc.suncode.jar.code.universal.smalltools
 
 import com.coc.suncode.core.util.basic.RunShell
+import com.coc.suncode.core.util.basic.ShowMessage
 
 suspend fun setSUNInputMethod() {
     val imeId = "com.coc.suncode/.core.system.inputmethod.SunInputMethodService"
@@ -15,8 +16,8 @@ suspend fun setSUNInputMethod() {
         // 3. Execute setting
         RunShell.run("ime set $imeId")
         // Verify switch success
-        println("Input method switched to $imeId")
+        ShowMessage.record("Input method switched to $imeId")
     } else {
-        println("Input method is already default.")
+        ShowMessage.record("Input method is already default.")
     }
 }

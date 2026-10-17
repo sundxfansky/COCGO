@@ -49,6 +49,7 @@ interface IMainBaseAttackColors {
     val SpecialTroopColorAtDeploymentBar: ColorSchema
     val WaitForBattle: ColorSchema
     val BattlePage: ColorSchema
+    val SpeedUpButton: ColorSchema
 }
 
 object MainBaseAttackColors : IMainBaseAttackColors {
@@ -64,8 +65,12 @@ object MainBaseAttackColors : IMainBaseAttackColors {
     override val AttackButton = ColorSchema.parse(
         1045, 624, 1245, 662, "9BFDCF", "13|-5|A1FED2,24|-4|A1FED2,16|1|9AFCCE,8|20|4EE79F,121|-5|A1FED2,140|-3|A0FED1,146|3|97FCCC,132|20|4EE79F,137|20|4EE79F", 0, 0.9, "进攻！"
     )
+    // Re-sampled from the light-orange band of the "下一个" button, away from its icon/text.
+    // The previous offsets reached ~70px down into the button's dark text band (and beyond its
+    // bottom edge), so no candidate pixel could ever satisfy all of them; the search loop never
+    // matched NextOpponent and ran until the 8-minute timeout without deploying troops.
     override val NextOpponent = ColorSchema.parse(
-        1072, 472, 1265, 560, "36BFFD", "18|0|36BFFD,38|0|36BFFD,44|0|36BFFD,72|1|36BFFD,-56|53|0D59E8,-53|57|0D55E6,-47|58|0D54E6,-32|68|0D50E4,-27|72|0D50E4", 0, 0.95
+        1072, 472, 1265, 560, "4CCBFF", "20|-8|4CCBFF,40|0|4CCBFF,-10|15|4CCBFF,60|-10|4CCBFF,80|5|4CCBFF,0|20|48C4FF", 0, 0.9
     )
     override val GoldColor = ColorSchema.parse(
         998, 19, 1215, 136, "0DC0E7", "0|1|0DC0E7,0|2|0DC0E7,0|3|0DC0E7,0|4|0DC0E7,0|5|0DC0E7,0|6|0DC0E7,0|7|0DC0E7", 0, 0.97,
@@ -201,5 +206,12 @@ object MainBaseAttackColors : IMainBaseAttackColors {
     )
     override val BattlePage = ColorSchema.parse(
         92, 198, 712, 455, "83BEFF", "23|0|A5BECF,46|0|4C3D57,68|0|29478F,91|0|5567A5,0|30|7B7C7C,23|30|254154,46|30|61B2FD,68|30|76BBFD,91|30|485992", 0, 0.9, "对战页面"
+    )
+
+    // Battle speed-up toggle (1x/2x/4x) shown on the right edge during battle.
+    // Sampled from the stable light-green upper band; the button has a light-to-dark
+    // gradient like other confirm buttons, so offsets avoid the darker lower half.
+    override val SpeedUpButton = ColorSchema.parse(
+        1160, 370, 1280, 430, "85F6DD", "10|0|85F6DD,20|0|85F6DD,25|5|84F6DC,5|12|7FF4D8,15|10|80F4D9", 0, 0.9, "对战加速"
     )
 }

@@ -1,6 +1,6 @@
 # 太阳
 
-Root 环境下运行的部落冲突（Clash of Clans）自动化客户端：Kotlin/Compose 宿主 + 动态加载的脚本模块 + Rust/JNI 原生计算 + 一个独立的 Root 常驻服务。
+Root 环境下运行的部落冲突（Clash of Clans）自动化客户端：Kotlin/Compose 宿主 + 动态加载的脚本模块 + Rust/JNI 原生计算 + 宿主内置的 Root 后端。
 
 ## 功能
 
@@ -16,7 +16,7 @@ Root 环境下运行的部落冲突（Clash of Clans）自动化客户端：Kotl
 
 1. **宿主（`app/`）** — 常规安装的 Android APK，负责权限申请、Root 环境准备、动态加载脚本模块、以及生命周期管理。
 2. **脚本模块（`app/src/main/java/com/coc/suncode/jar`）** — 实际的自动化逻辑和界面。构建时被单独打包成一个 JAR，运行时由宿主通过 `DexClassLoader` 加载。这一层可以独立发布更新。
-3. **Root 常驻进程（`third_party/sunserver`）** — 用 `app_process` 以 `su` 权限启动，不依赖标准 Android `Context`，监听本机端口提供触摸模拟和跨应用文件访问，供宿主和脚本模块通过 WebSocket/HTTP 调用。
+3. **宿主 Root 后端** — 直接加载已安装的宿主 APK，通过 `su app_process` 执行触摸、跨应用文件访问和 Shell 命令。宿主使用私有标准输入输出管道通信，不监听网络端口，不需要独立的服务 APK。
 
 性能敏感的计算（取色、加解密等）通过 JNI 交给 `rust_logic` 里的 Rust 代码处理。
 
@@ -28,7 +28,7 @@ Root 环境下运行的部落冲突（Clash of Clans）自动化客户端：Kotl
 | `app/src/main/java/com/coc/suncode/jar` | 动态加载的自动化脚本与界面 |
 | `app/src/main/cpp` | JNI 层（C++），桥接到 Rust |
 | `rust_logic/` | Rust 原生库，通过 `cargo-ndk` 编译 |
-| `third_party/sunserver/` | Root 常驻服务，独立 Android 工程 |
+| `third_party/sunserver/` | 历史服务源码参考，不参与主应用构建和运行 |
 | `third_party/building_plugin/` | 可选的建筑检测 + OCR 服务，独立 Android 工程 |
 | `backend/` | 可选的云端配置同步后端（Go） |
 | `web/` | 可选的云端配置同步管理页面（React） |
@@ -40,7 +40,7 @@ Root 环境下运行的部落冲突（Clash of Clans）自动化客户端：Kotl
 依赖：JDK 17+、Android SDK/NDK、Rust（配合 `cargo-ndk`）、已获取 Root 权限的设备或模拟器。
 
 ```sh
-# 一键检测/安装工具链并构建依赖服务
+# 一键检测/安装工具链并构建主应用
 ./scripts/setup_dev.sh
 
 # 构建主应用（会先编译 Rust 原生库）
@@ -50,7 +50,7 @@ Root 环境下运行的部落冲突（Clash of Clans）自动化客户端：Kotl
 ./gradlew -Pdevice=<设备序列号> runDebugOnDevice
 ```
 
-`third_party/sunserver` 的构建产物需要放在 `app/src/main/assets/server.apk`，`setup_dev.sh` 会自动完成这一步；也可以手动进入该目录单独执行 `./gradlew assembleDebug` 后自行复制。
+Root 后端随主应用构建，不需要构建、复制或安装 `server.apk`。触摸和文件/Shell 使用各自的内部执行通道，日志浮层的 Android Service 继续由宿主管理。
 
 详细的环境要求、模拟器配置和故障排查见 [`docs/LOCAL_DEBUG.md`](docs/LOCAL_DEBUG.md)。
 
@@ -61,7 +61,6 @@ Root 环境下运行的部落冲突（Clash of Clans）自动化客户端：Kotl
 | `assembleDebug` | 构建调试 APK（自动触发 `rustBuild`） |
 | `runDebugOnDevice` | 安装并启动应用 |
 | `debugLogs` | 输出过滤后的应用与原生日志 |
-| `stopDebugServer` | 停止设备上的 Root 常驻服务 |
 | `buildJar` | 构建独立插件到 app/build/plugin/code.jar，不修改 assets |
 | `deployAndReload` | 单独构建脚本模块 JAR 并推送到设备热重载，无需重装 APK |
 
@@ -71,7 +70,7 @@ Root 环境下运行的部落冲突（Clash of Clans）自动化客户端：Kotl
 |---|---|
 | 主应用 | Kotlin, Jetpack Compose |
 | 原生计算 | Rust（cargo-ndk）, C++/JNI |
-| Root 服务 | Kotlin, Ktor |
+| Root 后端 | 宿主 Java/Kotlin、app_process、私有管道 |
 | 云配置后端 | Go, SQLite |
 | 云配置前端 | React, Vite |
 
@@ -84,7 +83,7 @@ Root 环境下运行的部落冲突（Clash of Clans）自动化客户端：Kotl
 | 库 | 用途 |
 |---|---|
 | [libsu](https://github.com/topjohnwu/libsu) | Root Shell 调用 |
-| [OkHttp](https://github.com/square/okhttp) / [Ktor](https://github.com/ktorio/ktor) | 网络与 WebSocket |
+| [OkHttp](https://github.com/square/okhttp) | 云端网络请求 |
 | [Gson](https://github.com/google/gson) | JSON 序列化 |
 | [ML Kit Text Recognition](https://developers.google.com/ml-kit) | 文字识别 |
 | [Reorderable](https://github.com/Calvin-LL/Reorderable) | Compose 拖拽排序组件 |
@@ -93,4 +92,4 @@ Root 环境下运行的部落冲突（Clash of Clans）自动化客户端：Kotl
 
 见 [LICENSE](LICENSE)。
 
-签名热更新、会话迁移与 Root 服务认证见 [发布与迁移指南](docs/PLUGIN_RELEASE.md)。
+签名热更新、会话迁移与内部 Root 后端说明见 [发布与迁移指南](docs/PLUGIN_RELEASE.md)。

@@ -15,8 +15,9 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.IOException
 
+// Keep this public type and package stable for already-built dynamic plugins.
 class ServerActions(
-    private val serverConnection: ServerTransport,
+    private val serverConnection: ServerTransport = LocalActionTransport(),
     private val baseDir: String = "${Environment.getExternalStorageDirectory().path}/sunFiles/",
     private val onConfigLoaded: (() -> Unit)? = null
 ) {
@@ -61,12 +62,15 @@ class ServerActions(
                     if (current == generation && !closed) {
                         try {
                             val response = gson.fromJson(message, JsonObject::class.java)
-                                ?: throw IOException("Empty server response")
+                                ?: throw IOException("Empty local response")
                             if (startupResponses < 2) {
                                 startupResponses++
                                 // The first reply checks the directory; only the second reads config.
                                 if (startupResponses == 2) {
                                     val result = InitConfigs.handleStartupResponse(response, gson)
+                                    if (!result.isLoaded) throw IOException(
+                                        response.get("message")?.asString ?: "本地配置格式无效，未覆盖原文件"
+                                    )
                                     result.configJson?.let { configJson = it }
                                     isLoading = false
                                     ready.complete(Unit)
@@ -79,7 +83,7 @@ class ServerActions(
                             isLoading = false
                             ready.completeExceptionally(e)
                             actionDeferred?.completeExceptionally(e)
-                            ShowMessage("读取服务器响应失败: ${e.message}", isChecking = false)
+                            ShowMessage("读取本地数据失败: ${e.message}", isChecking = false)
                         }
                     }
                 }
@@ -96,6 +100,23 @@ class ServerActions(
         )
     }
 
+    /** Do not expose an empty configuration when root startup or an existing file cannot be read. */
+    suspend fun awaitReady(timeout: Long = 15_000L): Boolean = try {
+        withTimeoutOrNull(timeout) {
+            val ready = synchronized(stateLock) {
+                check(!closed) { "ServerActions is closed" }
+                startup
+            }
+            ready.await()
+            true
+        } ?: false
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: Exception) {
+        ShowMessage("本地配置初始化失败: ${error.message}", isChecking = false)
+        false
+    }
+
     suspend fun writeToConfigFile(key: String, content: String) {
         configMutex.withLock {
             val updated = configJson.deepCopy().apply { addProperty(key, content) }
@@ -103,7 +124,7 @@ class ServerActions(
         }
     }
 
-    /** Persist external data through the root server before publishing it to readers. */
+    /** Publish new configuration only after the internal root worker atomically persists it. */
     suspend fun persistConfig(newJson: JsonObject): Boolean = configMutex.withLock { persistConfigLocked(newJson) }
 
     private suspend fun persistConfigLocked(newJson: JsonObject): Boolean {
@@ -131,13 +152,13 @@ class ServerActions(
                     check(!closed) { "ServerActions is closed" }
                     actionDeferred = deferred
                     sent = serverConnection.sendAction(action)
-                    if (!sent) throw IOException("WebSocket send failed")
+                    if (!sent) throw IOException("Local command send failed")
                 }
                 deferred.await()
             }.also { response ->
                 if (response == null) {
                     reconnect()
-                    ShowMessage("服务器请求超时", isChecking = false)
+                    ShowMessage("本地文件或命令请求超时", isChecking = false)
                 }
             }
         } catch (e: CancellationException) {
@@ -146,7 +167,7 @@ class ServerActions(
             throw e
         } catch (e: Exception) {
             reconnect()
-            ShowMessage("服务器请求失败: ${e.message}", isChecking = false)
+            ShowMessage("本地文件或命令请求失败: ${e.message}", isChecking = false)
             null
         } finally {
             synchronized(stateLock) {

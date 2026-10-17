@@ -4,18 +4,14 @@ import android.graphics.Bitmap
 import android.graphics.Rect
 import com.coc.suncode.core.system.screencapture.ScreenCaptureManager
 import com.coc.suncode.core.util.basic.waitForPlay
-import com.coc.suncode.core.util.fileactions.LogHelper.logAndRestart
 import com.coc.suncode.core.util.fileactions.LogHelper.showDebugInfo
-import com.google.android.gms.tasks.Tasks
-import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.text.TextRecognition
-import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions
-import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import com.coc.suncode.core.util.basic.ShowMessage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.core.graphics.createBitmap
 import java.io.File
 import java.io.FileOutputStream
+import com.coc.suncode.jar.code.universal.ocr.PpOcrEngine
 import kotlin.coroutines.cancellation.CancellationException
 
 data class RecognizedText(
@@ -37,28 +33,38 @@ object TextRecognizer {
         invertBinarization: Boolean = true
     ): List<RecognizedText> {
         val screenBuffer = ScreenCaptureManager.capture(asBitmap = true) as? Bitmap
-            ?: logAndRestart("in TextRecognizer, screen capture failed.")
+        if (screenBuffer == null) {
+            // OCR is a best-effort helper. A transient capture failure must not force-stop the
+            // host process and lose the user's current automation state.
+            ShowMessage.record("OCR skipped: screen capture returned no bitmap")
+            showDebugInfo("OCR skipped: screen capture returned no bitmap")
+            return emptyList()
+        }
 
         val width = endX - startX
         val height = endY - startY
 
-        if (width <= 0 || height <= 0) {
-            logAndRestart("Invalid crop area: width=$width, height=$height")
+        if (startX < 0 || startY < 0 || width <= 0 || height <= 0 ||
+            endX > screenBuffer.width || endY > screenBuffer.height
+        ) {
+            ShowMessage.record(
+                "OCR skipped: invalid crop area ($startX,$startY)-($endX,$endY) for " +
+                    "${screenBuffer.width}x${screenBuffer.height}"
+            )
+            screenBuffer.recycle()
+            return emptyList()
         }
 
-        waitForPlay()
-
         try {
-            if (startX + width <= screenBuffer.width && startY + height <= screenBuffer.height) {
-                // 1. Crop the original region
-                val croppedBitmap = Bitmap.createBitmap(screenBuffer, startX, startY, width, height)
+            waitForPlay()
+            // 1. Crop the original region. The caller owns the screen frame; release both
+            // bitmaps after inference to avoid a native heap leak during repeated OCR calls.
+            val croppedBitmap = Bitmap.createBitmap(screenBuffer, startX, startY, width, height)
+            try {
 
                 // 2. [Core Optimization] Apply preprocessing (optional)
-                val bitmapToRecognize = if (applyPreprocess) {
-                    preprocess(croppedBitmap, threshold = threshold, invertBinarization = invertBinarization)
-                } else {
-                    croppedBitmap
-                }
+                // PP-OCR performs its own detector/recognizer preprocessing; preserve RGB input here.
+                val bitmapToRecognize = croppedBitmap
 
                 // 2.1 Save the image if requested
                 if (saveImage) {
@@ -77,15 +83,20 @@ object TextRecognizer {
 
                 // 3. Recognize the image
                 return recognizeTextSync(bitmapToRecognize, useChinese)
-            } else {
-                return emptyList()
+            } finally {
+                if (!croppedBitmap.isRecycled) croppedBitmap.recycle()
             }
         } catch (e: CancellationException) {
             // Important: if it's a cancellation exception, must rethrow it for coroutine system to handle
             throw e
         } catch (e: Exception) {
-            // Handle actual business errors here (e.g., out of memory, Bitmap creation failure, etc.)
-            logAndRestart("Error during cropping or recognition: ${e.message}")
+            // OCR is an optional recognition step; keep the automation alive and let the
+            // caller use its existing color/template fallback when model inference fails.
+            ShowMessage.record("OCR recognition failed; using fallback: ${e.message}", throwable = e)
+            showDebugInfo("OCR recognition failed; using fallback: ${e.message}")
+            return emptyList()
+        } finally {
+            if (!screenBuffer.isRecycled) screenBuffer.recycle()
         }
     }
 
@@ -123,28 +134,10 @@ object TextRecognizer {
 
     private suspend fun recognizeTextSync(bitmap: Bitmap, useChinese: Boolean): List<RecognizedText> =
         withContext(Dispatchers.IO) {
-            val options = if (useChinese) {
-                ChineseTextRecognizerOptions.Builder().build()
-            } else {
-                TextRecognizerOptions.DEFAULT_OPTIONS
-            }
-            val recognizer = TextRecognition.getClient(options)
-
-            // The InputImage here receives our processed binarized Bitmap
-            val image = InputImage.fromBitmap(bitmap, 0)
-
-            try {
-                val visionText = Tasks.await(recognizer.process(image))
-                val result = mutableListOf<RecognizedText>()
-                for (block in visionText.textBlocks) {
-                    for (line in block.lines) {
-                        result.add(RecognizedText(line.text, line.boundingBox))
-                    }
-                }
-                result
-            } catch (e: Exception) {
-                showDebugInfo("UniversalTextRecognizer recognition failed: ${e.message}")
-                emptyList()
+            // Use the bundled PP-OCR engine so recognition works without ML Kit or a remote service.
+            ScreenCaptureManager.getContext()?.let { PpOcrEngine.initialize(it) }
+            return@withContext PpOcrEngine.recognize(bitmap).map {
+                RecognizedText(it.text, Rect(it.box.left.toInt(), it.box.top.toInt(), it.box.right.toInt(), it.box.bottom.toInt()))
             }
         }
 }

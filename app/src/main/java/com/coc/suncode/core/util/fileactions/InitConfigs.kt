@@ -56,10 +56,8 @@ object InitConfigs {
         }
 
         if (response.has("status") && response.get("status")?.asString == "error") {
-            val errorMsg = response.get("message")?.asString ?: ""
-            if (errorMsg.contains("sun_config.json")) {
-                // If the server returns an error for the config file (e.g., "File not found"),
-                // we still trigger the callback to use default values.
+            if (response.get("code")?.asString == "NOT_FOUND") {
+                // Only a missing config may fall back to defaults; never hide permission or I/O errors.
                 shouldCallback = true
                 isLoaded = true
             }

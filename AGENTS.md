@@ -10,8 +10,8 @@ Dynamic Source Path: app/src/main/java/com/coc/suncode/jar
 Behavior: Treat all files in this directory as a standalone module. They are packed into a JAR and loaded dynamically at runtime.
 
 I/O & Networking Constraints
-Required I/O Method: All file reading and writing that are not in private path must be routed through the WebSocket server.
-Server Address: ws://localhost:6839/sun
+Required I/O Method: All file reading and writing that are not in private path must use the host's internal Root backend. Dynamic modules must call the host file/configuration and shell APIs.
+Root Backend: Host-owned Root app_process workers communicate through private stdin/stdout pipes. Do not add a WebSocket file server, a listening port, or an external server.apk dependency.
 
 When adding debug information, you should use ShowMessage, which can be imported from com.coc.suncode.core.util.basic.ShowMessage.
 

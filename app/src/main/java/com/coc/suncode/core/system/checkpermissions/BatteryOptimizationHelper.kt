@@ -5,6 +5,8 @@ import android.content.Intent
 import android.net.Uri
 import android.os.PowerManager
 import android.provider.Settings
+import android.util.Log
+import com.coc.suncode.core.util.basic.ShowMessage
 import com.topjohnwu.superuser.Shell
 
 object BatteryOptimizationHelper {
@@ -37,7 +39,7 @@ object BatteryOptimizationHelper {
                     }
                     context.startActivity(intent)
                 } catch (e: Exception) {
-                    e.printStackTrace()
+                    ShowMessage.record("Failed to request battery optimization exemption", Log.ERROR, throwable = e)
                 }
             }
         }

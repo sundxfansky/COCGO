@@ -9,6 +9,7 @@ import com.coc.suncode.jar.code.universal.InGamesVars
 import com.coc.suncode.jar.code.universal.colors.findMultiColors
 import com.coc.suncode.jar.code.universal.colors.findMultiColorsUntil
 import com.coc.suncode.jar.code.universal.enterMainScreen
+import com.coc.suncode.jar.code.universal.recognizer.findButtonByText
 import com.coc.suncode.jar.code.universal.recognizer.recognizeResources
 import com.coc.suncode.jar.code.universal.smalltools.StorageKeys
 import com.coc.suncode.jar.code.universal.smalltools.checkReconnections
@@ -94,6 +95,11 @@ suspend fun searchOpponentsAndDeployTroops(): Boolean {
     }
     var searchTimes = 0
     var battleStarted = false
+    // The attack flow has three distinct screens: the attack entry, the army panel,
+    // and the opponent screen. Keep this state so the army-panel confirmation is
+    // clicked once, while the attack button on an opponent screen is only clicked
+    // after resources have been checked.
+    var searchStarted = false
     val battleStartTime = System.currentTimeMillis()
     while (System.currentTimeMillis() - battleStartTime < SEARCH_TIMEOUT_MS) {
         val battleIcon = findMultiColorsUntil(schemas = listOf(MyColors.TrainTroops), duration = 500)
@@ -114,16 +120,9 @@ suspend fun searchOpponentsAndDeployTroops(): Boolean {
         if (villagerSpeaking != null || setBaseIcon != null) {
             if (!mainBaseBattleTutorial()) return false
         }
-        val searchOpponents = findMultiColors(schema = MyColors.SearchOpponents)
-        if (searchOpponents != null) {
-            TouchActions.tap(searchOpponents.x, searchOpponents.y, delayTime = 500)
-        }
-        val attackButton = findMultiColors(schema = MyColors.AttackButton)
-        if (attackButton != null) {
-            TouchActions.tap(attackButton.x, attackButton.y, delayTime = 500)
-        }
         val insufficientGold = findMultiColors(schema = MyColors.InsufficientGold)
         if (insufficientGold != null) {
+            ShowMessage("账号${InGamesVars.currentAccountNumber}，搜索金币不足，停止搜索")
             break
         }
         if (!checkReconnections()) return false
@@ -177,11 +176,61 @@ suspend fun searchOpponentsAndDeployTroops(): Boolean {
                     writeMemory(darkElixirKey, targetDarkElixir.toString())
                 }
 
-                battleStarted = true
-                mainBaseDeployTroops()
-                break
+                // The attack button is only actionable after the resource decision. Clicking it
+                // before reading the opponent screen transitions into battle and hides NextOpponent,
+                // which previously left the search loop running until its timeout.
+                // Try OCR text match first so a reskin (e.g. festive event UI) that only
+                // changes colors doesn't break detection; fall back to color matching.
+                val attackButton = findButtonByText(MyColors.AttackButton, "进攻")
+                    ?: findMultiColorsUntil(
+                        schemas = listOf(MyColors.AttackButton),
+                        duration = 2000,
+                        increment = 1
+                    )
+                if (attackButton == null) {
+                    ShowMessage("账号${InGamesVars.currentAccountNumber}，目标资源符合条件但未找到进攻按钮，继续等待")
+                } else {
+                    ShowMessage("账号${InGamesVars.currentAccountNumber}，目标资源符合条件，点击进攻")
+                    TouchActions.tap(attackButton.x, attackButton.y, delayTime = 500)
+                    val battlePage = findButtonByText(MyColors.EndBattle, "结束战斗")
+                        ?: findMultiColorsUntil(
+                            schemas = listOf(MyColors.EndBattle, MyColors.BattlePage),
+                            duration = 5000,
+                            increment = 1
+                        )
+                    if (battlePage == null) {
+                        ShowMessage("账号${InGamesVars.currentAccountNumber}，已点击进攻但未确认战斗界面，继续尝试下兵")
+                    } else {
+                        ShowMessage("账号${InGamesVars.currentAccountNumber}，已进入战斗界面，开始下兵")
+                    }
+                    battleStarted = true
+                    mainBaseDeployTroops()
+                    break
+                }
             } else {
+                ShowMessage("账号${InGamesVars.currentAccountNumber}，目标资源不足，点击下一位")
                 TouchActions.tap(nextOpponent.x, nextOpponent.y, delayTime = 2000)
+            }
+        } else if (!searchStarted) {
+            // SearchOpponents opens the army panel; the green AttackButton on that
+            // panel is the confirmation that actually starts opponent matching.
+            val searchOpponents = findButtonByText(MyColors.SearchOpponents, "搜索对手")
+                ?: findMultiColors(schema = MyColors.SearchOpponents)
+            if (searchOpponents != null) {
+                ShowMessage("账号${InGamesVars.currentAccountNumber}，打开军队面板")
+                TouchActions.tap(searchOpponents.x, searchOpponents.y, delayTime = 500)
+            } else {
+                val attackButton = findButtonByText(MyColors.AttackButton, "进攻")
+                    ?: findMultiColorsUntil(
+                        schemas = listOf(MyColors.AttackButton),
+                        duration = 1000,
+                        increment = 1
+                    )
+                if (attackButton != null) {
+                    ShowMessage("账号${InGamesVars.currentAccountNumber}，已点击军队面板进攻，开始搜索")
+                    TouchActions.tap(attackButton.x, attackButton.y, delayTime = 500)
+                    searchStarted = true
+                }
             }
         }
         val remainingMinutes = (SEARCH_TIMEOUT_MS - (System.currentTimeMillis() - battleStartTime)) / 60000.0
