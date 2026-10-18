@@ -7,7 +7,6 @@ object GlobalSettings {
     val ACCOUNT_COUNT = SettingDef("account_count", "多开账号数量", "2", "GLOBAL_SETTINGS")
     val AUTO_START = SettingDef("auto_start", "开机自启(仅部分设备有效)", 1, "GLOBAL_SETTINGS")
     val EXTRACT_VERSION = SettingDef("extract_version", "提取存档版本选择", "0", "GLOBAL_SETTINGS")
-    val SWITCH_ACCOUNT_VERSION = SettingDef("switch_account_version", "提取存档版本选择", "0", "GLOBAL_SETTINGS")
     val EXTRACT_CN = SettingDef("extract_cn", "提取国服存档到此序号", "1", "GLOBAL_SETTINGS")
     val EXTRACT_GLOBAL = SettingDef("extract_global", "提取国际服存档到此序号", "1", "GLOBAL_SETTINGS")
 
@@ -27,6 +26,7 @@ object GlobalSettings {
     val CREATE_GEM_BUILD = SettingDef("create_gem_build", "创号时宝石秒建筑", 0, "GLOBAL_SETTINGS")
     val GEM_COUNT = SettingDef("gem_count", "宝石数量", "", "GLOBAL_SETTINGS")
     val AFTER_KICK_OPTION = SettingDef("after_kick_option", "顶号后选项", "1", "GLOBAL_SETTINGS")
+    val AFTER_KICK_COOLDOWN_MINUTES = SettingDef("after_kick_cooldown_minutes", "被顶账号冷却时间（分钟）", "3", "GLOBAL_SETTINGS")
     val DEVICE_REMARK = SettingDef("device_remark", "设备备注", "", "GLOBAL_SETTINGS")
     val RUNTIME_SCREENSHOT = SettingDef("runtime_screenshot", "运行时截图", 0, "GLOBAL_SETTINGS")
 
@@ -35,7 +35,6 @@ object GlobalSettings {
         ACCOUNT_COUNT,
         AUTO_START,
         EXTRACT_VERSION,
-        SWITCH_ACCOUNT_VERSION,
         EXTRACT_CN,
         EXTRACT_GLOBAL,
         EMAIL,
@@ -52,6 +51,7 @@ object GlobalSettings {
         CREATE_GEM_BUILD,
         GEM_COUNT,
         AFTER_KICK_OPTION,
+        AFTER_KICK_COOLDOWN_MINUTES,
         DEVICE_REMARK,
         RUNTIME_SCREENSHOT
     )

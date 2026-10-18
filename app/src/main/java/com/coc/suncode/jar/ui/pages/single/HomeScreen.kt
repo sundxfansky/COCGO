@@ -204,10 +204,6 @@ fun HomeScreen(
                         }
                         SettingSection {
                             FlowRow {
-                                CustomButton(text = "启动手动切号模式", onClick = {
-                                    AppStateManager.setMode(AppMode.SwitchAccount)
-                                    onSaveSuccess()
-                                })
                                 CustomButton(text = "截屏反馈问题", onClick = {
                                     AppStateManager.setMode(AppMode.BugReport)
                                     onSaveSuccess()
@@ -226,14 +222,17 @@ fun HomeScreen(
                                 SettingSwitchIcon(key = GLOBAL_SETTINGS.AUTO_START.key)
                                 SettingDropdown(
                                     key = GLOBAL_SETTINGS.AFTER_KICK_OPTION.key,
-                                    options = listOf("立刻重连", "切换账号", "原地等待"),
-                                    // Disable batch create when dropdown is not "立刻重连" (index 0)
+                                    options = listOf("立刻重连", "切号并冷却被顶账号", "原地等待"),
+                                    // Disable batch creation when the selected action needs account rotation.
                                     afterChange = { selectedIndex ->
                                         if (selectedIndex != 0) {
                                             GlobalVars.configStates[GLOBAL_SETTINGS.BATCH_CREATE_ACCOUNT.key]?.value = "0"
                                         }
                                     }
                                 )
+                                if (GlobalVars.configStates[GLOBAL_SETTINGS.AFTER_KICK_OPTION.key]?.value == "1") {
+                                    SettingInputRow(key = GLOBAL_SETTINGS.AFTER_KICK_COOLDOWN_MINUTES.key, digitsOnly = true)
+                                }
                                 Column(Modifier.padding(top = 6.dp)) {
                                     SettingInputRow(key = GLOBAL_SETTINGS.DEVICE_REMARK.key)
                                 }

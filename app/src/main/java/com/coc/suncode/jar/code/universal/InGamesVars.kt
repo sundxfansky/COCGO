@@ -24,6 +24,8 @@ enum class GameVersion(val id: Int, val packageName: String, val launchComponent
 }
 
 object InGamesVars {
+    val accountCooldownTracker = AccountCooldownTracker()
+
     @Volatile
     var hasCurrentAccount: Boolean = false
         private set

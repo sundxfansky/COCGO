@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -43,6 +44,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
@@ -181,7 +183,7 @@ class WindowCenterPositionProvider : PopupPositionProvider {
 
 
 @Composable
-fun SettingInputRow(key: String, afterChange: ((String) -> Unit)? = null) {
+fun SettingInputRow(key: String, digitsOnly: Boolean = false, afterChange: ((String) -> Unit)? = null) {
     // Use getOrPut to lazily initialize missing config keys with their Schema defaults
     val state = GlobalVars.configStates.getOrPut(key) {
         mutableStateOf(Schema.getDefaultValue(key))
@@ -199,6 +201,7 @@ fun SettingInputRow(key: String, afterChange: ((String) -> Unit)? = null) {
 
         BasicTextField(
             value = state.value, onValueChange = { newValue ->
+                if (digitsOnly && newValue.any { !it.isDigit() }) return@BasicTextField
                 GlobalVars.isAutoRunEnabled = false
                 state.value = newValue
                 afterChange?.invoke(newValue)
@@ -211,7 +214,8 @@ fun SettingInputRow(key: String, afterChange: ((String) -> Unit)? = null) {
                 .padding(4.dp)
                 .align(Alignment.CenterVertically)
                 .heightIn(max = 120.dp)
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(rememberScrollState()),
+            keyboardOptions = if (digitsOnly) KeyboardOptions(keyboardType = KeyboardType.Number) else KeyboardOptions.Default
         )
     }
 }
