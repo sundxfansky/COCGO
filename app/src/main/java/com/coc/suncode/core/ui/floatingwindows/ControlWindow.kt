@@ -41,9 +41,14 @@ import com.coc.suncode.core.ui.localcomponents.LocalCustomAlertDialog
 import com.coc.suncode.core.util.basic.ShowMessage
 import com.coc.suncode.core.util.exit.AppExitHelper
 import com.coc.suncode.core.util.exit.AppExitHelper.restoreDefaultInputMethod
+import com.coc.suncode.interfaces.AccountSwitchState
+import com.coc.suncode.interfaces.RuntimeAccountSwitcher
 import com.coc.suncode.statehelper.AppMode
 import com.coc.suncode.statehelper.AppStateManager
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 // Base DPI for consistent physical size across devices
 private const val BASE_DPI = 320f
@@ -79,7 +84,8 @@ fun ControlWindow(
     screenWidth: Int = 0,
     screenHeight: Int = 0,
     onOpenMainUI: () -> Unit = {},
-    onSwitchAccount: () -> Unit = {},
+    isSwitchingAccount: Boolean = false,
+    onSwitchAccount: (Int) -> Unit = {},
     onDragStart: () -> Unit = {},
     onDragEnd: () -> Unit = {},
     onDrag: (Float, Float) -> Unit = { _, _ -> }
@@ -92,6 +98,34 @@ fun ControlWindow(
     var showLogs by remember { mutableStateOf(false) }
     var logInteractionEnabled by remember { mutableStateOf(false) }
     val logLines by ShowMessage.logLines.collectAsState()
+    var accountSwitchState by remember { mutableStateOf(AccountSwitchState()) }
+
+    LaunchedEffect(controlState, GlobalVars.pluginUI, isSwitchingAccount) {
+        accountSwitchState = AccountSwitchState()
+        val switcher = GlobalVars.pluginUI as? RuntimeAccountSwitcher ?: return@LaunchedEffect
+        if (controlState != ControlState.EXPANDED || isSwitchingAccount) return@LaunchedEffect
+        var reportedFailure = false
+        // Query only while expanded, and keep all root I/O off the main thread.
+        while (true) {
+            try {
+                accountSwitchState = withContext(Dispatchers.IO) { switcher.accountSwitchState() }
+                reportedFailure = false
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                accountSwitchState = AccountSwitchState()
+                if (!reportedFailure) ShowMessage.record("读取相邻账号存档失败：${error.message}", throwable = error)
+                reportedFailure = true
+            }
+            delay(1000)
+        }
+    }
+
+    val switchAccount: (Int) -> Unit = { target ->
+        internalInteractionCount++
+        isPlaying = false
+        onSwitchAccount(target)
+    }
 
     LaunchedEffect(isPlaying) {
         // Resuming automation always returns the log window to touch-through mode.
@@ -146,11 +180,6 @@ fun ControlWindow(
     }
     val settingIcon = remember {
         context.assets.open("setting.png").use {
-            BitmapFactory.decodeStream(it).asImageBitmap()
-        }
-    }
-    val switchAccountIcon = remember {
-        context.assets.open("switch.png").use {
             BitmapFactory.decodeStream(it).asImageBitmap()
         }
     }
@@ -226,7 +255,7 @@ fun ControlWindow(
                     modifier = Modifier
                         .size(iconSize)
                         .padding(4.dp)
-                        .clickable {
+                        .clickable(enabled = !isSwitchingAccount) {
                             // Disable setting icon when ad is playing
                             if (GlobalVars.isAdPlaying) return@clickable
                             internalInteractionCount++
@@ -236,21 +265,11 @@ fun ControlWindow(
                             onOpenMainUI()
                         }
                 )
-                Image(
-                    bitmap = switchAccountIcon,
-                    contentDescription = "Switch",
-                    modifier = Modifier
-                        .size(iconSize)
-                        .padding(4.dp)
-                        .clickable {
-                            // Disable switch account icon when ad is playing
-                            if (GlobalVars.isAdPlaying) return@clickable
-                            internalInteractionCount++
-                            pauseForInteraction()
-                            AppStateManager.setMode(AppMode.SwitchAccount)
-                            restoreDefaultInputMethod()
-                            onSwitchAccount()
-                        }
+                FloatingAccountButtons(
+                    iconSize = iconSize,
+                    state = accountSwitchState,
+                    enabled = !isSwitchingAccount && !GlobalVars.isAdPlaying,
+                    onSwitchAccount = switchAccount
                 )
                 FloatingLogButton(iconSize = iconSize, selected = showLogs) {
                     internalInteractionCount++
@@ -269,7 +288,7 @@ fun ControlWindow(
                     modifier = Modifier
                         .size(iconSize)
                         .padding(4.dp)
-                        .clickable {
+                        .clickable(enabled = !isSwitchingAccount) {
                             // Disable play/pause icon when ad is playing
                             if (GlobalVars.isAdPlaying) return@clickable
                             internalInteractionCount++
@@ -283,7 +302,7 @@ fun ControlWindow(
                 )
             }
         } else {
-            // Right side: Play/Pause, Switch, Setting, then Main Icon
+            // Right side: Play/Pause, account arrows, Setting, then Main Icon.
             if (controlState == ControlState.EXPANDED) {
                 Image(
                     bitmap = if (isPlaying) pauseIcon else playIcon,
@@ -291,7 +310,7 @@ fun ControlWindow(
                     modifier = Modifier
                         .size(iconSize)
                         .padding(4.dp)
-                        .clickable {
+                        .clickable(enabled = !isSwitchingAccount) {
                             // Disable play/pause icon when ad is playing
                             if (GlobalVars.isAdPlaying) return@clickable
                             internalInteractionCount++
@@ -314,21 +333,11 @@ fun ControlWindow(
                         logInteractionEnabled = !logInteractionEnabled
                     }
                 }
-                Image(
-                    bitmap = switchAccountIcon,
-                    contentDescription = "Switch",
-                    modifier = Modifier
-                        .size(iconSize)
-                        .padding(4.dp)
-                        .clickable {
-                            // Disable switch account icon when ad is playing
-                            if (GlobalVars.isAdPlaying) return@clickable
-                            internalInteractionCount++
-                            pauseForInteraction()
-                            AppStateManager.setMode(AppMode.SwitchAccount)
-                            restoreDefaultInputMethod()
-                            onSwitchAccount()
-                        }
+                FloatingAccountButtons(
+                    iconSize = iconSize,
+                    state = accountSwitchState,
+                    enabled = !isSwitchingAccount && !GlobalVars.isAdPlaying,
+                    onSwitchAccount = switchAccount
                 )
                 Image(
                     bitmap = settingIcon,
@@ -336,7 +345,7 @@ fun ControlWindow(
                     modifier = Modifier
                         .size(iconSize)
                         .padding(4.dp)
-                        .clickable {
+                        .clickable(enabled = !isSwitchingAccount) {
                             // Disable setting icon when ad is playing
                             if (GlobalVars.isAdPlaying) return@clickable
                             internalInteractionCount++

@@ -55,12 +55,29 @@ suspend fun writeGameFilesCore(
         return false
     }
     ShowMessage("写入存档文件中，路径：$sourceDir")
+    // Validate all source directories before clearing any game data.
+    for (subDir in subDirs) {
+        if (!ServerShell.exec("[ -d \"$sourceDir/$subDir\" ]").isSuccess) {
+            ShowMessage("存档不完整：$sourceDir/$subDir", isChecking = false)
+            return false
+        }
+    }
     if (killGame) killGame()
     subDirs.forEach { subDir ->
         val destPath = "/data/data/$packageName/$subDir"
-        ServerShell.exec("rm -rf \"$destPath\"/*")
-        ServerShell.exec("cp -r \"$sourceDir/$subDir/\"* \"$destPath/\"")
-        ServerShell.exec("chmod -R 777 \"$destPath\"")
+        // A failed restore must never be reported as a successful account login.
+        val commands = listOf(
+            "mkdir -p \"$destPath\"",
+            "rm -rf \"$destPath\"/*",
+            "cp -r \"$sourceDir/$subDir/.\" \"$destPath/\"",
+            "chmod -R 777 \"$destPath\""
+        )
+        for (command in commands) {
+            if (!ServerShell.exec(command).isSuccess) {
+                ShowMessage("存档写入失败：$subDir", isChecking = false)
+                return false
+            }
+        }
     }
     return true
 }
