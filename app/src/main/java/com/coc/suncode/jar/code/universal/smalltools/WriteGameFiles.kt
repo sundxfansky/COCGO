@@ -34,7 +34,7 @@ fun getGameFilePath(): String {
 /**
  * Core helper: copies each subdirectory from the SD card archive into the game's data directory,
  * clears the destination first, then sets permissions to 777.
- * This is called by both [writeGameFiles] and SwitchAccount UI.
+ * This is called by [writeGameFiles] when preparing the active account.
  *
  * @param packageName  Game package name (e.g. "com.supercell.clashofclans")
  * @param savePathName Archive folder suffix identifying the account save (e.g. "001")
@@ -65,7 +65,7 @@ suspend fun writeGameFilesCore(
                 "cp -R \"$sourceDir/$subDir/.\" \"$destPath/\" && chmod -R 777 \"$destPath\""
         ).isSuccess
         if (!copied) {
-            ShowMessage("存档写入失败，请检查存档及 Root 权限；已取消上号")
+            ShowMessage("存档写入失败，请检查存档及 Root 权限；已取消上号", isChecking = false)
             return false
         }
     }

@@ -1,5 +1,6 @@
 package com.coc.suncode.jar.code
 
+import android.os.SystemClock
 import com.coc.suncode.core.data.database.GlobalVars
 import com.coc.suncode.core.util.basic.RunShell
 import com.coc.suncode.core.util.basic.ShowMessage
@@ -12,7 +13,6 @@ import com.coc.suncode.jar.code.universal.InGamesVars
 import com.coc.suncode.jar.code.universal.create.batchCreateAccounts
 import com.coc.suncode.jar.code.universal.enterMainScreen
 import com.coc.suncode.jar.code.universal.smalltools.StorageKeys
-import com.coc.suncode.jar.code.universal.smalltools.accountCooldowns
 import com.coc.suncode.jar.code.universal.smalltools.getConfigOrStop
 import com.coc.suncode.jar.code.universal.smalltools.readMemory
 import com.coc.suncode.jar.code.universal.smalltools.writeGameFiles
@@ -152,15 +152,16 @@ private suspend fun findAndActivateAccount(
         val enabled = order.filter { id ->
             skipIsOpenCheck || getConfigOrStop("${Schema.ACCOUNT_SETTINGS.ISOPEN.key}$id") == "1"
         }
-        val selection = accountCooldowns.select(enabled)
-        selection.account?.let { return it }
+        val nowMillis = SystemClock.elapsedRealtime()
+        InGamesVars.accountCooldownTracker.findAvailableAccount(enabled, nowMillis)?.let { return it }
         if (enabled.isEmpty()) {
             ShowMessage("当前未开启任何账号\n请勾选要开启的账号。")
             delay(2500)
         } else {
-            val seconds = (selection.waitMillis + 999L) / 1000L
+            val waitMillis = InGamesVars.accountCooldownTracker.shortestRemainingMillis(enabled, nowMillis) ?: continue
+            val seconds = (waitMillis + 999L) / 1000L
             ShowMessage("所有启用账号均在顶号冷却中，${seconds / 60}分${seconds % 60}秒后继续")
-            delay(minOf(1000L, selection.waitMillis))
+            delay(minOf(1000L, waitMillis))
         }
     }
     return null

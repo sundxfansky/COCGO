@@ -41,7 +41,6 @@ import com.coc.suncode.jar.ui.components.CustomButton
 import com.coc.suncode.jar.ui.components.SettingSwitchIcon
 import com.coc.suncode.jar.ui.components.SettingDropdown
 import com.coc.suncode.jar.ui.components.SettingInputRow
-import com.coc.suncode.jar.ui.components.SettingNumberStepper
 import com.coc.suncode.jar.ui.components.SettingSection
 import com.coc.suncode.core.ui.theme.AppColors
 import com.coc.suncode.core.util.exit.AppExitHelper
@@ -227,8 +226,8 @@ fun HomeScreen(
                                 SettingSwitchIcon(key = GLOBAL_SETTINGS.AUTO_START.key)
                                 SettingDropdown(
                                     key = GLOBAL_SETTINGS.AFTER_KICK_OPTION.key,
-                                    options = listOf("立刻重连", "切号并计时等待", "原地等待"),
-                                    // Disable batch create when dropdown is not "立刻重连" (index 0)
+                                    options = listOf("立刻重连", "切号并冷却被顶账号", "原地等待"),
+                                    // Disable batch creation when the selected action needs account rotation.
                                     afterChange = { selectedIndex ->
                                         if (selectedIndex != 0) {
                                             GlobalVars.configStates[GLOBAL_SETTINGS.BATCH_CREATE_ACCOUNT.key]?.value = "0"
@@ -236,7 +235,7 @@ fun HomeScreen(
                                     }
                                 )
                                 if (GlobalVars.configStates[GLOBAL_SETTINGS.AFTER_KICK_OPTION.key]?.value == "1") {
-                                    SettingNumberStepper(GLOBAL_SETTINGS.AFTER_KICK_WAIT_MINUTES.key, 1..1440)
+                                    SettingInputRow(key = GLOBAL_SETTINGS.AFTER_KICK_COOLDOWN_MINUTES.key, digitsOnly = true)
                                 }
                                 Column(Modifier.padding(top = 6.dp)) {
                                     SettingInputRow(key = GLOBAL_SETTINGS.DEVICE_REMARK.key)

@@ -49,6 +49,24 @@ class QqAuthorizationConfigTest {
     }
 
     @Test
+    fun cooldownMigrationPreservesLocalValueAndPrefersCanonicalValueOnReload() {
+        val key = GLOBAL_SETTINGS.AFTER_KICK_COOLDOWN_MINUTES.key
+        load(JsonObject().apply { addProperty("after_kick_wait_minutes", "7") })
+        assertEquals("7", GlobalVars.configStates[key]!!.value)
+        val saved = JsonParser.parseString(SchemaExporter.exportSchemasToJson(accountCount = 3)).asJsonObject
+        GlobalVars.configStates.clear()
+        load(saved)
+        assertEquals("7", GlobalVars.configStates[key]!!.value)
+
+        GlobalVars.configStates.clear()
+        load(JsonObject().apply {
+            addProperty("after_kick_wait_minutes", "7")
+            addProperty(key, "0")
+        })
+        assertEquals("0", GlobalVars.configStates[key]!!.value)
+    }
+
+    @Test
     fun upgradingKeepsExistingAccountToGrantBindings() {
         load(JsonObject().apply { addProperty("account_count", "3") })
         assertEquals(listOf("1", "2", "3"), (1..3).map {

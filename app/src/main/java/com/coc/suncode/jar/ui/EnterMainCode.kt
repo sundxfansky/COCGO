@@ -19,6 +19,9 @@ import androidx.navigation.compose.rememberNavController
 import com.coc.suncode.core.data.database.GlobalVars
 import com.coc.suncode.core.util.basic.RunShell
 import com.coc.suncode.interfaces.MainCode
+import com.coc.suncode.interfaces.AccountSwitchState
+import com.coc.suncode.interfaces.RuntimeAccountSwitcher
+import com.coc.suncode.jar.code.universal.smalltools.RuntimeAccountSwitch
 import com.coc.suncode.core.data.websocket.ServerActions
 import com.coc.suncode.jar.code.runMainScript
 import com.coc.suncode.jar.ui.components.CustomButton
@@ -36,7 +39,12 @@ import kotlinx.coroutines.flow.first
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 
-class EnterMainCode : MainCode {
+class EnterMainCode : MainCode, RuntimeAccountSwitcher {
+    // Keep account configuration and archive resolution inside the active dynamic module.
+    override suspend fun accountSwitchState(): AccountSwitchState = RuntimeAccountSwitch.state()
+
+    override suspend fun switchToAccount(accountNumber: Int): Boolean = RuntimeAccountSwitch.switchTo(accountNumber)
+
     override fun refreshConfigs(actions: ServerActions) {
         ConfigManager.initializeAllConfigs(actions)
         GlobalVars.isConfigLoaded = true

@@ -26,7 +26,7 @@ object GlobalSettings {
     val CREATE_GEM_BUILD = SettingDef("create_gem_build", "创号时宝石秒建筑", 0, "GLOBAL_SETTINGS")
     val GEM_COUNT = SettingDef("gem_count", "宝石数量", "", "GLOBAL_SETTINGS")
     val AFTER_KICK_OPTION = SettingDef("after_kick_option", "顶号后选项", "1", "GLOBAL_SETTINGS")
-    val AFTER_KICK_WAIT_MINUTES = SettingDef("after_kick_wait_minutes", "顶号冷却时间（分钟）", "3", "GLOBAL_SETTINGS")
+    val AFTER_KICK_COOLDOWN_MINUTES = SettingDef("after_kick_cooldown_minutes", "被顶账号冷却时间（分钟）", "3", "GLOBAL_SETTINGS")
     val DEVICE_REMARK = SettingDef("device_remark", "设备备注", "", "GLOBAL_SETTINGS")
     val RUNTIME_SCREENSHOT = SettingDef("runtime_screenshot", "运行时截图", 0, "GLOBAL_SETTINGS")
     // Only the account selector is ordinary configuration; QQ grants remain host-private.
@@ -55,7 +55,7 @@ object GlobalSettings {
         CREATE_GEM_BUILD,
         GEM_COUNT,
         AFTER_KICK_OPTION,
-        AFTER_KICK_WAIT_MINUTES,
+        AFTER_KICK_COOLDOWN_MINUTES,
         DEVICE_REMARK,
         RUNTIME_SCREENSHOT,
         QQ_ACCOUNT_SLOT,

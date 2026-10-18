@@ -183,7 +183,7 @@ class UIWindowService : Service(), LifecycleOwner, SavedStateRegistryOwner, View
 
     private fun handleUIIClose() {
         when (AppStateManager.currentMode) {
-            AppMode.SwitchAccount, AppMode.BugReport, AppMode.Main -> {
+            AppMode.BugReport, AppMode.Main -> {
                 updateWindowSizeForCurrentMode()
             }
 

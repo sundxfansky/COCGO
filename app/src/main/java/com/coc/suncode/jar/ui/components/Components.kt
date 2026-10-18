@@ -194,7 +194,7 @@ class WindowCenterPositionProvider : PopupPositionProvider {
 
 
 @Composable
-fun SettingInputRow(key: String, afterChange: ((String) -> Unit)? = null) {
+fun SettingInputRow(key: String, digitsOnly: Boolean = false, afterChange: ((String) -> Unit)? = null) {
     // Use getOrPut to lazily initialize missing config keys with their Schema defaults
     val state = GlobalVars.configStates.getOrPut(key) {
         mutableStateOf(Schema.getDefaultValue(key))
@@ -213,6 +213,7 @@ fun SettingInputRow(key: String, afterChange: ((String) -> Unit)? = null) {
         BasicTextField(
             enabled = LocalSettingsEnabled.current,
             value = state.value, onValueChange = { newValue ->
+                if (digitsOnly && newValue.any { !it.isDigit() }) return@BasicTextField
                 GlobalVars.isAutoRunEnabled = false
                 state.value = newValue
                 afterChange?.invoke(newValue)
@@ -225,7 +226,8 @@ fun SettingInputRow(key: String, afterChange: ((String) -> Unit)? = null) {
                 .padding(4.dp)
                 .align(Alignment.CenterVertically)
                 .heightIn(max = 120.dp)
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(rememberScrollState()),
+            keyboardOptions = if (digitsOnly) KeyboardOptions(keyboardType = KeyboardType.Number) else KeyboardOptions.Default
         )
     }
 }

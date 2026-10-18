@@ -126,12 +126,12 @@ class AccountEditorTest {
     fun kickCooldownDefaultsToThreeMinutesAndCanBeEditedWithoutManualSwitchMode() {
         compose.setContent { MaterialTheme { HomeScreen() } }
         compose.onNodeWithText("启动手动切号模式").assertDoesNotExist()
-        compose.onNodeWithText("切号并计时等待").performScrollTo().assertIsDisplayed()
-        val label = Schema.GLOBAL_SETTINGS.AFTER_KICK_WAIT_MINUTES.displayName
+        compose.onNodeWithText("切号并冷却被顶账号").performScrollTo().assertIsDisplayed()
+        val label = Schema.GLOBAL_SETTINGS.AFTER_KICK_COOLDOWN_MINUTES.displayName
         compose.onNodeWithText(label).performScrollTo().assertIsDisplayed()
         compose.onNode(hasSetTextAction() and hasText("3") and hasAnySibling(hasText(label))).performTextReplacement("5")
         compose.runOnIdle {
-            assertEquals("5", GlobalVars.configStates[Schema.GLOBAL_SETTINGS.AFTER_KICK_WAIT_MINUTES.key]!!.value)
+            assertEquals("5", GlobalVars.configStates[Schema.GLOBAL_SETTINGS.AFTER_KICK_COOLDOWN_MINUTES.key]!!.value)
         }
     }
 }

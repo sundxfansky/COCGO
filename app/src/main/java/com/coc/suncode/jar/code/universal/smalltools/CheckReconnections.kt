@@ -1,6 +1,7 @@
 package com.coc.suncode.jar.code.universal.smalltools
 
 import android.os.Environment
+import android.os.SystemClock
 import com.coc.suncode.core.data.database.GlobalVars
 import com.coc.suncode.core.system.screencapture.ScreenCaptureManager
 import com.coc.suncode.core.util.basic.RunShell
@@ -45,11 +46,11 @@ suspend fun checkReconnections(): Boolean {
                 }
 
                 1 -> {
-                    val setting = Schema.GLOBAL_SETTINGS.AFTER_KICK_WAIT_MINUTES
-                    val minutes = getStaticConfig(setting.key).toIntOrNull()?.takeIf { it in 1..1440 }
+                    val setting = Schema.GLOBAL_SETTINGS.AFTER_KICK_COOLDOWN_MINUTES
+                    val minutes = getStaticConfig(setting.key).toIntOrNull()?.coerceAtLeast(0)
                         ?: setting.defaultValue.toString().toInt()
                     val account = InGamesVars.currentAccountNumber
-                    accountCooldowns.start(account, minutes)
+                    InGamesVars.accountCooldownTracker.startCooldown(account, minutes, SystemClock.elapsedRealtime())
                     ShowMessage("账号 $account 被顶号，冷却 $minutes 分钟，准备切换其他账号")
                     // The main loop skips this account until its deadline instead of pausing every account.
                     return false

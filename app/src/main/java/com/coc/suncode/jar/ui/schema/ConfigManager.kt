@@ -22,7 +22,11 @@ object ConfigManager {
             when (module.scope) {
                 Scope.GLOBAL -> {
                     module.settings.forEach { def ->
+                        // Migrate the local cooldown setting while preferring an explicit canonical value.
                         val savedValue = actions.getValue(def.key)
+                            ?: if (def.key == Schema.GLOBAL_SETTINGS.AFTER_KICK_COOLDOWN_MINUTES.key) {
+                                actions.getValue("after_kick_wait_minutes")
+                            } else null
                         GlobalVars.configStates.getOrPut(def.key) {
                             mutableStateOf(savedValue ?: def.defaultValue.toString())
                         }.value = savedValue ?: def.defaultValue.toString()
