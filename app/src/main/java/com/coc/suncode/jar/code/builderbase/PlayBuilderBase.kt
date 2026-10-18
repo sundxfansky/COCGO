@@ -15,9 +15,9 @@ import com.coc.suncode.jar.code.universal.smalltools.getBooleanConfigRuntime
 import com.coc.suncode.jar.ui.schema.Schema
 
 suspend fun playBuilderBase(): Boolean {
+    // The master switch also skips prechecks and auxiliary actions for this world.
+    if (!getBooleanConfigRuntime(Schema.BUILDER_BASE_SETTINGS.ENABLED.key)) return true
     if (!claimAchievement()) return false
-    val noBuilderBase = getBooleanConfigRuntime(Schema.BUILDER_BASE_SETTINGS.NO_BUILDER_BASE.key)
-    if (noBuilderBase) return true//if no builder base, then directly return.
     if (!enterBuilderBase(true)) return true
     if (!collectBuilderBaseResources()) return false
     if (!enterBuilderBase(false)) return true

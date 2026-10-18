@@ -5,6 +5,7 @@ package com.coc.suncode.jar.ui.schema.details
 import com.coc.suncode.jar.ui.schema.SettingDef
 
 object BuilderBaseSettings {
+    val ENABLED = SettingDef("builder_base_enabled", "夜世界", 1, "BUILDER_BASE_SETTINGS")
     val NO_BUILDER_BASE = SettingDef("no_builder_base", "不打夜世界", 0, "BUILDER_BASE_SETTINGS")
     val BUILDER_BASE_FARMING = SettingDef("builder_base_farming", "夜世界打资源", 1, "BUILDER_BASE_SETTINGS")
     val SWITCH_ACCOUNT_AFTER_BATTLES = SettingDef(
@@ -27,6 +28,7 @@ object BuilderBaseSettings {
     val BUILDER_BASE_SAVE_WORKER = SettingDef("builder_base_save_worker", "留1工人升级城墙", 0, "BUILDER_BASE_SETTINGS")
 
     val all = listOf(
+        ENABLED,
         NO_BUILDER_BASE,
         BUILDER_BASE_FARMING,
         SWITCH_ACCOUNT_AFTER_BATTLES,

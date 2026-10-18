@@ -20,6 +20,7 @@
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <queries>
+        <package android:name="com.tencent.mobileqq" />
         <package android:name="com.tencent.tmgp.supercell.clashofclans" />
         <package android:name="com.supercell.clashofclans" />
         <package android:name="com.atrasis.original" />
@@ -46,6 +47,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Activity results belong to the host, even when authorization is requested by a hot-loaded plugin. -->
+        <activity
+            android:name=".core.qq.QqAuthorizationActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Suncode" />
 
         <service
             android:name="com.coc.suncode.core.ui.floatingwindows.UIWindowService"

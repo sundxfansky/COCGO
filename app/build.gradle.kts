@@ -205,7 +205,9 @@ tasks.register("deployAndReload") {
         // Only this task's exact temporary artifact is removed, even on failure.
         try {
             run("push", layout.buildDirectory.file("plugin/code.jar").get().asFile.path, temporary)
-            run("shell", "su", "-c", "mkdir -p /data/data/com.coc.suncode/files/assets && cp $temporary /data/data/com.coc.suncode/files/assets/$name && chmod 444 /data/data/com.coc.suncode/files/assets/$name")
+            // adb joins remote arguments, so quote the whole root script for the device shell.
+            val rootScript = "mkdir -p /data/data/com.coc.suncode/files/assets && cp $temporary /data/data/com.coc.suncode/files/assets/$name && chmod 444 /data/data/com.coc.suncode/files/assets/$name"
+            run("shell", "su", "-c", "'" + rootScript.replace("'", "'\\''") + "'")
             run("shell", "am", "broadcast", "-a", "com.coc.suncode.SUN_RELOAD", "-n", "com.coc.suncode/.core.system.daemon.DebugReloadReceiver")
         } finally { run("shell", "rm", "-f", temporary) }
     }

@@ -17,8 +17,12 @@ import com.coc.suncode.jar.code.universal.buildings.upgrade.upgradeBuildings
 import com.coc.suncode.jar.code.universal.buildings.walls.upgradeWalls
 import com.coc.suncode.jar.code.universal.clickRightBottom
 import com.coc.suncode.jar.code.universal.smalltools.enterMainBase
+import com.coc.suncode.jar.code.universal.smalltools.getBooleanConfigRuntime
+import com.coc.suncode.jar.ui.schema.Schema
 
 suspend fun playMainBase(): Boolean {
+    // Disabling a world skips every action in its module, including training and maintenance.
+    if (!getBooleanConfigRuntime(Schema.MAIN_BASE_SETTINGS.ENABLED.key)) return true
     if (!enterMainBase()) return false
 
     zoomSmallMainBase()

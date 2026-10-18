@@ -22,6 +22,8 @@ import androidx.activity.result.ActivityResultLauncher
 import androidx.core.graphics.createBitmap
 import com.coc.suncode.core.system.accessibility.MyAccessibilityService
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import java.nio.ByteBuffer
@@ -148,15 +150,16 @@ object ScreenCaptureManager {
     /**
      * Request permission or attempt to take screenshot directly.
      */
-    fun requestPermission(launcher: ActivityResultLauncher<Intent>) {
+    suspend fun requestPermission(launcher: ActivityResultLauncher<Intent>) {
         if (cachedResultCode != null && cachedIntentData != null) {
             // If permission is already cached, try to take a screenshot directly
-            if (takeScreenshot()) return
+            if (withContext(Dispatchers.IO) { takeScreenshot() }) return
             reset()
         }
 
         // Keep the accessibility logic here
-        AutoGrantTool.forceEnableAccessibility() 
+        // Root shell calls and the accessibility rebind delay must not block startup rendering.
+        withContext(Dispatchers.IO) { AutoGrantTool.forceEnableAccessibility() }
         MyAccessibilityService.isDetectionEnabled = true
 
         mediaProjectionManager?.let {

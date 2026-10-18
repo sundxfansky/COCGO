@@ -3,6 +3,7 @@ package com.coc.suncode.jar.code.universal
 import com.coc.suncode.core.data.database.GlobalVars
 import com.coc.suncode.core.system.screencapture.ScreenCaptureManager
 import com.coc.suncode.core.util.basic.ShowMessage
+import com.coc.suncode.core.qq.QqAuthorizationManager
 import com.coc.suncode.core.util.fileactions.LogHelper.logAndRestart
 import com.coc.suncode.core.util.touchactions.TouchActions
 import com.coc.suncode.jar.code.colorschema.MyColors
@@ -36,6 +37,14 @@ suspend fun enterMainScreen(isDoubleCheck: Boolean = false): Boolean {
     var stuckPasses = 0
     GlobalVars.absorbEdge = 0
     while (System.currentTimeMillis() - startTime < timeoutMillis) {
+        // Do not steal focus from the companion or send game-coordinate taps to its authorization UI.
+        if (InGamesVars.currentGameVersion == GameVersion.CN &&
+            GlobalVars.configStates["${Schema.ACCOUNT_SETTINGS.START_METHOD.key}${InGamesVars.currentAccountNumber}"]?.value == "2" &&
+            QqAuthorizationManager.isToolAtFront()
+        ) {
+            delay(500)
+            continue
+        }
         // 3. Insert your logic to check if the main screen is actually visible
         if (!isGameAtFront()) {
             runGame()
@@ -175,7 +184,9 @@ private suspend fun closeAdvertisements(): Boolean {
     }
     findMultiColors(byteBuffer = screenBuffer, schema = MyColors.DailyLoginReward, increment = 1)?.let {
         matchedAny = true
-        if (getBooleanConfigRuntime(Schema.MAIN_BASE_SETTINGS.CLAIM_DAILY_REWARD.key)) {
+        // A disabled main world may dismiss this entry popup but must not claim its rewards.
+        if (getBooleanConfigRuntime(Schema.MAIN_BASE_SETTINGS.ENABLED.key) &&
+            getBooleanConfigRuntime(Schema.MAIN_BASE_SETTINGS.CLAIM_DAILY_REWARD.key)) {
             TouchActions.tap(622, 492, delayTime = 2000)
         } else {
             TouchActions.tap(it.x, it.y)

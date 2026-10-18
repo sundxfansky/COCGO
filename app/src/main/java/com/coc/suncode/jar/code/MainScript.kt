@@ -12,6 +12,7 @@ import com.coc.suncode.jar.code.universal.InGamesVars
 import com.coc.suncode.jar.code.universal.create.batchCreateAccounts
 import com.coc.suncode.jar.code.universal.enterMainScreen
 import com.coc.suncode.jar.code.universal.smalltools.StorageKeys
+import com.coc.suncode.jar.code.universal.smalltools.accountCooldowns
 import com.coc.suncode.jar.code.universal.smalltools.getConfigOrStop
 import com.coc.suncode.jar.code.universal.smalltools.readMemory
 import com.coc.suncode.jar.code.universal.smalltools.writeGameFiles
@@ -144,20 +145,24 @@ private suspend fun runTestCode() {
 private suspend fun findAndActivateAccount(
     searchOrder: Iterable<Int>, skipIsOpenCheck: Boolean = false
 ): Int? {
-    // In batch-create mode, treat all accounts as active
-    val found = if (skipIsOpenCheck) {
-        searchOrder.firstOrNull()
-    } else {
-        searchOrder.firstOrNull { id ->
-            getConfigOrStop("${Schema.ACCOUNT_SETTINGS.ISOPEN.key}$id") == "1"
+    val order = searchOrder.toList()
+    while (currentCoroutineContext().isActive) {
+        waitForPlay()
+        // Re-evaluate eligibility after each countdown tick without changing the circular order.
+        val enabled = order.filter { id ->
+            skipIsOpenCheck || getConfigOrStop("${Schema.ACCOUNT_SETTINGS.ISOPEN.key}$id") == "1"
         }
-    }
-    if (found == null) {
-        while (currentCoroutineContext().isActive) {
+        val selection = accountCooldowns.select(enabled)
+        selection.account?.let { return it }
+        if (enabled.isEmpty()) {
             ShowMessage("当前未开启任何账号\n请勾选要开启的账号。")
             delay(2500)
+        } else {
+            val seconds = (selection.waitMillis + 999L) / 1000L
+            ShowMessage("所有启用账号均在顶号冷却中，${seconds / 60}分${seconds % 60}秒后继续")
+            delay(minOf(1000L, selection.waitMillis))
         }
     }
-    return found
+    return null
 }
 

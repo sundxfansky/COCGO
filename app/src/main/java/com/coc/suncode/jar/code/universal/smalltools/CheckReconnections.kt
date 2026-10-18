@@ -4,6 +4,7 @@ import android.os.Environment
 import com.coc.suncode.core.data.database.GlobalVars
 import com.coc.suncode.core.system.screencapture.ScreenCaptureManager
 import com.coc.suncode.core.util.basic.RunShell
+import com.coc.suncode.core.util.basic.ShowMessage
 import com.coc.suncode.core.util.fileactions.LogHelper.logAndRestart
 import com.coc.suncode.core.util.touchactions.TouchActions
 import com.coc.suncode.jar.code.colorschema.MyColors
@@ -23,15 +24,13 @@ suspend fun checkReconnections(): Boolean {
         MyColors.Reconnection, MyColors.ReconnectionOnCloudPhone, MyColors.RatingOnCloudPhone
     )
     val screenBuffer = ScreenCaptureManager.capture(asBitmap = false) as? ScreenCaptureManager.CaptureResult ?: return true
-    // 3. Run the check and capture the result
-    // We return the result of 'any' to determine if a reconnection event occurred.
-    return homeSchemas.any { schema ->
-        val match = findMultiColors(byteBuffer = screenBuffer, schema = schema)
-        if (match != null) {
+    // Inspect every variant; an unmatched pattern must not hide subsequent cloud-phone dialogs.
+    for (schema in homeSchemas) {
+        if (findMultiColors(byteBuffer = screenBuffer, schema = schema) != null) {
             // Count white pixels in the confirmation area; skip this iteration if insufficient
             val whiteCount = countWhitePixels(screenBuffer, 270, 230, 1010, 430)
             if (whiteCount <= 100) {
-                return@any true // Not enough white pixels, skip this time
+                continue
             }
             // Retrieve the configuration state for the specific account
             val configKey = Schema.GLOBAL_SETTINGS.AFTER_KICK_OPTION.key
@@ -46,8 +45,13 @@ suspend fun checkReconnections(): Boolean {
                 }
 
                 1 -> {
-                    // Action: Signal a need to switch accounts
-                    // By returning false here, we tell the caller the check 'failed' or needs a different flow
+                    val setting = Schema.GLOBAL_SETTINGS.AFTER_KICK_WAIT_MINUTES
+                    val minutes = getStaticConfig(setting.key).toIntOrNull()?.takeIf { it in 1..1440 }
+                        ?: setting.defaultValue.toString().toInt()
+                    val account = InGamesVars.currentAccountNumber
+                    accountCooldowns.start(account, minutes)
+                    ShowMessage("账号 $account 被顶号，冷却 $minutes 分钟，准备切换其他账号")
+                    // The main loop skips this account until its deadline instead of pausing every account.
                     return false
                 }
 
@@ -56,13 +60,10 @@ suspend fun checkReconnections(): Boolean {
                     delay(1000)
                 }
             }
-            true // Match found and handled
-        } else {
-            true// No match for this schema
+            return true
         }
     }
-
-
+    return true
 }
 
 /**

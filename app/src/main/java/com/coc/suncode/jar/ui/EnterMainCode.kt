@@ -25,8 +25,8 @@ import com.coc.suncode.jar.ui.components.CustomButton
 import com.coc.suncode.jar.ui.pages.mainbase.MainBaseUpgradePriority
 import com.coc.suncode.jar.ui.pages.builderbase.BuilderBaseUpgradePriority
 import com.coc.suncode.jar.ui.pages.single.HomeScreen
+import com.coc.suncode.jar.ui.pages.single.AccountDetailScreen
 import com.coc.suncode.jar.ui.pages.single.BugReport
-import com.coc.suncode.jar.ui.pages.single.SwitchAccount
 import com.coc.suncode.jar.ui.schema.ConfigManager
 import com.coc.suncode.statehelper.AppMode
 import com.coc.suncode.statehelper.AppStateManager
@@ -45,7 +45,8 @@ class EnterMainCode : MainCode {
     @Composable
     override fun ShowMainUI(context: Context, onClose: () -> Unit) {
         // Initialize states from Schema
-        var isConfigInitialized by remember { mutableStateOf(false) }
+        // A prepared plugin can render its home page on the first composition.
+        var isConfigInitialized by remember { mutableStateOf(GlobalVars.isConfigLoaded) }
 
         LaunchedEffect(Unit) {
             if (GlobalVars.isConfigLoaded) {
@@ -72,26 +73,26 @@ class EnterMainCode : MainCode {
 
         // Route to the appropriate page based on current mode
         when (AppStateManager.currentMode) {
-            AppMode.SwitchAccount -> {
-                SwitchAccount(onClose = onClose)
-                return
-            }
             AppMode.BugReport -> {
                 BugReport(onClose = onClose)
                 return
             }
-            AppMode.Main -> {
+            // Older plugins may retain the retired mode; route it to the ordinary settings page.
+            AppMode.Main, AppMode.SwitchAccount -> {
                 val navController = rememberNavController()
                 NavHost(navController = navController, startDestination = "home") {
                     composable("home") {
                         HomeScreen(
                             onSaveSuccess = onClose,
-                            onNavigatePriority = { index ->
-                                navController.navigate("priority/$index")
-                            },
-                            onNavigateBuilderBasePriority = { index ->
-                                navController.navigate("builder_base_priority/$index")
-                            }
+                            onNavigateAccount = { index -> navController.navigate("account/$index") }
+                        )
+                    }
+                    composable("account/{index}") { entry ->
+                        AccountDetailScreen(
+                            initialIndex = entry.arguments?.getString("index")?.toIntOrNull() ?: 1,
+                            onBack = { navController.popBackStack() },
+                            onNavigatePriority = { index -> navController.navigate("priority/$index") },
+                            onNavigateBuilderBasePriority = { index -> navController.navigate("builder_base_priority/$index") }
                         )
                     }
                     composable("priority/{index}") { backStackEntry ->

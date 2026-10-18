@@ -6,10 +6,9 @@ import android.os.Build
 import androidx.activity.ComponentActivity
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.lifecycle.lifecycleScope
 import com.coc.suncode.core.ui.floatingwindows.UIWindowService
 import com.coc.suncode.core.util.fileactions.LogHelper.logAndRestart
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -30,7 +29,7 @@ class ProjectionPermissionHelper(private val activity: ComponentActivity) {
 
             // Wait for the foreground service to finish startForeground() before
             // calling getMediaProjection(), avoiding the race condition on cold start
-            CoroutineScope(Dispatchers.Main).launch {
+            activity.lifecycleScope.launch {
                 val ready = withTimeoutOrNull(5000) {
                     UIWindowService.foregroundReady.await()
                 }
@@ -46,6 +45,8 @@ class ProjectionPermissionHelper(private val activity: ComponentActivity) {
     }
 
     fun requestMediaProjection() {
-        ScreenCaptureManager.requestPermission(projectionLauncher)
+        activity.lifecycleScope.launch {
+            ScreenCaptureManager.requestPermission(projectionLauncher)
+        }
     }
 }

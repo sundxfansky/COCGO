@@ -7,7 +7,7 @@ import androidx.compose.runtime.setValue
 enum class AppMode {
     Main,
     Run,
-    SwitchAccount,
+    SwitchAccount, // Retained for binary compatibility with previously built plugins.
     BugReport
 }
 

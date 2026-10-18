@@ -7,7 +7,6 @@ import android.os.Build
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
@@ -25,7 +24,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Article
 import androidx.compose.material.icons.filled.Close
@@ -38,7 +36,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PlainTooltip
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TooltipAnchorPosition
 import androidx.compose.material3.TooltipBox
@@ -67,8 +64,10 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.findViewTreeLifecycleOwner
 import androidx.lifecycle.findViewTreeViewModelStoreOwner
 import androidx.lifecycle.setViewTreeLifecycleOwner
@@ -142,8 +141,9 @@ internal fun FloatingLogOverlay(
     }
     val availableWidth = with(density) { screenWidth.toDp() }.coerceAtLeast(1.dp)
     val availableHeight = with(density) { screenHeight.toDp() }.coerceAtLeast(1.dp)
-    val panelWidth = (availableWidth - 24.dp).coerceAtLeast(1.dp).coerceAtMost(420.dp)
-    val panelHeight = (availableHeight - 24.dp).coerceAtLeast(1.dp).coerceAtMost(320.dp)
+    // Use an edge-to-edge half-screen layer instead of a small floating card.
+    val panelWidth = availableWidth
+    val panelHeight = availableHeight * 0.55f
     val latestLines = rememberUpdatedState(logLines)
     val latestInteractive = rememberUpdatedState(interactive)
     val latestOnClear = rememberUpdatedState(onClear)
@@ -165,7 +165,7 @@ internal fun FloatingLogOverlay(
             } else {
                 1f
             }
-            alpha = minOf(0.75f, maximumOpacity).coerceIn(0f, 1f)
+            alpha = minOf(0.78f, maximumOpacity).coerceIn(0f, 1f)
             windowAnimations = 0
         }
     }
@@ -204,7 +204,7 @@ internal fun FloatingLogOverlay(
         params.width = widthPx
         params.height = heightPx
         params.x = ((screenWidth - widthPx) / 2).coerceAtLeast(0)
-        params.y = ((screenHeight - heightPx) / 2).coerceAtLeast(0)
+        params.y = (screenHeight - heightPx).coerceAtLeast(0)
         updateInputFlags(LogOverlayCaptureGuard.isInputActive())
         windowManager.addView(logView, params)
         LogOverlayCaptureGuard.register(
@@ -227,7 +227,7 @@ internal fun FloatingLogOverlay(
         params.width = widthPx
         params.height = heightPx
         params.x = ((screenWidth - widthPx) / 2).coerceAtLeast(0)
-        params.y = ((screenHeight - heightPx) / 2).coerceAtLeast(0)
+        params.y = (screenHeight - heightPx).coerceAtLeast(0)
         updateInputFlags(LogOverlayCaptureGuard.isInputActive())
         if (logView.isAttachedToWindow) windowManager.updateViewLayout(logView, params)
     }
@@ -259,29 +259,23 @@ private fun FloatingLogPanel(
         }
     }
 
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f)),
-        shadowElevation = 4.dp
-    ) {
+    Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.9f))) {
         Column {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.fillMaxWidth().padding(start = 6.dp, end = 2.dp),
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     text = "运行日志",
                     modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.titleSmall
+                    color = Color.White,
+                    fontSize = 11.sp
                 )
                 if (interactive) {
                     Text(
                         text = "浏览",
-                        color = AppColors.Azure,
+                        color = Color.White,
                         style = MaterialTheme.typography.labelSmall
                     )
                 }
@@ -308,29 +302,33 @@ private fun FloatingLogPanel(
                     onClick = onDismiss
                 )
             }
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f))
+            HorizontalDivider(color = Color.White.copy(alpha = 0.2f))
             if (logLines.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
                         text = "暂无日志",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = Color.White,
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
             } else {
                 LazyColumn(
                     state = listState,
-                    modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    modifier = Modifier.fillMaxSize().padding(horizontal = 6.dp),
+                    verticalArrangement = Arrangement.spacedBy(0.dp)
                 ) {
                     itemsIndexed(logLines, key = { _, entry -> entry.id }) { index, entry ->
                         Text(
                             text = entry.line,
                             modifier = Modifier.padding(
-                                top = if (index == 0) 8.dp else 0.dp,
-                                bottom = if (index == logLines.lastIndex) 8.dp else 0.dp
+                                top = if (index == 0) 3.dp else 0.dp,
+                                bottom = if (index == logLines.lastIndex) 3.dp else 0.dp
                             ),
-                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.White,
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontSize = 10.sp, lineHeight = 12.sp,
+                                platformStyle = PlatformTextStyle(includeFontPadding = false)
+                            ),
                             fontFamily = FontFamily.Monospace
                         )
                     }
@@ -353,17 +351,17 @@ private fun LogToolbarButton(
         IconButton(
             onClick = onClick,
             enabled = enabled,
-            modifier = Modifier.size(40.dp).semantics { this.selected = selected }
+            modifier = Modifier.size(32.dp).semantics { this.selected = selected }
         ) {
             Icon(
                 imageVector = imageVector,
                 contentDescription = description,
                 tint = when {
-                    !enabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                    selected -> AppColors.Azure
-                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    !enabled -> Color.White.copy(alpha = 0.4f)
+                    selected -> Color.White
+                    else -> Color.White.copy(alpha = 0.7f)
                 },
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(16.dp)
             )
         }
     }

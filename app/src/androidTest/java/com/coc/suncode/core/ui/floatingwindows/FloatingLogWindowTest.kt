@@ -114,6 +114,7 @@ class FloatingLogWindowTest {
 
         compose.onNodeWithContentDescription("Main Icon").performClick()
         compose.mainClock.advanceTimeByFrame()
+        compose.onNodeWithContentDescription("Switch").assertDoesNotExist()
         compose.runOnIdle { assertTrue(GlobalVars.isPlaying.value) }
         compose.onNodeWithContentDescription("日志").performClick()
         compose.mainClock.advanceTimeByFrame()
@@ -179,7 +180,11 @@ class FloatingLogWindowTest {
     private fun verifyWindowMode(window: View, interactive: Boolean) {
         compose.runOnIdle {
             val params = window.layoutParams as WindowManager.LayoutParams
-            assertTrue(params.alpha > 0f && params.alpha <= 0.75f)
+            assertTrue(params.alpha > 0f && params.alpha <= 0.78f)
+            // The flat log layer spans the screen and uses approximately its lower half.
+            val screen = window.resources.displayMetrics
+            assertTrue(params.width >= screen.widthPixels * 0.95f)
+            assertTrue(params.height in (screen.heightPixels * 0.45f).toInt()..(screen.heightPixels * 0.6f).toInt())
             assertTrue(params.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE != 0)
             assertTrue(params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL != 0)
             assertEquals(!interactive, params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE != 0)

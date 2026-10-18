@@ -1,6 +1,7 @@
 package com.coc.suncode.jar.ui.pages.single
 
 import com.coc.suncode.core.data.cloud.CloudConfigInbox
+import com.coc.suncode.core.data.cloud.CloudSyncManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -40,6 +41,7 @@ import com.coc.suncode.jar.ui.components.CustomButton
 import com.coc.suncode.jar.ui.components.SettingSwitchIcon
 import com.coc.suncode.jar.ui.components.SettingDropdown
 import com.coc.suncode.jar.ui.components.SettingInputRow
+import com.coc.suncode.jar.ui.components.SettingNumberStepper
 import com.coc.suncode.jar.ui.components.SettingSection
 import com.coc.suncode.core.ui.theme.AppColors
 import com.coc.suncode.core.util.exit.AppExitHelper
@@ -53,11 +55,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import com.coc.suncode.core.util.basic.RunShell
+import com.coc.suncode.core.util.basic.ServerShell
+import com.coc.suncode.core.util.basic.ShowMessage
+import com.coc.suncode.core.qq.QqAuthorizationManager
+import com.coc.suncode.jar.code.universal.smalltools.AccountLoginResult
+import com.coc.suncode.jar.code.universal.smalltools.loginConfiguredAccount
 
 @Composable
 fun HomeScreen(
-    onSaveSuccess: () -> Unit = {}, onNavigatePriority: (Int) -> Unit = {}, onNavigateBuilderBasePriority: (Int) -> Unit = {}
+    onSaveSuccess: () -> Unit = {}, onNavigateAccount: (Int) -> Unit = {}
 ) {
 
     // Ensure all keys are initialized if not already (safeguard)
@@ -67,8 +73,8 @@ fun HomeScreen(
     }
 
     // Safety check for configuration state
-    val configCountState = GlobalVars.configStates[GLOBAL_SETTINGS.CONFIG_COUNT.key]
-    if (configCountState == null) {
+    val accountCountState = GlobalVars.configStates[GLOBAL_SETTINGS.ACCOUNT_COUNT.key]
+    if (accountCountState == null) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -79,26 +85,24 @@ fun HomeScreen(
         }
         return
     }
-    val configCountStr = configCountState.value
-
-
     var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
-
-    // Hoisted expansion states keyed by tab index
-    // Hoisted expansion states keyed by tab index
-    val mainBaseExpandedStates = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateMapOf<Int, Boolean>() }
-    val builderBaseExpandedStates = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateMapOf<Int, Boolean>() }
-
-    val configCount = configCountStr.toIntOrNull() ?: 1
-    val tabs = listOf("主页设置", "账号设置", "提取存档") + List(configCount) { "配置文件${it + 1}" }
-
+    val tabs = listOf("主页设置", "账号设置")
     val lazyListState = rememberLazyListState()
     val scope = rememberCoroutineScope()
-    val scrollToBottom: () -> Unit = {
-        scope.launch {
-            // Small delay to let AnimatedVisibility content measure
-            delay(300L)
-            lazyListState.animateScrollToItem(lazyListState.layoutInfo.totalItemsCount - 1)
+    val context = LocalContext.current
+    var busyAccount by remember { mutableStateOf<Int?>(null) }
+    val loginAccount: (Int) -> Unit = { index ->
+        if (busyAccount == null) {
+            busyAccount = index
+            scope.launch {
+                try {
+                    if (loginConfiguredAccount(context, index) == AccountLoginResult.STARTED) {
+                        GlobalVars.updateWindowPosition = true
+                        AppStateManager.setMode(AppMode.Run)
+                        onSaveSuccess()
+                    }
+                } finally { busyAccount = null }
+            }
         }
     }
     // Save configs and explicitly set the playing state before closing the config window
@@ -138,6 +142,7 @@ fun HomeScreen(
     var showExitConfirmation by rememberSaveable { mutableStateOf(false) }
     // Clean All Data Confirmation Dialog State
     var showCleanAllConfirmation by rememberSaveable { mutableStateOf(false) }
+    var isClearingData by remember { mutableStateOf(false) }
 
     val cleanAllData = {
         showCleanAllConfirmation = true
@@ -165,7 +170,7 @@ fun HomeScreen(
         ) {
             tabs.forEachIndexed { index, title ->
                 Tab(
-                    selected = selectedTabIndex == index, onClick = { selectedTabIndex = index }, modifier = Modifier
+                    enabled = busyAccount == null, selected = selectedTabIndex == index, onClick = { selectedTabIndex = index }, modifier = Modifier
                         .wrapContentWidth() // Allows the tab to wrap its content
                         .widthIn(min = 0.dp), // BREAKS the default minimum width constraint
                     selectedContentColor = Color.White, unselectedContentColor = Color.White.copy(alpha = 0.75f), content = {
@@ -204,11 +209,7 @@ fun HomeScreen(
                         }
                         SettingSection {
                             FlowRow {
-                                CustomButton(text = "启动手动切号模式", onClick = {
-                                    AppStateManager.setMode(AppMode.SwitchAccount)
-                                    onSaveSuccess()
-                                })
-                                CustomButton(text = "截屏反馈问题", onClick = {
+                                CustomButton(text = "截屏反馈问题", enable = busyAccount == null, onClick = {
                                     AppStateManager.setMode(AppMode.BugReport)
                                     onSaveSuccess()
                                 })
@@ -226,7 +227,7 @@ fun HomeScreen(
                                 SettingSwitchIcon(key = GLOBAL_SETTINGS.AUTO_START.key)
                                 SettingDropdown(
                                     key = GLOBAL_SETTINGS.AFTER_KICK_OPTION.key,
-                                    options = listOf("立刻重连", "切换账号", "原地等待"),
+                                    options = listOf("立刻重连", "切号并计时等待", "原地等待"),
                                     // Disable batch create when dropdown is not "立刻重连" (index 0)
                                     afterChange = { selectedIndex ->
                                         if (selectedIndex != 0) {
@@ -234,6 +235,9 @@ fun HomeScreen(
                                         }
                                     }
                                 )
+                                if (GlobalVars.configStates[GLOBAL_SETTINGS.AFTER_KICK_OPTION.key]?.value == "1") {
+                                    SettingNumberStepper(GLOBAL_SETTINGS.AFTER_KICK_WAIT_MINUTES.key, 1..1440)
+                                }
                                 Column(Modifier.padding(top = 6.dp)) {
                                     SettingInputRow(key = GLOBAL_SETTINGS.DEVICE_REMARK.key)
                                 }
@@ -245,7 +249,7 @@ fun HomeScreen(
                                     explain = "本辅助会记住账号信息，例如记住当前账号是否已完成突袭，是否已完成部落竞赛等等。如果换号后不清空记忆，那么本辅助就会保留先前账号错误的记忆，进而可能发生某些异常操作。"
                                 )
                                 CustomButton(
-                                    text = "清除全部数据", onClick = { cleanAllData() }, explain = "点击后将删除所有数据，包括辅助设置，保存的账号信息，数据号信息等等，用于保护用户隐私。"
+                                    text = "清除全部数据", enable = busyAccount == null, onClick = { cleanAllData() }, explain = "删除辅助设置、账号信息、全部 QQ 授权及授权工具缓存，用于保护用户隐私。"
                                 )
                             }
                             Text(
@@ -254,6 +258,9 @@ fun HomeScreen(
                                 style = MaterialTheme.typography.labelMedium,
                             )
                         }
+                    }
+                    item {
+                        QqAuthorizationSettings()
                     }
                     item {
                         CloudSettings()
@@ -265,43 +272,11 @@ fun HomeScreen(
                     }
                 }
 
-                1 -> {
-                    // Display account configurations based on account_count
-                    AccountSettings()
-                }
-
-                2 -> {
-                    // Display account configurations based on account_count
-                    ExtractGameSave()
-                }
-
-                else -> {
-                    // Pass the 1-based index (selectedTabIndex) to MainBaseConfig
-
-                    // State hoisting for expansion
-                    val currentMainExpanded = mainBaseExpandedStates[selectedTabIndex] ?: true
-                    val currentBuilderBaseExpanded = builderBaseExpandedStates[selectedTabIndex] ?: true
-
-                    GameConfig(
-                        index = selectedTabIndex - 2,
-                        isMainExpanded = currentMainExpanded,
-                        onToggleMainExpanded = { mainBaseExpandedStates[selectedTabIndex] = !currentMainExpanded },
-                        isBuilderBaseExpanded = currentBuilderBaseExpanded,
-                        onToggleBuilderBaseExpanded = {
-                            val newExpanded = !currentBuilderBaseExpanded
-                            builderBaseExpandedStates[selectedTabIndex] = newExpanded
-                            if (newExpanded) scrollToBottom()
-                        },
-                        onNavigatePriority = onNavigatePriority,
-                        onNavigateBuilderBasePriority = onNavigateBuilderBasePriority,
-                        onScrollToBottom = scrollToBottom
-                    )
-                }
+                1 -> AccountSettings(onConfigure = onNavigateAccount, onLogin = loginAccount, busyAccount = busyAccount)
             }
         }
 
         // 3. Bottom fixed button area
-        val context = LocalContext.current
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -316,15 +291,15 @@ fun HomeScreen(
             }
             Row {
                 CustomButton(
-                    text = "保存并运行", onClick = {
+                    text = "保存并运行", enable = busyAccount == null, onClick = {
                         saveAndSetPlaying(true)
                     })
                 CustomButton(
-                    text = "保存并暂停", onClick = {
+                    text = "保存并暂停", enable = busyAccount == null, onClick = {
                         saveAndSetPlaying(false)
                     })
                 CustomButton(
-                    text = "保存并退出", onClick = {
+                    text = "保存并退出", enable = busyAccount == null, onClick = {
                         showExitConfirmation = true
                     })
             }
@@ -361,33 +336,44 @@ fun HomeScreen(
 
         // Confirmation dialog for clearing all data
         if (showCleanAllConfirmation) {
-            CustomAlertDialog(onDismissRequest = { showCleanAllConfirmation = false }, title = {
+            CustomAlertDialog(onDismissRequest = { if (!isClearingData) showCleanAllConfirmation = false }, title = {
                 Text(
                     text = "清除全部数据", style = MaterialTheme.typography.titleMedium
                 )
             }, text = {
                 Text(
-                    text = "确认要删除所有数据吗？\n此操作不可撤销，将删除辅助设置、账号信息等全部数据。\n\n清除数据后，辅助将自动关闭，请手动重启辅助。", style = MaterialTheme.typography.bodyMedium
+                    text = "确认要删除所有数据吗？\n此操作不可撤销，将删除辅助设置、账号信息、全局 QQ 授权库及授权工具缓存。\n\n清除数据后，辅助将自动关闭，请手动重启辅助。", style = MaterialTheme.typography.bodyMedium
                 )
             }, confirmButton = {
                 Row {
-                    TextButton(onClick = { showCleanAllConfirmation = false }) {
+                    TextButton(enabled = !isClearingData, onClick = { showCleanAllConfirmation = false }) {
                         Text("取消")
                     }
-                    TextButton(onClick = {
-                        showCleanAllConfirmation = false
-                        // Delete all data files and exit immediately without saving GlobalVars
+                    TextButton(enabled = !isClearingData, onClick = {
+                        isClearingData = true
+                        GlobalVars.isAutoRunEnabled = false
+                        GlobalVars.isPlaying.value = false
+                        // Stop writers before deleting data, then exit without saving the in-memory draft.
+                        CloudSyncManager.stop()
                         scope.launch {
                             val sdPath = Environment.getExternalStorageDirectory().path
-                            withContext(Dispatchers.IO) {
-                                RunShell.runNoOutput(
-                                    "rm -rf $sdPath/sunFiles", isCheckIsPlaying = false
-                                )
+                            try {
+                                withContext(Dispatchers.IO) {
+                                    // QQ grants live outside sunFiles and must be cleared with ordinary app data.
+                                    QqAuthorizationManager.clearSavedAuthorizations(context)
+                                    val path = "'$sdPath/sunFiles'"
+                                    check(ServerShell.exec("rm -rf -- $path && [ ! -e $path ]").isSuccess)
+                                }
+                            } catch (error: Exception) {
+                                isClearingData = false
+                                ShowMessage.record("全部数据清除未完成：${error.javaClass.simpleName}")
+                                showMsg("数据清除未完成，请确认 QQ 授权操作已结束、Root 权限正常后重试")
+                                return@launch
                             }
                             AppExitHelper.exitApplication(context)
                         }
                     }) {
-                        Text("确认")
+                        Text(if (isClearingData) "正在清除..." else "确认")
                     }
                 }
             })

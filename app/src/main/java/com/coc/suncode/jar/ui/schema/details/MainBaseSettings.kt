@@ -5,6 +5,7 @@ package com.coc.suncode.jar.ui.schema.details
 import com.coc.suncode.jar.ui.schema.SettingDef
 
 object MainBaseSettings {
+    val ENABLED = SettingDef("main_base_enabled", "主世界", 1, "MAIN_BASE_SETTINGS")
     // Common settings
     val CLAIM_DAILY_REWARD = SettingDef("claim_daily_reward", "领取国服每日奖励", 1, "MAIN_BASE_SETTINGS")
     val AUTO_ATTACK = SettingDef("auto_attack", "自动进攻", 1, "MAIN_BASE_SETTINGS")
@@ -132,6 +133,7 @@ object MainBaseSettings {
     val CONSECUTIVE_COUNT = SettingDef("consecutive_count", "连号数量:", 3, "MAIN_BASE_SETTINGS")
 
     val all = listOf(
+        ENABLED,
         CLAIM_DAILY_REWARD,
         AUTO_ATTACK,
         GOLD_REQUIREMENT,

@@ -24,10 +24,11 @@ import com.coc.suncode.jar.ui.components.SettingSection
 import com.coc.suncode.jar.ui.schema.Schema.MAIN_BASE_SETTINGS
 
 fun LazyListScope.MainBaseConfig(
-    index: Int, isExpanded: Boolean, onToggleExpanded: () -> Unit, onNavigatePriority: (Int) -> Unit = {}
+    index: Int, isExpanded: Boolean, onToggleExpanded: () -> Unit, onNavigatePriority: (Int) -> Unit = {}, showHeader: Boolean = true
 ) {
-    // Header
-    item {
+    val enabled = GlobalVars.configStates["${MAIN_BASE_SETTINGS.ENABLED.key}_c$index"]?.value != "0"
+    // The detail editor supplies its own world title and master switch.
+    if (showHeader) item {
         FlowRow {
             Text(
                 text = "以下是主世界设置", fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(10.dp), textAlign = TextAlign.Start
@@ -40,7 +41,7 @@ fun LazyListScope.MainBaseConfig(
 
     // Attack & Resource requirements
     item {
-        SettingSection(visible = isExpanded) {
+        SettingSection(visible = isExpanded, enabled = enabled) {
             SettingSwitchIcon(key = "${MAIN_BASE_SETTINGS.CLAIM_DAILY_REWARD.key}_c$index")
             SettingSwitchIcon(key = "${MAIN_BASE_SETTINGS.AUTO_ATTACK.key}_c$index")
             Text(
@@ -55,7 +56,7 @@ fun LazyListScope.MainBaseConfig(
 
     // Battle adjustments
     item {
-        SettingSection(visible = isExpanded) {
+        SettingSection(visible = isExpanded, enabled = enabled) {
             FlowRow {
                 SettingSwitchIcon(
                     key = "${MAIN_BASE_SETTINGS.DYNAMIC_ADJUSTMENT.key}_c$index", explain = "勾选后，辅助会跳过前两个搜到的目标，并且会根据所有搜索到的目标的可获得资源的平均值来搜鱼要求。"
@@ -73,7 +74,7 @@ fun LazyListScope.MainBaseConfig(
 
     // Battle behavior options
     item {
-        SettingSection(visible = isExpanded) {
+        SettingSection(visible = isExpanded, enabled = enabled) {
             FlowRow {
                 SettingSwitchIcon(
                     key = "${MAIN_BASE_SETTINGS.WAIT_FOR_BATTLE.key}_c$index", explain = "勾选后，如果当前处于对战冷却时间，辅助会一直等待到冷却结束。"
@@ -131,7 +132,7 @@ fun LazyListScope.MainBaseConfig(
 
     // Donation & Research toggle
     item {
-        SettingSection(visible = isExpanded) {
+        SettingSection(visible = isExpanded, enabled = enabled) {
             FlowRow {
                 SettingSwitchIcon(key = "${MAIN_BASE_SETTINGS.DONATION_SETTING.key}_c$index")
                 SettingSwitchIcon(key = "${MAIN_BASE_SETTINGS.REQUEST_REINFORCEMENT_SETTING.key}_c$index")
@@ -163,7 +164,7 @@ fun LazyListScope.MainBaseConfig(
 
     // Building & Wall settings
     item {
-        SettingSection(visible = isExpanded) {
+        SettingSection(visible = isExpanded, enabled = enabled) {
             FlowRow {
                 SettingSwitchIcon(key = "${MAIN_BASE_SETTINGS.BUILD_SETTING.key}_c$index")
                 SettingSwitchIcon(key = "${MAIN_BASE_SETTINGS.WALL_UPGRADE_SETTINGS.key}_c$index")
@@ -189,7 +190,7 @@ fun LazyListScope.MainBaseConfig(
 
     // Pet upgrades
     item {
-        SettingSection(visible = isExpanded) {
+        SettingSection(visible = isExpanded, enabled = enabled) {
             Column {
                 SettingSwitchIcon(key = "${MAIN_BASE_SETTINGS.UPGRADE_PETS.key}_c$index")
 
@@ -288,7 +289,7 @@ fun LazyListScope.MainBaseConfig(
 
     // Gear & Rewards
     item {
-        SettingSection(visible = isExpanded) {
+        SettingSection(visible = isExpanded, enabled = enabled) {
             FlowRow {
                 SettingSwitchIcon(key = "${MAIN_BASE_SETTINGS.UPGRADE_WERA_GEAR.key}_c$index")
                 SettingSwitchIcon(
@@ -327,7 +328,7 @@ fun LazyListScope.MainBaseConfig(
 
 
     item {
-        SettingSection(visible = isExpanded) {
+        SettingSection(visible = isExpanded, enabled = enabled) {
             Column {
                 SettingSwitchIcon(
                     key = "${MAIN_BASE_SETTINGS.AUTO_JOIN_CLAN.key}_c$index",

@@ -12,10 +12,13 @@ object CloudSyncManager {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var sync: CloudConfigSync? = null
     fun ensureStarted(context: Context) { if (sync == null) restart(context) }
-    fun restart(context: Context) {
+    fun stop() {
         sync?.stop()
         sync = null
         CloudConfigInbox.clear()
+    }
+    fun restart(context: Context) {
+        stop()
         val application = context.applicationContext
         val preferences = application.getSharedPreferences("cloud", Context.MODE_PRIVATE)
         val actions = GlobalVars.serverActions ?: return

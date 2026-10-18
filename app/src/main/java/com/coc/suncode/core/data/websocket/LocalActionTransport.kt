@@ -78,8 +78,17 @@ internal class LocalActionTransport : ServerTransport {
                 val apk = context.applicationInfo.sourceDir
                 val quotedApk = "'" + apk.replace("'", "'\\''") + "'"
                 // Only the trusted APK path enters the launcher shell; requests stay in JSON pipes.
+                val workerCommand = "CLASSPATH=$quotedApk exec app_process /system/bin $ENTRY"
+                val quotedWorker = "'" + workerCommand.replace("'", "'\\''") + "'"
+                // Android app data isolation otherwise exposes shadow directories for other packages.
+                // Older devices already share the system namespace and need no nsenter binary.
+                val launchCommand = "if [ \"\$(readlink /proc/self/ns/mnt)\" = \"\$(readlink /proc/1/ns/mnt)\" ]; then " +
+                    "exec /system/bin/sh -c $quotedWorker; " +
+                    "elif [ -x /system/bin/nsenter ]; then " +
+                    "exec /system/bin/nsenter -t 1 -m -- /system/bin/sh -c $quotedWorker; " +
+                    "else echo 'Root mount namespace access unavailable' >&2; exit 1; fi"
                 val child = ProcessBuilder(
-                    "su", "-c", "CLASSPATH=$quotedApk exec app_process /system/bin $ENTRY"
+                    "su", "-c", launchCommand
                 ).redirectErrorStream(false).start()
                 process = child
                 if (!isCurrent()) {

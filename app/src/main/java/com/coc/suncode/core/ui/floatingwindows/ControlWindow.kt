@@ -79,7 +79,6 @@ fun ControlWindow(
     screenWidth: Int = 0,
     screenHeight: Int = 0,
     onOpenMainUI: () -> Unit = {},
-    onSwitchAccount: () -> Unit = {},
     onDragStart: () -> Unit = {},
     onDragEnd: () -> Unit = {},
     onDrag: (Float, Float) -> Unit = { _, _ -> }
@@ -146,11 +145,6 @@ fun ControlWindow(
     }
     val settingIcon = remember {
         context.assets.open("setting.png").use {
-            BitmapFactory.decodeStream(it).asImageBitmap()
-        }
-    }
-    val switchAccountIcon = remember {
-        context.assets.open("switch.png").use {
             BitmapFactory.decodeStream(it).asImageBitmap()
         }
     }
@@ -236,22 +230,6 @@ fun ControlWindow(
                             onOpenMainUI()
                         }
                 )
-                Image(
-                    bitmap = switchAccountIcon,
-                    contentDescription = "Switch",
-                    modifier = Modifier
-                        .size(iconSize)
-                        .padding(4.dp)
-                        .clickable {
-                            // Disable switch account icon when ad is playing
-                            if (GlobalVars.isAdPlaying) return@clickable
-                            internalInteractionCount++
-                            pauseForInteraction()
-                            AppStateManager.setMode(AppMode.SwitchAccount)
-                            restoreDefaultInputMethod()
-                            onSwitchAccount()
-                        }
-                )
                 FloatingLogButton(iconSize = iconSize, selected = showLogs) {
                     internalInteractionCount++
                     showLogs = !showLogs
@@ -314,22 +292,6 @@ fun ControlWindow(
                         logInteractionEnabled = !logInteractionEnabled
                     }
                 }
-                Image(
-                    bitmap = switchAccountIcon,
-                    contentDescription = "Switch",
-                    modifier = Modifier
-                        .size(iconSize)
-                        .padding(4.dp)
-                        .clickable {
-                            // Disable switch account icon when ad is playing
-                            if (GlobalVars.isAdPlaying) return@clickable
-                            internalInteractionCount++
-                            pauseForInteraction()
-                            AppStateManager.setMode(AppMode.SwitchAccount)
-                            restoreDefaultInputMethod()
-                            onSwitchAccount()
-                        }
-                )
                 Image(
                     bitmap = settingIcon,
                     contentDescription = "Setting",

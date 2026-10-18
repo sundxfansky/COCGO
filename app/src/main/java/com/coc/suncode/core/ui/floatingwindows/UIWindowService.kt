@@ -8,6 +8,7 @@ import android.graphics.PixelFormat
 import android.os.Build
 import android.os.IBinder
 import android.view.Gravity
+import android.view.View
 import android.view.WindowManager
 import androidx.activity.OnBackPressedDispatcher
 import androidx.activity.OnBackPressedDispatcherOwner
@@ -32,6 +33,7 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.coc.suncode.core.data.database.GlobalVars
 import com.coc.suncode.core.system.hotupdate.HotUpdateManager
 import com.coc.suncode.core.util.basic.ShowMessage
+import com.coc.suncode.core.qq.QqAuthorizationManager
 import com.coc.suncode.loadjar.Loadjar
 import com.coc.suncode.statehelper.AppMode
 import com.coc.suncode.statehelper.AppStateManager
@@ -41,6 +43,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import timber.log.Timber
 
 class UIWindowService : Service(), LifecycleOwner, SavedStateRegistryOwner, ViewModelStoreOwner,
@@ -84,6 +87,7 @@ class UIWindowService : Service(), LifecycleOwner, SavedStateRegistryOwner, View
     private val loadjar by lazy { Loadjar(this) }
     private val loadStatus = mutableStateOf(DEFAULT_LOAD_STATUS)
     private var isLoadStarted = false
+    private var isLoadFinished = false
 
     override fun onCreate() {
         super.onCreate()
@@ -92,16 +96,26 @@ class UIWindowService : Service(), LifecycleOwner, SavedStateRegistryOwner, View
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         startJarLoading()
         startHotUpdateListener()
-        showFloatingWindow()
+        serviceScope.launch {
+            QqAuthorizationManager.status.collect {
+                updateAuthorizationVisibility(it.busy || it.hideSettings)
+                if (!it.busy && it.hideSettings) startService(Intent(this@UIWindowService, ControlWindowService::class.java))
+            }
+        }
     }
 
     private fun startJarLoading() {
         if (!isLoadStarted) {
             isLoadStarted = true
             serviceScope.launch {
-                loadjar.startLoading { status ->
-                    loadStatus.value = status
+                // Prepare assets, verification and configuration before attaching the Compose window.
+                var preparedStatus = DEFAULT_LOAD_STATUS
+                withContext(Dispatchers.IO) {
+                    loadjar.startLoading { preparedStatus = it }
                 }
+                loadStatus.value = preparedStatus
+                isLoadFinished = true
+                showFloatingWindow()
             }
         }
     }
@@ -117,7 +131,7 @@ class UIWindowService : Service(), LifecycleOwner, SavedStateRegistryOwner, View
     }
 
     private fun showFloatingWindow() {
-        if (composeView != null) return
+        if (!isLoadFinished || composeView != null) return
 
         val (width, height) = calculateWindowSize()
         val windowType = getWindowType()
@@ -153,7 +167,18 @@ class UIWindowService : Service(), LifecycleOwner, SavedStateRegistryOwner, View
         }
 
         windowManager.addView(composeView, windowParams)
+        val qqStatus = QqAuthorizationManager.status.value
+        updateAuthorizationVisibility(qqStatus.busy || qqStatus.hideSettings)
         lifecycleRegistry.currentState = Lifecycle.State.RESUMED
+    }
+
+    private fun updateAuthorizationVisibility(busy: Boolean) {
+        val view = composeView ?: return
+        // Retain the settings draft while allowing the external authorization window to receive touches.
+        view.visibility = if (busy) View.INVISIBLE else View.VISIBLE
+        val hiddenFlags = WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+        windowParams.flags = if (busy) windowParams.flags or hiddenFlags else windowParams.flags and hiddenFlags.inv()
+        windowManager.updateViewLayout(view, windowParams)
     }
 
     private fun handleUIIClose() {
@@ -188,8 +213,8 @@ class UIWindowService : Service(), LifecycleOwner, SavedStateRegistryOwner, View
         val screenHeight = displayMetrics.heightPixels
 
         val height = when (AppStateManager.currentMode) {
-            AppMode.SwitchAccount, AppMode.BugReport -> WindowManager.LayoutParams.WRAP_CONTENT
-            AppMode.Main -> (screenHeight * HEIGHT_RATIO_MAIN).toInt()
+            AppMode.BugReport -> WindowManager.LayoutParams.WRAP_CONTENT
+            AppMode.Main, AppMode.SwitchAccount -> (screenHeight * HEIGHT_RATIO_MAIN).toInt()
             else -> (screenHeight * HEIGHT_RATIO_DEFAULT).toInt()
         }
 
@@ -244,6 +269,7 @@ class UIWindowService : Service(), LifecycleOwner, SavedStateRegistryOwner, View
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         updateForegroundRecord()
         lifecycleRegistry.currentState = Lifecycle.State.STARTED
+        QqAuthorizationManager.revealSettings()
         showFloatingWindow()
         return START_STICKY
     }

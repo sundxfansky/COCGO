@@ -29,6 +29,29 @@ class LocalActionsTest {
     private fun newDirectory() = "${Environment.getExternalStorageDirectory().path}/sunFiles/.local-test-${UUID.randomUUID()}/"
 
     @Test
+    fun rootOperationsUseSystemMountNamespace() = runBlocking {
+        val directory = newDirectory()
+        val actions = ServerActions(baseDir = directory)
+        try {
+            assertTrue(actions.awaitReady())
+            // A root UID inside an app's mount namespace can still modify only shadow package data.
+            val response = actions.sendActionSync(mapOf(
+                "actionType" to "shell_action",
+                "command" to "readlink /proc/self/ns/mnt; readlink /proc/1/ns/mnt"
+            ))
+            assertEquals("success", response?.get("status")?.asString)
+            assertEquals(0, response?.get("exitCode")?.asInt)
+            val namespaces = response!!.get("data").asString.trim().lines()
+            assertEquals(2, namespaces.size)
+            assertEquals(namespaces[1], namespaces[0])
+        } finally {
+            delete(actions, directory + "sun_config.json")
+            delete(actions, directory)
+            actions.close()
+        }
+    }
+
+    @Test
     fun configurationAndLegacyShellWorkWithoutSunserver() = runBlocking {
         withTimeout(30_000) {
             val directory = newDirectory()

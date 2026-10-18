@@ -10,8 +10,8 @@ object AutoGrantTool {
 
     /**
      * Use Root permissions to enable accessibility service via a double-toggle cycle.
-     * Must run on the main thread — returns immediately so onServiceConnected()
-     * can be dispatched via the main Looper without being blocked.
+     * Run on a worker thread so shell calls and the rebind delay leave the main Looper available
+     * for rendering and onServiceConnected() dispatch.
      */
     fun forceEnableAccessibility(): Boolean {
         try {

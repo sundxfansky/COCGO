@@ -49,6 +49,8 @@ import com.coc.suncode.core.ui.localcomponents.LocalCustomButton
 import com.coc.suncode.statehelper.AppMode
 import com.coc.suncode.statehelper.AppStateManager
 import com.topjohnwu.superuser.Shell
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Composable
 fun CheckRootScreen() {
@@ -70,6 +72,24 @@ fun CheckRootScreen() {
         }
     }
 
+    LaunchedEffect(status) {
+        if (status != RootStatus.GRANTED) return@LaunchedEffect
+        // Finish blocking preparation off the UI thread, then open the main window once.
+        withContext(Dispatchers.IO) {
+            if (GlobalVars.defaultInputMethod == null) {
+                val result = Shell.cmd("settings get secure default_input_method").exec()
+                if (result.isSuccess) GlobalVars.defaultInputMethod = result.out.firstOrNull()
+            }
+        }
+        AppStateManager.setMode(AppMode.Main)
+        GlobalVars.isAutoRunEnabled = true
+        GlobalVars.autoRunTimer = 60
+        GlobalVars.updateWindowPosition = false
+        (context as? MainActivity)?.restartCloudSync()
+        context.startService(Intent(context, UIWindowService::class.java))
+        (context as? MainActivity)?.requestMediaProjection()
+    }
+
     // Recheck after the user returns from granting access in their root manager.
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -84,8 +104,9 @@ fun CheckRootScreen() {
     }
 
     when (status) {
-        RootStatus.CHECKING -> {
-            FullScreenMessage("正在检测Root环境...")
+        RootStatus.CHECKING, RootStatus.INITIALIZING_LOCAL, RootStatus.GRANTED -> {
+            // Keep one stable startup view until the prepared main window covers it.
+            FullScreenMessage("正在启动，请稍候...")
         }
 
         RootStatus.ROOT_DENIED -> {
@@ -127,10 +148,6 @@ fun CheckRootScreen() {
             }
         }
 
-        RootStatus.INITIALIZING_LOCAL -> {
-            FullScreenMessage("正在加载本地配置...")
-        }
-
         RootStatus.LOCAL_ERROR -> {
             Column(
                 modifier = Modifier.fillMaxSize(),
@@ -142,44 +159,6 @@ fun CheckRootScreen() {
             }
         }
 
-        RootStatus.GRANTED -> {
-            // Permissions and the internal backend are ready before starting overlay services.
-            LaunchedEffect(Unit) {
-                // Get and store default IME
-                if (GlobalVars.defaultInputMethod == null) {
-                    val result = Shell.cmd("settings get secure default_input_method").exec()
-                    if (result.isSuccess && result.out.isNotEmpty()) {
-                        GlobalVars.defaultInputMethod = result.out[0]
-                    }
-                }
-
-                (context as? MainActivity)?.restartCloudSync()
-
-                val serviceIntent = Intent(context, UIWindowService::class.java)
-                context.startService(serviceIntent)
-                (context as? MainActivity)?.requestMediaProjection()
-            }
-            Column(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                FullScreenMessage("权限检查通过，配置加载完成。\n\n若未能自动显示主界面，请手动点击按钮")
-                Spacer(modifier = Modifier.height(16.dp))
-                LocalCustomButton(
-                    text = "显示主界面",
-                    onClick = {
-                        AppStateManager.setMode(AppMode.Main)
-                        val serviceIntent = Intent(context, UIWindowService::class.java)
-                        GlobalVars.isAutoRunEnabled = true
-                        GlobalVars.autoRunTimer = 60
-                        GlobalVars.updateWindowPosition = false
-                        context.startService(serviceIntent)
-                    }
-                )
-            }
-
-        }
     }
 }
 

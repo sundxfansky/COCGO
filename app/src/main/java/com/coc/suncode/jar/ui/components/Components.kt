@@ -13,18 +13,23 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -33,6 +38,8 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,8 +48,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
@@ -56,6 +65,9 @@ import com.coc.suncode.core.data.database.GlobalVars
 import com.coc.suncode.core.ui.theme.AppColors
 import com.coc.suncode.jar.ui.schema.Schema
 import kotlinx.coroutines.delay
+
+// Disabled world sections propagate to every reusable setting control, including nested groups.
+private val LocalSettingsEnabled = compositionLocalOf { true }
 
 
 @Composable
@@ -85,6 +97,7 @@ fun InputRowWithCheckBox(
             },
         )
         BasicTextField(
+            enabled = LocalSettingsEnabled.current,
             value = inputState.value, onValueChange = { newValue ->
                 GlobalVars.isAutoRunEnabled = false
                 inputState.value = newValue
@@ -198,6 +211,7 @@ fun SettingInputRow(key: String, afterChange: ((String) -> Unit)? = null) {
         )
 
         BasicTextField(
+            enabled = LocalSettingsEnabled.current,
             value = state.value, onValueChange = { newValue ->
                 GlobalVars.isAutoRunEnabled = false
                 state.value = newValue
@@ -213,6 +227,44 @@ fun SettingInputRow(key: String, afterChange: ((String) -> Unit)? = null) {
                 .heightIn(max = 120.dp)
                 .verticalScroll(rememberScrollState())
         )
+    }
+}
+
+/** A bounded numeric selector keeps schema labels and supports direct entry as well as quick steps. */
+@Composable
+fun SettingNumberStepper(key: String, range: IntRange, afterChange: (String) -> Unit = {}) {
+    val state = GlobalVars.configStates.getOrPut(key) { mutableStateOf(Schema.getDefaultValue(key)) }
+    val label = Schema.getDisplayName(key)
+    val number = state.value.toIntOrNull()
+    val update: (String) -> Unit = { value ->
+        GlobalVars.isAutoRunEnabled = false
+        state.value = value
+        afterChange(value)
+    }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(label, style = MaterialTheme.typography.labelMedium)
+        IconButton(
+            enabled = LocalSettingsEnabled.current && (number == null || number > range.first),
+            onClick = { update(((number ?: (range.first + 1)) - 1).coerceIn(range).toString()) }
+        ) { Icon(Icons.Default.Remove, contentDescription = "减少$label") }
+        BasicTextField(
+            enabled = LocalSettingsEnabled.current,
+            value = state.value,
+            onValueChange = { value ->
+                if (value.isEmpty() || (value.all { it.isDigit() } && value.toIntOrNull() in range)) update(value)
+            },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            textStyle = MaterialTheme.typography.labelMedium.copy(textAlign = TextAlign.Center),
+            modifier = Modifier.width(64.dp)
+                .background(Color.White, RoundedCornerShape(4.dp))
+                .border(1.dp, Color.Gray, RoundedCornerShape(4.dp))
+                .padding(6.dp)
+        )
+        IconButton(
+            enabled = LocalSettingsEnabled.current && (number == null || number < range.last),
+            onClick = { update(((number ?: (range.first - 1)) + 1).coerceIn(range).toString()) }
+        ) { Icon(Icons.Default.Add, contentDescription = "增加$label") }
     }
 }
 
@@ -263,6 +315,7 @@ fun SettingInputRowWithSuffix(key: String, suffix: String, afterChange: ((String
         )
 
         BasicTextField(
+            enabled = LocalSettingsEnabled.current,
             value = state.value, onValueChange = { newValue ->
                 GlobalVars.isAutoRunEnabled = false
                 state.value = newValue
@@ -302,7 +355,7 @@ fun CustomButton(
                 onClick()
             }, modifier = Modifier
                 .padding(top = marginTop, bottom = marginBottom, end = 8.dp)
-                .height(32.dp), shape = RoundedCornerShape(8.dp), enabled = enable, colors = ButtonDefaults.buttonColors(
+                .height(32.dp), shape = RoundedCornerShape(8.dp), enabled = enable && LocalSettingsEnabled.current, colors = ButtonDefaults.buttonColors(
                 containerColor = AppColors.Azure
             )
         ) {
@@ -375,22 +428,26 @@ fun SettingToggleButton(key: String) {
     }
     val label = Schema.getDisplayName(key)
     val isEnabled = state.value == "1"
+    val sectionEnabled = LocalSettingsEnabled.current
 
     if (isEnabled) {
         Button(
+            enabled = LocalSettingsEnabled.current,
             onClick = {
                 GlobalVars.isAutoRunEnabled = false
                 state.value = "0"
             }, modifier = Modifier
                 .padding(2.dp)
                 .height(32.dp), shape = RoundedCornerShape(8.dp), contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp), colors = ButtonDefaults.buttonColors(
-                containerColor = ToggleButtonBlue, contentColor = EnabledSettingToggleTextColor, disabledContentColor = EnabledSettingToggleTextColor
+                containerColor = ToggleButtonBlue, contentColor = EnabledSettingToggleTextColor,
+                disabledContainerColor = Color(0xFFD3D6DB), disabledContentColor = Color.DarkGray
             )
         ) {
-            Text(label, color = EnabledSettingToggleTextColor, style = MaterialTheme.typography.labelMedium)
+            Text(label, color = if (sectionEnabled) EnabledSettingToggleTextColor else Color.DarkGray, style = MaterialTheme.typography.labelMedium)
         }
     } else {
         OutlinedButton(
+            enabled = LocalSettingsEnabled.current,
             onClick = {
                 GlobalVars.isAutoRunEnabled = false
                 state.value = "1"
@@ -412,12 +469,13 @@ private fun CustomSwitch(
 ) {
     var showExplanation by remember { mutableStateOf(false) }
     val isChecked = checkedState == "1"
+    val enabled = LocalSettingsEnabled.current
 
     Row(
         modifier = Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically
     ) {
         Row(
-            verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable {
+            verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable(enabled = enabled) {
                 GlobalVars.isAutoRunEnabled = false
                 onCheckStateChange(!isChecked)
             }) {
@@ -456,6 +514,7 @@ private fun CustomSwitch(
 
         // Scaled-down toggle switch to keep similar row height
         Switch(
+            enabled = enabled,
             checked = isChecked, onCheckedChange = { checked ->
                 GlobalVars.isAutoRunEnabled = false
                 onCheckStateChange(checked)
@@ -472,16 +531,20 @@ private fun CustomSwitch(
 // Rounded-corner white card for grouping related settings, with built-in AnimatedVisibility support
 @Composable
 fun SettingSection(
-    modifier: Modifier = Modifier, visible: Boolean = true, content: @Composable () -> Unit
+    modifier: Modifier = Modifier, visible: Boolean = true, enabled: Boolean = true, content: @Composable () -> Unit
 ) {
+    val inheritedEnabled = LocalSettingsEnabled.current
+    val active = enabled && inheritedEnabled
     AnimatedVisibility(visible = visible) {
         Surface(
             modifier = modifier
+                // Dim a disabled branch once so nested sections remain readable.
+                .alpha(if (inheritedEnabled && !enabled) 0.6f else 1f)
                 .fillMaxWidth()
                 .padding(vertical = 4.dp), shape = RoundedCornerShape(12.dp), color = Color.White, shadowElevation = 8.dp, tonalElevation = 5.dp
         ) {
             Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
-                content()
+                CompositionLocalProvider(LocalSettingsEnabled provides active) { content() }
             }
         }
     }
@@ -502,7 +565,7 @@ fun SettingDropdown(
 
     // 3. Data conversion logic
     val selectedIndex = state.value.toIntOrNull() ?: 0
-    val selectedOption = options.getOrElse(selectedIndex) { options.getOrNull(0) ?: "" }
+    val selectedOption = options.getOrElse(selectedIndex) { "请选择" }
 
     Row(
         verticalAlignment = Alignment.CenterVertically, modifier = Modifier
@@ -516,6 +579,7 @@ fun SettingDropdown(
         Box(modifier = Modifier.wrapContentSize(Alignment.TopStart)) {
             // Dropdown trigger button
             Button(
+                enabled = LocalSettingsEnabled.current,
                 onClick = {
                     GlobalVars.isAutoRunEnabled = false
                     expanded = true

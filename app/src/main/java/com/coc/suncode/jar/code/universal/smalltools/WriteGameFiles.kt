@@ -11,6 +11,7 @@ import com.coc.suncode.jar.code.universal.InGamesVars
 import com.coc.suncode.jar.ui.schema.Schema
 import com.coc.suncode.jar.ui.schema.Schema.ACCOUNT_SETTINGS
 import com.coc.suncode.core.util.basic.ServerShell
+import com.coc.suncode.core.qq.QqAuthorizationManager
 
 // Helper function: quickly get config value, trigger logAndRestart if empty
 fun getConfigOrStop(key: String): String {
@@ -49,8 +50,8 @@ suspend fun writeGameFilesCore(
     val sdPath = Environment.getExternalStorageDirectory().path
     val sourceDir = "$sdPath/sunFiles/$folderName/$savePathName"
 
-    // Verify that the archive directory exists before attempting to write
-    if (!ServerShell.exec("[ -d \"$sourceDir\" ]").isSuccess) {
+    // Validate every source before clearing any destination, including empty save directories.
+    if (subDirs.isEmpty() || subDirs.any { !ServerShell.exec("[ -d \"$sourceDir/$it\" ]").isSuccess }) {
         ShowMessage("存档文件不存在：$sourceDir\n即将跳过当前账号")
         return false
     }
@@ -58,9 +59,15 @@ suspend fun writeGameFilesCore(
     if (killGame) killGame()
     subDirs.forEach { subDir ->
         val destPath = "/data/data/$packageName/$subDir"
-        ServerShell.exec("rm -rf \"$destPath\"/*")
-        ServerShell.exec("cp -r \"$sourceDir/$subDir/\"* \"$destPath/\"")
-        ServerShell.exec("chmod -R 777 \"$destPath\"")
+        // Stop on the first root error so manual login never starts with a failed copy.
+        val copied = ServerShell.exec(
+            "rm -rf \"$destPath\" && mkdir -p \"$destPath\" && " +
+                "cp -R \"$sourceDir/$subDir/.\" \"$destPath/\" && chmod -R 777 \"$destPath\""
+        ).isSuccess
+        if (!copied) {
+            ShowMessage("存档写入失败，请检查存档及 Root 权限；已取消上号")
+            return false
+        }
     }
     return true
 }
@@ -71,6 +78,22 @@ suspend fun writeGameFilesCore(
  */
 suspend fun writeGameFiles(): Boolean {
     val startMethod = getConfigOrStop("${ACCOUNT_SETTINGS.START_METHOD.key}${InGamesVars.currentAccountNumber}").toIntOrNull() ?: logAndRestart("${ACCOUNT_SETTINGS.START_METHOD.displayName} 必须是数字，请检查配置")
+    // QQ login uses the host bridge and awaits the login request before automation can touch the game.
+    if (startMethod == 2) {
+        if (InGamesVars.currentGameVersion != GameVersion.CN) {
+            ShowMessage("QQ 授权登录仅支持国服")
+            return false
+        }
+        val context = ShowMessage.getContext() ?: return false
+        // Multiple automation accounts may deliberately share the same global authorization slot.
+        val account = InGamesVars.currentAccountNumber
+        val slot = getConfigOrStop("${ACCOUNT_SETTINGS.QQ_AUTHORIZATION_SLOT.key}$account").toIntOrNull()
+        if (slot == null || slot !in 1..10_000) {
+            ShowMessage("账号 $account 的 QQ 授权序号无效，本轮跳过")
+            return false
+        }
+        return QqAuthorizationManager.loginAccount(context, slot)
+    }
     if (startMethod != 0) return true
     killGame()
     val savePathName = getGameFilePath()

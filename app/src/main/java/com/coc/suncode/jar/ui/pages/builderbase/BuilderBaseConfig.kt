@@ -24,10 +24,11 @@ import com.coc.suncode.jar.ui.schema.Schema.BUILDER_BASE_SETTINGS
 
 fun LazyListScope.BuilderBaseConfig(
     index: Int, isExpanded: Boolean, onToggleExpanded: () -> Unit, onNavigateBuilderBasePriority: (Int) -> Unit = {},
-    onScrollToBottom: () -> Unit = {}
+    onScrollToBottom: () -> Unit = {}, showHeader: Boolean = true
 ) {
-    // Header
-    item {
+    val enabled = GlobalVars.configStates["${BUILDER_BASE_SETTINGS.ENABLED.key}_c$index"]?.value != "0"
+    // The positive master switch replaces the old hidden negative setting.
+    if (showHeader) item {
         FlowRow {
             Text(
                 text = "以下是夜世界设置", fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(10.dp), textAlign = TextAlign.Start
@@ -38,26 +39,9 @@ fun LazyListScope.BuilderBaseConfig(
         }
     }
 
-    // NO_BUILDER_BASE toggle
-    item {
-        SettingSection(visible = isExpanded) {
-            val noBuilderBase = GlobalVars.configStates["${BUILDER_BASE_SETTINGS.NO_BUILDER_BASE.key}_c${index}"]?.value == "0"
-            val prevNoBuilderBase = remember { mutableStateOf(noBuilderBase) }
-            LaunchedEffect(noBuilderBase) {
-                if (noBuilderBase && !prevNoBuilderBase.value) onScrollToBottom()
-                prevNoBuilderBase.value = noBuilderBase
-            }
-            SettingSwitchIcon(
-                key = "${BUILDER_BASE_SETTINGS.NO_BUILDER_BASE.key}_c${index}",
-                explain = "勾选后，辅助将完全不会进入夜世界。换言之，夜世界的所有设置都将失效！\n但因为辅助只会接取夜世界竞赛任务，所以如果接取了部落竞赛的任务，那么就算勾选了不打夜世界，辅助也会打夜世界。"
-            )
-        }
-    }
-
     // Farming & resource settings
     item {
-        val noBuilderBase = GlobalVars.configStates["${BUILDER_BASE_SETTINGS.NO_BUILDER_BASE.key}_c${index}"]?.value == "0"
-        SettingSection(visible = isExpanded && noBuilderBase) {
+        SettingSection(visible = isExpanded, enabled = enabled) {
             Row {
                 SettingSwitchIcon(
                     key = "${BUILDER_BASE_SETTINGS.BUILDER_BASE_FARMING.key}_c${index}",
@@ -72,10 +56,9 @@ fun LazyListScope.BuilderBaseConfig(
 
     // Trophy & Elixir cart (mutually exclusive)
     item {
-        val noBuilderBase = GlobalVars.configStates["${BUILDER_BASE_SETTINGS.NO_BUILDER_BASE.key}_c${index}"]?.value == "0"
         val trophyKey = "${BUILDER_BASE_SETTINGS.TROPHY_PUSHING_MODE.key}_c${index}"
         val elixirCartKey = "${BUILDER_BASE_SETTINGS.ELIXIR_CART_FARMING.key}_c${index}"
-        SettingSection(visible = isExpanded && noBuilderBase) {
+        SettingSection(visible = isExpanded, enabled = enabled) {
             Row {
                 SettingSwitchIcon(
                     key = trophyKey,
@@ -101,8 +84,7 @@ fun LazyListScope.BuilderBaseConfig(
 
     // Research
     item {
-        val noBuilderBase = GlobalVars.configStates["${BUILDER_BASE_SETTINGS.NO_BUILDER_BASE.key}_c${index}"]?.value == "0"
-        SettingSection(visible = isExpanded && noBuilderBase) {
+        SettingSection(visible = isExpanded, enabled = enabled) {
             SettingSwitchIcon(key = "${BUILDER_BASE_SETTINGS.BUILDER_BASE_RESEARCH.key}_c${index}")
 
             AnimatedVisibility(visible = GlobalVars.configStates["${BUILDER_BASE_SETTINGS.BUILDER_BASE_RESEARCH.key}_c${index}"]?.value == "1") {
@@ -113,8 +95,7 @@ fun LazyListScope.BuilderBaseConfig(
 
     // Build & Upgrade settings
     item {
-        val noBuilderBase = GlobalVars.configStates["${BUILDER_BASE_SETTINGS.NO_BUILDER_BASE.key}_c${index}"]?.value == "0"
-        SettingSection(visible = isExpanded && noBuilderBase) {
+        SettingSection(visible = isExpanded, enabled = enabled) {
             FlowRow {
                 SettingSwitchIcon(key = "${BUILDER_BASE_SETTINGS.BUILDER_BASE_BUILD_SETTING.key}_c${index}")
                 SettingSwitchIcon(key = "${BUILDER_BASE_SETTINGS.BUILDER_BASE_WALL_UPGRADE_SETTINGS.key}_c${index}")
