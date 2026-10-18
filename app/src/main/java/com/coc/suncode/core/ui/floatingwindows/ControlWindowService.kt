@@ -37,6 +37,9 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.coc.suncode.core.data.database.GlobalVars
 import com.coc.suncode.core.system.hotupdate.HotUpdateManager
 import com.coc.suncode.core.util.basic.RunShell
+import com.coc.suncode.core.util.basic.ShowMessage
+import com.coc.suncode.core.util.exit.AppExitHelper.restoreDefaultInputMethod
+import com.coc.suncode.interfaces.RuntimeAccountSwitcher
 import com.coc.suncode.core.util.touchactions.TouchActions
 import com.coc.suncode.statehelper.AppMode
 import com.coc.suncode.statehelper.AppStateManager
@@ -45,10 +48,13 @@ import timber.log.Timber
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
 class ControlWindowService : Service(), LifecycleOwner, SavedStateRegistryOwner {
@@ -56,6 +62,7 @@ class ControlWindowService : Service(), LifecycleOwner, SavedStateRegistryOwner 
     private lateinit var windowManager: WindowManager
     private var controlComposeView: ComposeView? = null
     private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
+    private var isSwitchingAccount by mutableStateOf(false)
 
     private val lifecycleRegistry = LifecycleRegistry(this)
     override val lifecycle: Lifecycle = lifecycleRegistry
@@ -257,6 +264,8 @@ class ControlWindowService : Service(), LifecycleOwner, SavedStateRegistryOwner 
                     GlobalVars.updateWindowPosition = false
                     startService(intent)
                 },
+                isSwitchingAccount = isSwitchingAccount,
+                onSwitchAccount = ::switchToAccount,
                 onDragStart = {
                     interactionCount++
                     isDragging = true
@@ -279,6 +288,41 @@ class ControlWindowService : Service(), LifecycleOwner, SavedStateRegistryOwner 
                     interactionCount++
                 }
             )
+        }
+    }
+
+    internal fun switchToAccount(accountNumber: Int) {
+        if (isSwitchingAccount || GlobalVars.isSwitchingAccount || GlobalVars.isAdPlaying ||
+            AppStateManager.currentMode != AppMode.Run
+        ) return
+        val plugin = GlobalVars.pluginUI
+        val switcher = plugin as? RuntimeAccountSwitcher ?: return
+        // Claim the operation before launching so a second tap cannot queue another restore.
+        isSwitchingAccount = true
+        GlobalVars.isSwitchingAccount = true
+        GlobalVars.isPlaying.value = false
+        GlobalVars.isAutoRunEnabled = false
+        serviceScope.launch {
+            try {
+                // Join the old script before replacing its game files or restarting the game.
+                BotRuntime.stop()
+                withContext(Dispatchers.IO) {
+                    restoreDefaultInputMethod()
+                    switcher.switchToAccount(accountNumber)
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                ShowMessage("切号失败，辅助保持暂停：${error.message}", isChecking = false)
+            } finally {
+                GlobalVars.isPlaying.value = false
+                GlobalVars.isSwitchingAccount = false
+                isSwitchingAccount = false
+                if (isActive && AppStateManager.currentMode == AppMode.Run && GlobalVars.pluginUI === plugin) {
+                    // Re-enter at the script's pause gate, ready for an explicit Play tap later.
+                    BotRuntime.start(serviceScope) { plugin.runBot() }
+                }
+            }
         }
     }
 

@@ -23,6 +23,9 @@ object GlobalVars {
     var defaultInputMethod: String? = null
 
     @Volatile
+    var isSwitchingAccount: Boolean = false
+
+    @Volatile
     var absorbEdge: Int = 0 // 1: Left, 0: Right
 
     @Volatile

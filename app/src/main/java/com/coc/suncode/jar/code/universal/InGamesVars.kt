@@ -27,7 +27,16 @@ object InGamesVars {
     val accountCooldownTracker = AccountCooldownTracker()
 
     @Volatile
+    var hasCurrentAccount: Boolean = false
+        private set
+
+    @Volatile
     var currentAccountNumber: Int = 1
+        set(value) {
+            // Distinguish an active account from the initial placeholder before the first run.
+            field = value
+            hasCurrentAccount = true
+        }
 
     @Volatile
     var currentGameVersion: GameVersion = GameVersion.CN
