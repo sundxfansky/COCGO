@@ -26,7 +26,6 @@ import com.coc.suncode.jar.ui.pages.mainbase.MainBaseUpgradePriority
 import com.coc.suncode.jar.ui.pages.builderbase.BuilderBaseUpgradePriority
 import com.coc.suncode.jar.ui.pages.single.HomeScreen
 import com.coc.suncode.jar.ui.pages.single.BugReport
-import com.coc.suncode.jar.ui.pages.single.SwitchAccount
 import com.coc.suncode.jar.ui.schema.ConfigManager
 import com.coc.suncode.statehelper.AppMode
 import com.coc.suncode.statehelper.AppStateManager
@@ -72,10 +71,6 @@ class EnterMainCode : MainCode {
 
         // Route to the appropriate page based on current mode
         when (AppStateManager.currentMode) {
-            AppMode.SwitchAccount -> {
-                SwitchAccount(onClose = onClose)
-                return
-            }
             AppMode.BugReport -> {
                 BugReport(onClose = onClose)
                 return

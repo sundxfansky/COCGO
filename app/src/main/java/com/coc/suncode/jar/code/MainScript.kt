@@ -1,5 +1,6 @@
 package com.coc.suncode.jar.code
 
+import android.os.SystemClock
 import com.coc.suncode.core.data.database.GlobalVars
 import com.coc.suncode.core.util.basic.RunShell
 import com.coc.suncode.core.util.basic.ShowMessage
@@ -144,20 +145,31 @@ private suspend fun runTestCode() {
 private suspend fun findAndActivateAccount(
     searchOrder: Iterable<Int>, skipIsOpenCheck: Boolean = false
 ): Int? {
-    // In batch-create mode, treat all accounts as active
-    val found = if (skipIsOpenCheck) {
-        searchOrder.firstOrNull()
-    } else {
-        searchOrder.firstOrNull { id ->
-            getConfigOrStop("${Schema.ACCOUNT_SETTINGS.ISOPEN.key}$id") == "1"
+    val candidates = searchOrder.toList()
+    var waitingForCooldown = false
+    while (currentCoroutineContext().isActive) {
+        // In batch-create mode, treat all accounts as active while still honoring kick cooldowns.
+        val enabledAccounts = if (skipIsOpenCheck) {
+            candidates
+        } else {
+            candidates.filter { id -> getConfigOrStop("${Schema.ACCOUNT_SETTINGS.ISOPEN.key}$id") == "1" }
         }
-    }
-    if (found == null) {
-        while (currentCoroutineContext().isActive) {
+
+        val nowMillis = SystemClock.elapsedRealtime()
+        InGamesVars.accountCooldownTracker.findAvailableAccount(enabledAccounts, nowMillis)?.let { return it }
+        val cooldownWaitMillis = InGamesVars.accountCooldownTracker.shortestRemainingMillis(enabledAccounts, nowMillis)
+        if (cooldownWaitMillis == null) {
+            waitingForCooldown = false
             ShowMessage("当前未开启任何账号\n请勾选要开启的账号。")
             delay(2500)
+        } else {
+            if (!waitingForCooldown) {
+                ShowMessage("账号冷却中，冷却结束后将自动切回。")
+            }
+            waitingForCooldown = true
+            delay(cooldownWaitMillis.coerceAtMost(2500L).coerceAtLeast(1L))
         }
     }
-    return found
+    return null
 }
 

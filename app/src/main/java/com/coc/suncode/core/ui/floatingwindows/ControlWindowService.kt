@@ -257,15 +257,6 @@ class ControlWindowService : Service(), LifecycleOwner, SavedStateRegistryOwner 
                     GlobalVars.updateWindowPosition = false
                     startService(intent)
                 },
-                onSwitchAccount = {
-                    AppStateManager.setMode(AppMode.SwitchAccount)
-                    startService(
-                        Intent(
-                            this@ControlWindowService,
-                            UIWindowService::class.java
-                        )
-                    )
-                },
                 onDragStart = {
                     interactionCount++
                     isDragging = true

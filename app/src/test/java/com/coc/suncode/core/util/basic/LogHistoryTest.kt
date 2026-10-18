@@ -14,7 +14,6 @@ import timber.log.Timber
 class LogHistoryTest {
     private lateinit var originalTrees: List<Timber.Tree>
     private var wasPlaying = false
-    private var wasSwitchingAccount = false
 
     @Before
     fun prepareHistory() {
@@ -22,7 +21,6 @@ class LogHistoryTest {
         Timber.uprootAll()
         ShowMessage.clearLogs()
         wasPlaying = GlobalVars.isPlaying.value
-        wasSwitchingAccount = GlobalVars.isSwitchingAccount
         // JVM tests never create Android overlay windows.
         ShowMessage.setLogOverlayVisible(true)
     }
@@ -30,7 +28,6 @@ class LogHistoryTest {
     @After
     fun restoreLogging() {
         GlobalVars.isPlaying.value = wasPlaying
-        GlobalVars.isSwitchingAccount = wasSwitchingAccount
         ShowMessage.setLogOverlayVisible(false)
         ShowMessage.clearLogs()
         Timber.uprootAll()
@@ -53,7 +50,6 @@ class LogHistoryTest {
     @Test
     fun pausedAndRepeatedMessagesAreStillRecordedExactlyOnce() {
         GlobalVars.isPlaying.value = false
-        GlobalVars.isSwitchingAccount = false
         ShowMessage("while paused")
         GlobalVars.isPlaying.value = true
         repeat(2) { ShowMessage("same event") }

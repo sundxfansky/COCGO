@@ -52,7 +52,7 @@ object ShowMessage {
     operator fun invoke(text: String, isChecking: Boolean = true) {
         // Pausing only suppresses transient presentation; it must not discard log events.
         record(text, priority = Log.VERBOSE)
-        if (isChecking && !GlobalVars.isPlaying.value && !GlobalVars.isSwitchingAccount) {
+        if (isChecking && !GlobalVars.isPlaying.value) {
             return
         }
         if (isLogOverlayVisible) return

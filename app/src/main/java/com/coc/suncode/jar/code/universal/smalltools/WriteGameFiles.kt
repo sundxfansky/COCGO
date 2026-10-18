@@ -33,7 +33,7 @@ fun getGameFilePath(): String {
 /**
  * Core helper: copies each subdirectory from the SD card archive into the game's data directory,
  * clears the destination first, then sets permissions to 777.
- * This is called by both [writeGameFiles] and SwitchAccount UI.
+ * This is called by [writeGameFiles] when preparing the active account.
  *
  * @param packageName  Game package name (e.g. "com.supercell.clashofclans")
  * @param savePathName Archive folder suffix identifying the account save (e.g. "001")

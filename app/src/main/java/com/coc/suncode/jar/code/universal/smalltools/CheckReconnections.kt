@@ -1,9 +1,11 @@
 package com.coc.suncode.jar.code.universal.smalltools
 
 import android.os.Environment
+import android.os.SystemClock
 import com.coc.suncode.core.data.database.GlobalVars
 import com.coc.suncode.core.system.screencapture.ScreenCaptureManager
 import com.coc.suncode.core.util.basic.RunShell
+import com.coc.suncode.core.util.basic.ShowMessage
 import com.coc.suncode.core.util.fileactions.LogHelper.logAndRestart
 import com.coc.suncode.core.util.touchactions.TouchActions
 import com.coc.suncode.jar.code.colorschema.MyColors
@@ -46,8 +48,15 @@ suspend fun checkReconnections(): Boolean {
                 }
 
                 1 -> {
-                    // Action: Signal a need to switch accounts
-                    // By returning false here, we tell the caller the check 'failed' or needs a different flow
+                    // Cool down the kicked account so the account selector skips it until the delay expires.
+                    val cooldownMinutes = GlobalVars.configStates[Schema.GLOBAL_SETTINGS.AFTER_KICK_COOLDOWN_MINUTES.key]
+                        ?.value?.toIntOrNull()?.coerceAtLeast(0) ?: 3
+                    InGamesVars.accountCooldownTracker.startCooldown(
+                        accountNumber = InGamesVars.currentAccountNumber,
+                        durationMinutes = cooldownMinutes,
+                        nowMillis = SystemClock.elapsedRealtime()
+                    )
+                    ShowMessage("账号被顶，已切换账号；该账号冷却 $cooldownMinutes 分钟")
                     return false
                 }
 
