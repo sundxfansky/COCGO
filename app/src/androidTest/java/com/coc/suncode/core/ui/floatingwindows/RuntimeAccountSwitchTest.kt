@@ -207,7 +207,7 @@ class RuntimeAccountSwitchTest {
         GlobalVars.pluginUI = ToolbarPlugin(AccountSwitchState(1, 3))
         compose.setContent { MaterialTheme { ControlWindow(isSwitchingAccount = true) } }
         compose.onNodeWithContentDescription("Main Icon").performClick()
-        compose.mainClock.advanceTimeByFrame()
+        compose.mainClock.advanceTimeBy(320)
         compose.onNodeWithContentDescription("上一个账号").assertIsNotEnabled()
         compose.onNodeWithContentDescription("下一个账号").assertIsNotEnabled()
         compose.onNodeWithContentDescription("Play").assertIsNotEnabled()
@@ -316,6 +316,7 @@ class RuntimeAccountSwitchTest {
             }
         }
         compose.onNodeWithContentDescription("Main Icon").performClick()
+        compose.mainClock.advanceTimeBy(320)
         compose.waitUntil(5000) {
             compose.mainClock.advanceTimeByFrame()
             runCatching { compose.onNodeWithContentDescription("下一个账号").assertIsEnabled() }.isSuccess

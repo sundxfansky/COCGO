@@ -11,6 +11,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
@@ -35,11 +36,11 @@ object BotRuntime {
                         ShowMessage.record("辅助脚本已正常返回")
                         break
                     } catch (error: TouchInputException) {
-                        // Resume from the script entry after a rejected gesture, never halfway through it.
-                        GlobalVars.isPlaying.value = false
+                        // Retry from the script entry after a fixed cooldown, preserving manual pause state.
                         TouchActions.releaseAllPointers()
-                        ShowMessage.record("目标应用触摸失败，辅助已暂停：${error.message}", throwable = error)
-                        ShowMessage("目标应用触摸失败，辅助已暂停：${error.message}", isChecking = false)
+                        ShowMessage.record("目标应用触摸失败，暂停10秒后自动重试：${error.message}", throwable = error)
+                        ShowMessage("目标应用触摸失败，暂停10秒后自动重试：${error.message}", isChecking = false)
+                        delay(10_000L)
                         waitForPlay()
                     } catch (error: CancellationException) {
                         throw error

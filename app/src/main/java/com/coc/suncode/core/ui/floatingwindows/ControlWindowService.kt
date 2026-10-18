@@ -16,16 +16,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.toSize
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
@@ -131,56 +129,24 @@ class ControlWindowService : Service(), LifecycleOwner, SavedStateRegistryOwner 
     }
 
     private fun showControlWindow() {
-        val windowType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-        } else {
-            @Suppress("DEPRECATION")
-            WindowManager.LayoutParams.TYPE_PHONE
-        }
-
-        val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            windowType,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = Gravity.TOP or Gravity.START
-            x = 1280
-            y = 360
-        }
+        val params = createControlWindowLayoutParams()
 
         controlComposeView = ComposeView(this).apply {
             setViewTreeLifecycleOwner(this@ControlWindowService)
             setViewTreeSavedStateRegistryOwner(this@ControlWindowService)
 
             setContent {
-                var currentX by remember { mutableIntStateOf(params.x) }
-                var currentY by remember { mutableIntStateOf(params.y) }
-                ControlWindowContainer(
-                    currentX = currentX,
-                    currentY = currentY,
-                    onPositionUpdate = { dx, dy ->
-                        params.x += dx
-                        params.y += dy
-                        currentX = params.x
-                        currentY = params.y
-                        windowManager.updateViewLayout(this, params)
-                    },
-                    onSnapToEdge = { finalX ->
-                        params.x = finalX
-                        currentX = params.x
-                        windowManager.updateViewLayout(this, params)
-                    },
-                    onAutoPosition = { newX, newY ->
-                        params.x = newX
-                        params.y = newY
-                        currentX = params.x
-                        currentY = params.y
-                        windowManager.updateViewLayout(this, params)
+                ControlWindowContainer { isAtRightSide, horizontalOffset, currentY, contentWidth ->
+                    val edgeGravity = Gravity.TOP or if (isAtRightSide) Gravity.RIGHT else Gravity.LEFT
+                    // Width changes need no follow-up x correction, so the icon cannot bounce.
+                    if (params.gravity != edgeGravity || params.x != horizontalOffset || params.y != currentY || params.width != contentWidth) {
+                        params.gravity = edgeGravity
+                        params.x = horizontalOffset
+                        params.y = currentY
+                        params.width = contentWidth
+                        if (isAttachedToWindow) windowManager.updateViewLayout(this, params)
                     }
-                )
+                }
             }
         }
 
@@ -189,15 +155,15 @@ class ControlWindowService : Service(), LifecycleOwner, SavedStateRegistryOwner 
 
     @Composable
     private fun ControlWindowContainer(
-        currentX: Int,
-        currentY: Int,
-        onPositionUpdate: (Int, Int) -> Unit,
-        onSnapToEdge: (Int) -> Unit,
-        onAutoPosition: (Int, Int) -> Unit
+        onWindowPositionUpdate: (Boolean, Int, Int, Int) -> Unit
     ) {
         var interactionCount by remember { mutableIntStateOf(0) }
-        var componentSize by remember { mutableStateOf(Size.Zero) }
+        var componentSize by remember { mutableStateOf(IntSize.Zero) }
+        var contentWidth by remember { mutableIntStateOf(WindowManager.LayoutParams.WRAP_CONTENT) }
         var isAtRightSide by remember { mutableStateOf(true) }
+        var horizontalOffset by remember { mutableStateOf(0f) }
+        var currentY by remember { mutableStateOf(360f) }
+        var isDragging by remember { mutableStateOf(false) }
 
         // The controls use WRAP_CONTENT; their window size is not the display size.
         val configuration = LocalConfiguration.current
@@ -212,46 +178,38 @@ class ControlWindowService : Service(), LifecycleOwner, SavedStateRegistryOwner 
         }
         val screenWidth = screenSize.width
         val screenHeight = screenSize.height
-
-        var isDragging by remember { mutableStateOf(false) }
-
-        val currentXState = rememberUpdatedState(currentX)
-        val screenWidthState = rememberUpdatedState(screenWidth)
-        val screenHeightState = rememberUpdatedState(screenHeight)
-
-        LaunchedEffect(componentSize.width, isAtRightSide, screenWidth) {
-            if (isAtRightSide && componentSize.width > 0) {
-                val finalX = screenWidth - componentSize.width.toInt()
-                onSnapToEdge(finalX)
-            }
+        val currentX = if (isAtRightSide) {
+            screenWidth - componentSize.width - horizontalOffset.roundToInt()
+        } else {
+            horizontalOffset.roundToInt()
         }
 
-        LaunchedEffect(Unit) {
+        // Read the desired width during composition so measurement changes schedule a native resize.
+        val windowWidth = contentWidth
+        val windowOffset = horizontalOffset.roundToInt()
+        val windowY = currentY.roundToInt()
+        SideEffect {
+            onWindowPositionUpdate(isAtRightSide, windowOffset, windowY, windowWidth)
+        }
+
+        LaunchedEffect(screenWidth, screenHeight) {
             while (true) {
-                delay(500)
                 if (GlobalVars.updateWindowPosition && !isDragging) {
-                    val absorbEdge = GlobalVars.absorbEdge
-                    val absorbYPercentage = GlobalVars.absorbYPercentage
-
-                    val newX =
-                        if (absorbEdge == 1) 0 else (screenWidthState.value - componentSize.width).toInt()
-                    val newY = (screenHeightState.value * (absorbYPercentage / 100f)).toInt()
-
-                    isAtRightSide = absorbEdge != 1
-                    onAutoPosition(newX, newY)
+                    isAtRightSide = GlobalVars.absorbEdge != 1
+                    horizontalOffset = 0f
+                    currentY = (screenHeight * (GlobalVars.absorbYPercentage / 100f))
+                        .coerceIn(0f, (screenHeight - componentSize.height).coerceAtLeast(0).toFloat())
                 }
+                delay(500)
             }
         }
 
-        Box(
-            modifier = Modifier
-                .onGloballyPositioned { componentSize = it.size.toSize() }
-        ) {
+        Box(modifier = Modifier.onSizeChanged { componentSize = it }) {
             ControlWindow(
                 externalInteractionCount = interactionCount,
                 isAtRightSide = isAtRightSide,
                 currentX = currentX,
-                currentY = currentY,
+                currentY = currentY.roundToInt(),
                 screenWidth = screenWidth,
                 screenHeight = screenHeight,
                 onOpenMainUI = {
@@ -266,25 +224,29 @@ class ControlWindowService : Service(), LifecycleOwner, SavedStateRegistryOwner 
                 },
                 isSwitchingAccount = isSwitchingAccount,
                 onSwitchAccount = ::switchToAccount,
+                onContentWidthChange = { contentWidth = it.coerceAtMost(screenWidth) },
+                isDragging = isDragging,
                 onDragStart = {
                     interactionCount++
                     isDragging = true
                 },
                 onDragEnd = {
-                    isDragging = false
-                    val currentXVal = currentXState.value
-                    val screenWidthVal = screenWidthState.value
-                    val finalX = if (currentXVal + componentSize.width / 2 < screenWidthVal / 2) {
-                        isAtRightSide = false
-                        0
+                    // Convert to screen coordinates before changing the native docking gravity.
+                    val left = if (isAtRightSide) {
+                        screenWidth - componentSize.width - horizontalOffset
                     } else {
-                        isAtRightSide = true
-                        (screenWidthVal - componentSize.width).toInt()
+                        horizontalOffset
                     }
-                    onSnapToEdge(finalX)
+                    isAtRightSide = left + componentSize.width / 2f >= screenWidth / 2f
+                    horizontalOffset = 0f
+                    isDragging = false
                 },
                 onDrag = { dx, dy ->
-                    onPositionUpdate(dx.roundToInt(), dy.roundToInt())
+                    // Right gravity measures x from the right edge; retain subpixel drag movement.
+                    horizontalOffset = (horizontalOffset + if (isAtRightSide) -dx else dx)
+                        .coerceIn(0f, (screenWidth - componentSize.width).coerceAtLeast(0).toFloat())
+                    currentY = (currentY + dy)
+                        .coerceIn(0f, (screenHeight - componentSize.height).coerceAtLeast(0).toFloat())
                     interactionCount++
                 }
             )
@@ -373,5 +335,31 @@ class ControlWindowService : Service(), LifecycleOwner, SavedStateRegistryOwner 
         } catch (e: Exception) {
             Timber.e(e, "ControlWindowService: startForeground() failed, API=${Build.VERSION.SDK_INT}")
         }
+    }
+}
+
+/** Shared window geometry for the control service and platform-level animation checks. */
+internal fun createControlWindowLayoutParams(): WindowManager.LayoutParams {
+    val windowType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+    } else {
+        @Suppress("DEPRECATION")
+        WindowManager.LayoutParams.TYPE_PHONE
+    }
+
+    return WindowManager.LayoutParams(
+        WindowManager.LayoutParams.WRAP_CONTENT,
+        WindowManager.LayoutParams.WRAP_CONTENT,
+        windowType,
+        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+        PixelFormat.TRANSLUCENT
+    ).apply {
+        // Native edge gravity anchors width changes in the same layout pass as the animation.
+        gravity = Gravity.TOP or Gravity.RIGHT
+        x = 0
+        y = 360
+        title = "SunCodeControlOverlay"
+        windowAnimations = 0
     }
 }

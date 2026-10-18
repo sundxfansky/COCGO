@@ -1,16 +1,16 @@
 package com.coc.suncode.core.ui.floatingwindows
 
 import android.graphics.BitmapFactory
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -22,6 +22,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,6 +31,9 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
@@ -47,7 +52,9 @@ import com.coc.suncode.statehelper.AppMode
 import com.coc.suncode.statehelper.AppStateManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 // Base DPI for consistent physical size across devices
@@ -68,12 +75,6 @@ fun getConsistentIconSize(): Dp {
     return BASE_ICON_SIZE_DP * scaleFactor
 }
 
-enum class ControlState {
-    COLLAPSED, // State 1
-    EXPANDED,  // State 2
-    HIDDEN     // State 3
-}
-
 @Suppress("AssignedValueIsNeverRead")
 @Composable
 fun ControlWindow(
@@ -86,12 +87,28 @@ fun ControlWindow(
     onOpenMainUI: () -> Unit = {},
     isSwitchingAccount: Boolean = false,
     onSwitchAccount: (Int) -> Unit = {},
+    onContentWidthChange: (Int) -> Unit = {},
+    isDragging: Boolean = false,
     onDragStart: () -> Unit = {},
     onDragEnd: () -> Unit = {},
     onDrag: (Float, Float) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current
-    var controlState by remember { mutableStateOf(ControlState.COLLAPSED) }
+    var isExpanded by remember { mutableStateOf(false) }
+    val expansion = remember { Animatable(0f) }
+    val animationScope = rememberCoroutineScope()
+    val setExpanded: (Boolean) -> Unit = { expanded ->
+        if (isExpanded != expanded) {
+            isExpanded = expanded
+            // Cancel and reverse immediately on a tap, before the next animation frame can advance.
+            animationScope.launch(start = CoroutineStart.UNDISPATCHED) {
+                expansion.animateTo(
+                    targetValue = if (expanded) 1f else 0f,
+                    animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing)
+                )
+            }
+        }
+    }
     var internalInteractionCount by remember { mutableIntStateOf(0) }
     var isPlaying by remember { GlobalVars.isPlaying }
     var showExitConfirmation by remember { mutableStateOf(false) }
@@ -100,10 +117,10 @@ fun ControlWindow(
     val logLines by ShowMessage.logLines.collectAsState()
     var accountSwitchState by remember { mutableStateOf(AccountSwitchState()) }
 
-    LaunchedEffect(controlState, GlobalVars.pluginUI, isSwitchingAccount) {
+    LaunchedEffect(isExpanded, GlobalVars.pluginUI, isSwitchingAccount) {
         accountSwitchState = AccountSwitchState()
         val switcher = GlobalVars.pluginUI as? RuntimeAccountSwitcher ?: return@LaunchedEffect
-        if (controlState != ControlState.EXPANDED || isSwitchingAccount) return@LaunchedEffect
+        if (!isExpanded || isSwitchingAccount) return@LaunchedEffect
         var reportedFailure = false
         // Query only while expanded, and keep all root I/O off the main thread.
         while (true) {
@@ -144,27 +161,16 @@ fun ControlWindow(
         }
     }
 
-    LaunchedEffect(internalInteractionCount, externalInteractionCount) {
+    LaunchedEffect(internalInteractionCount, externalInteractionCount, isDragging, showExitConfirmation) {
+        if (isDragging || showExitConfirmation) return@LaunchedEffect
         delay(2500)
-        controlState = ControlState.HIDDEN
-    }
-
-    LaunchedEffect(externalInteractionCount) {
-        if (externalInteractionCount > 0) {
-            controlState = ControlState.COLLAPSED
-        }
+        setExpanded(false)
     }
 
     val iconSize = getConsistentIconSize()
 
     val mainIcon = remember {
         context.assets.open("main_icon.png").use {
-            BitmapFactory.decodeStream(it).asImageBitmap()
-        }
-    }
-    // Narrower icon (30% width) used in HIDDEN state to reduce touch area
-    val mainIconHidden = remember {
-        context.assets.open("main_icon_hidden.png").use {
             BitmapFactory.decodeStream(it).asImageBitmap()
         }
     }
@@ -188,209 +194,194 @@ fun ControlWindow(
             BitmapFactory.decodeStream(it).asImageBitmap()
         }
     }
+    // Read current callbacks without restarting an in-progress pointer gesture on recomposition.
+    val latestOnDragStart by rememberUpdatedState(onDragStart)
+    val latestOnDragEnd by rememberUpdatedState(onDragEnd)
+    val latestOnDrag by rememberUpdatedState(onDrag)
     val dragModifier = Modifier.pointerInput(Unit) {
         detectDragGestures(
-            onDragStart = { onDragStart() },
-            onDragEnd = { onDragEnd() },
+            onDragStart = { latestOnDragStart() },
+            onDragEnd = { latestOnDragEnd() },
+            onDragCancel = { latestOnDragEnd() },
             onDrag = { change, dragAmount ->
                 change.consume()
-                onDrag(dragAmount.x, dragAmount.y)
+                latestOnDrag(dragAmount.x, dragAmount.y)
             }
         )
     }
 
-    Row(
-        modifier = Modifier
-            .wrapContentSize(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.End
-    ) {
-        // Use narrower size in HIDDEN state so the window shrinks and stops blocking touches
-        val hiddenIconModifier = Modifier
-            .width(iconSize * 0.3f)
-            .height(iconSize)
-            .padding(vertical = 4.dp)
-        val normalIconModifier = Modifier
-            .size(iconSize)
-            .padding(2.dp)
-
-        if (!isAtRightSide) {
-            // Left side: Main icon first, use narrower hidden icon when HIDDEN
-            Image(
-                bitmap = if (controlState == ControlState.HIDDEN) mainIconHidden else mainIcon,
-                contentDescription = "Main Icon",
-                modifier = (if (controlState == ControlState.HIDDEN) hiddenIconModifier else normalIconModifier)
-                    .then(dragModifier)
-                    .clickable {
-                        controlState = when (controlState) {
-                            ControlState.HIDDEN -> ControlState.COLLAPSED
-                            ControlState.COLLAPSED -> ControlState.EXPANDED
-                            ControlState.EXPANDED -> ControlState.COLLAPSED
-                        }
-                        internalInteractionCount++
-                    }
-            )
-
-            if (controlState == ControlState.EXPANDED) {
-                Image(
-                    bitmap = exitIcon,
-                    contentDescription = "Exit",
-                    modifier = Modifier
-                        .size(iconSize)
-                        .padding(4.dp)
-                        .clickable {
-                            internalInteractionCount++
-                            // Skip confirmation and exit immediately when ad is playing
-                            if (GlobalVars.isAdPlaying) {
-                                AppExitHelper.exitApplication(context)
-                                return@clickable
-                            }
-                            pauseForInteraction()
-                            showExitConfirmation = true
-                        }
-                )
-                Image(
-                    bitmap = settingIcon,
-                    contentDescription = "Setting",
-                    modifier = Modifier
-                        .size(iconSize)
-                        .padding(4.dp)
-                        .clickable(enabled = !isSwitchingAccount) {
-                            // Disable setting icon when ad is playing
-                            if (GlobalVars.isAdPlaying) return@clickable
-                            internalInteractionCount++
-                            pauseForInteraction()
-                            AppStateManager.setMode(AppMode.Main)
-                            restoreDefaultInputMethod()
-                            onOpenMainUI()
-                        }
-                )
-                FloatingAccountButtons(
-                    iconSize = iconSize,
-                    state = accountSwitchState,
-                    enabled = !isSwitchingAccount && !GlobalVars.isAdPlaying,
-                    onSwitchAccount = switchAccount
-                )
-                FloatingLogButton(iconSize = iconSize, selected = showLogs) {
-                    internalInteractionCount++
-                    showLogs = !showLogs
-                    logInteractionEnabled = false
-                }
-                if (showLogs) {
-                    FloatingLogHistoryButton(iconSize = iconSize, selected = logInteractionEnabled) {
-                        internalInteractionCount++
-                        logInteractionEnabled = !logInteractionEnabled
-                    }
-                }
-                Image(
-                    bitmap = if (isPlaying) pauseIcon else playIcon,
-                    contentDescription = if (isPlaying) "Pause" else "Play",
-                    modifier = Modifier
-                        .size(iconSize)
-                        .padding(4.dp)
-                        .clickable(enabled = !isSwitchingAccount) {
-                            // Disable play/pause icon when ad is playing
-                            if (GlobalVars.isAdPlaying) return@clickable
-                            internalInteractionCount++
-                            isPlaying = !isPlaying
-                            if (!isPlaying) {
-                                ShowMessage("暂停中，请稍后...")
-                                restoreDefaultInputMethod()
-                                ShowMessage("已暂停")
-                            }
-                        }
-                )
+    FloatingControlStrip(
+        expansion = expansion.value,
+        isAtRightSide = isAtRightSide,
+        onContentWidthChange = onContentWidthChange,
+        iconModifier = dragModifier
+            .semantics {
+                contentDescription = "Main Icon"
+                stateDescription = if (isExpanded) "工具栏已展开" else "工具栏已收起"
             }
-        } else {
-            // Right side: Play/Pause, account arrows, Setting, then Main Icon.
-            if (controlState == ControlState.EXPANDED) {
-                Image(
-                    bitmap = if (isPlaying) pauseIcon else playIcon,
-                    contentDescription = if (isPlaying) "Pause" else "Play",
-                    modifier = Modifier
-                        .size(iconSize)
-                        .padding(4.dp)
-                        .clickable(enabled = !isSwitchingAccount) {
-                            // Disable play/pause icon when ad is playing
-                            if (GlobalVars.isAdPlaying) return@clickable
-                            internalInteractionCount++
-                            isPlaying = !isPlaying
-                            if (!isPlaying) {
-                                ShowMessage("暂停中，请稍后...")
-                                restoreDefaultInputMethod()
-                                ShowMessage("已暂停")
-                            }
-                        }
-                )
-                FloatingLogButton(iconSize = iconSize, selected = showLogs) {
-                    internalInteractionCount++
-                    showLogs = !showLogs
-                    logInteractionEnabled = false
-                }
-                if (showLogs) {
-                    FloatingLogHistoryButton(iconSize = iconSize, selected = logInteractionEnabled) {
-                        internalInteractionCount++
-                        logInteractionEnabled = !logInteractionEnabled
-                    }
-                }
-                FloatingAccountButtons(
-                    iconSize = iconSize,
-                    state = accountSwitchState,
-                    enabled = !isSwitchingAccount && !GlobalVars.isAdPlaying,
-                    onSwitchAccount = switchAccount
-                )
-                Image(
-                    bitmap = settingIcon,
-                    contentDescription = "Setting",
-                    modifier = Modifier
-                        .size(iconSize)
-                        .padding(4.dp)
-                        .clickable(enabled = !isSwitchingAccount) {
-                            // Disable setting icon when ad is playing
-                            if (GlobalVars.isAdPlaying) return@clickable
-                            internalInteractionCount++
-                            pauseForInteraction()
-                            AppStateManager.setMode(AppMode.Main)
-                            restoreDefaultInputMethod()
-                            onOpenMainUI()
-                        }
-                )
-                Image(
-                    bitmap = exitIcon,
-                    contentDescription = "Exit",
-                    modifier = Modifier
-                        .size(iconSize)
-                        .padding(4.dp)
-                        .clickable {
-                            internalInteractionCount++
-                            // Skip confirmation and exit immediately when ad is playing
-                            if (GlobalVars.isAdPlaying) {
-                                AppExitHelper.exitApplication(context)
-                                return@clickable
-                            }
-                            pauseForInteraction()
-                            showExitConfirmation = true
-                        }
-                )
-            }
-
-            // Right side: use narrower hidden icon when HIDDEN
+            // A ripple at the screen edge looks like a flash while the viewport changes width.
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) {
+                setExpanded(!isExpanded)
+                internalInteractionCount++
+            },
+        icon = {
+            // Keep one bitmap at one size; only its clipped viewport changes during the animation.
             Image(
-                bitmap = if (controlState == ControlState.HIDDEN) mainIconHidden else mainIcon,
-                contentDescription = "Main Icon",
-                modifier = (if (controlState == ControlState.HIDDEN) hiddenIconModifier else normalIconModifier)
-                    .then(dragModifier)
-                    .clickable {
-                        controlState = when (controlState) {
-                            ControlState.HIDDEN -> ControlState.COLLAPSED
-                            ControlState.COLLAPSED -> ControlState.EXPANDED
-                            ControlState.EXPANDED -> ControlState.COLLAPSED
-                        }
-                        internalInteractionCount++
-                    }
+                bitmap = mainIcon,
+                contentDescription = null,
+                modifier = Modifier.size(iconSize).padding(2.dp)
             )
+        },
+        toolbar = {
+            // Keep controls composed until the closing animation finishes.
+            if (isExpanded || expansion.value > 0f) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (!isAtRightSide) {
+                        Image(
+                            bitmap = exitIcon,
+                            contentDescription = "Exit",
+                            modifier = Modifier
+                                .size(iconSize)
+                                .padding(4.dp)
+                                .clickable {
+                                    internalInteractionCount++
+                                    // Skip confirmation and exit immediately when ad is playing
+                                    if (GlobalVars.isAdPlaying) {
+                                        AppExitHelper.exitApplication(context)
+                                        return@clickable
+                                    }
+                                    pauseForInteraction()
+                                    showExitConfirmation = true
+                                }
+                        )
+                        Image(
+                            bitmap = settingIcon,
+                            contentDescription = "Setting",
+                            modifier = Modifier
+                                .size(iconSize)
+                                .padding(4.dp)
+                                .clickable(enabled = !isSwitchingAccount) {
+                                    // Disable setting icon when ad is playing
+                                    if (GlobalVars.isAdPlaying) return@clickable
+                                    internalInteractionCount++
+                                    pauseForInteraction()
+                                    AppStateManager.setMode(AppMode.Main)
+                                    restoreDefaultInputMethod()
+                                    onOpenMainUI()
+                                }
+                        )
+                        FloatingAccountButtons(
+                            iconSize = iconSize,
+                            state = accountSwitchState,
+                            enabled = !isSwitchingAccount && !GlobalVars.isAdPlaying,
+                            onSwitchAccount = switchAccount
+                        )
+                        FloatingLogButton(iconSize = iconSize, selected = showLogs) {
+                            internalInteractionCount++
+                            showLogs = !showLogs
+                            logInteractionEnabled = false
+                        }
+                        if (showLogs) {
+                            FloatingLogHistoryButton(iconSize = iconSize, selected = logInteractionEnabled) {
+                                internalInteractionCount++
+                                logInteractionEnabled = !logInteractionEnabled
+                            }
+                        }
+                        Image(
+                            bitmap = if (isPlaying) pauseIcon else playIcon,
+                            contentDescription = if (isPlaying) "Pause" else "Play",
+                            modifier = Modifier
+                                .size(iconSize)
+                                .padding(4.dp)
+                                .clickable(enabled = !isSwitchingAccount) {
+                                    // Disable play/pause icon when ad is playing
+                                    if (GlobalVars.isAdPlaying) return@clickable
+                                    internalInteractionCount++
+                                    isPlaying = !isPlaying
+                                    if (!isPlaying) {
+                                        ShowMessage("暂停中，请稍后...")
+                                        restoreDefaultInputMethod()
+                                        ShowMessage("已暂停")
+                                    }
+                                }
+                        )
+                    } else {
+                        Image(
+                            bitmap = if (isPlaying) pauseIcon else playIcon,
+                            contentDescription = if (isPlaying) "Pause" else "Play",
+                            modifier = Modifier
+                                .size(iconSize)
+                                .padding(4.dp)
+                                .clickable(enabled = !isSwitchingAccount) {
+                                    // Disable play/pause icon when ad is playing
+                                    if (GlobalVars.isAdPlaying) return@clickable
+                                    internalInteractionCount++
+                                    isPlaying = !isPlaying
+                                    if (!isPlaying) {
+                                        ShowMessage("暂停中，请稍后...")
+                                        restoreDefaultInputMethod()
+                                        ShowMessage("已暂停")
+                                    }
+                                }
+                        )
+                        FloatingLogButton(iconSize = iconSize, selected = showLogs) {
+                            internalInteractionCount++
+                            showLogs = !showLogs
+                            logInteractionEnabled = false
+                        }
+                        if (showLogs) {
+                            FloatingLogHistoryButton(iconSize = iconSize, selected = logInteractionEnabled) {
+                                internalInteractionCount++
+                                logInteractionEnabled = !logInteractionEnabled
+                            }
+                        }
+                        FloatingAccountButtons(
+                            iconSize = iconSize,
+                            state = accountSwitchState,
+                            enabled = !isSwitchingAccount && !GlobalVars.isAdPlaying,
+                            onSwitchAccount = switchAccount
+                        )
+                        Image(
+                            bitmap = settingIcon,
+                            contentDescription = "Setting",
+                            modifier = Modifier
+                                .size(iconSize)
+                                .padding(4.dp)
+                                .clickable(enabled = !isSwitchingAccount) {
+                                    // Disable setting icon when ad is playing
+                                    if (GlobalVars.isAdPlaying) return@clickable
+                                    internalInteractionCount++
+                                    pauseForInteraction()
+                                    AppStateManager.setMode(AppMode.Main)
+                                    restoreDefaultInputMethod()
+                                    onOpenMainUI()
+                                }
+                        )
+                        Image(
+                            bitmap = exitIcon,
+                            contentDescription = "Exit",
+                            modifier = Modifier
+                                .size(iconSize)
+                                .padding(4.dp)
+                                .clickable {
+                                    internalInteractionCount++
+                                    // Skip confirmation and exit immediately when ad is playing
+                                    if (GlobalVars.isAdPlaying) {
+                                        AppExitHelper.exitApplication(context)
+                                        return@clickable
+                                    }
+                                    pauseForInteraction()
+                                    showExitConfirmation = true
+                                }
+                        )
+                    }
+                }
+            }
         }
-    }
+    )
 
     if (showLogs) {
         FloatingLogOverlay(

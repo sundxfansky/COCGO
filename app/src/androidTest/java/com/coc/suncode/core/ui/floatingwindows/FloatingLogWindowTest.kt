@@ -70,7 +70,7 @@ class FloatingLogWindowTest {
         GlobalVars.isPlaying.value = true
         ShowMessage.setLogOverlayVisible(false)
         ShowMessage.clearLogs()
-        // Keep the control strip expanded until each test explicitly advances its timer.
+        // Advance toolbar animations explicitly without triggering the idle collapse timer.
         compose.mainClock.autoAdvance = false
     }
 
@@ -113,7 +113,7 @@ class FloatingLogWindowTest {
         }
 
         compose.onNodeWithContentDescription("Main Icon").performClick()
-        compose.mainClock.advanceTimeByFrame()
+        compose.mainClock.advanceTimeBy(320)
         compose.onNodeWithContentDescription("Switch").assertDoesNotExist()
         compose.runOnIdle { assertTrue(GlobalVars.isPlaying.value) }
         compose.onNodeWithContentDescription("日志").performClick()
@@ -139,9 +139,7 @@ class FloatingLogWindowTest {
         compose.runOnIdle { assertTrue(GlobalVars.isPlaying.value) }
 
         compose.onNodeWithContentDescription("Main Icon").performClick()
-        compose.mainClock.advanceTimeByFrame()
-        compose.onNodeWithContentDescription("Main Icon").performClick()
-        compose.mainClock.advanceTimeByFrame()
+        compose.mainClock.advanceTimeBy(320)
         compose.onNodeWithContentDescription("浏览日志").performClick()
         compose.mainClock.advanceTimeByFrame()
         verifyWindowMode(logWindow, interactive = true)
