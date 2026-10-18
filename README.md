@@ -15,7 +15,7 @@ Root 环境下运行的部落冲突（Clash of Clans）自动化客户端：Kotl
 代码分为三层：
 
 1. **宿主（`app/`）** — 常规安装的 Android APK，负责权限申请、Root 环境准备、动态加载脚本模块、以及生命周期管理。
-2. **脚本模块（`app/src/main/java/com/coc/suncode/jar`）** — 实际的自动化逻辑和界面。构建时被单独打包成一个 JAR，运行时由宿主通过 `DexClassLoader` 加载。这一层可以独立发布更新。
+2. **脚本模块（`app/src/main/java/com/coc/suncode/jar`）** — 实际的自动化逻辑和界面。构建为公共核心 `code.jar` 与登录、进攻、升级等独立功能 JAR，运行时由宿主通过 `DexClassLoader` 加载。功能包支持单独更新和启停，详见 [`docs/FEATURE_PLUGINS.md`](docs/FEATURE_PLUGINS.md)。
 3. **宿主 Root 后端** — 直接加载已安装的宿主 APK，通过 `su app_process` 执行触摸、跨应用文件访问和 Shell 命令。宿主使用私有标准输入输出管道通信，不监听网络端口，不需要独立的服务 APK。
 
 性能敏感的计算（取色、加解密等）通过 JNI 交给 `rust_logic` 里的 Rust 代码处理。
@@ -61,7 +61,9 @@ Root 后端随主应用构建，不需要构建、复制或安装 `server.apk`�
 | `assembleDebug` | 构建调试 APK（自动触发 `rustBuild`） |
 | `runDebugOnDevice` | 安装并启动应用 |
 | `debugLogs` | 输出过滤后的应用与原生日志 |
-| `buildJar` | 构建独立插件到 app/build/plugin/code.jar，不修改 assets |
+| `buildJar` | 构建公共核心及全部功能包，核心包携带兼容的内置回退包 |
+| `buildFeaturePlugins -Pfeature=main_attack` | 只打包所选功能到 app/build/plugin/features/ |
+| `signFeaturePlugin -Pfeature=main_attack -PfeatureVersion=2 -PsigningKey=…` | 构建并签名单个功能包 |
 | `deployAndReload` | 单独构建脚本模块 JAR 并推送到设备热重载，无需重装 APK |
 
 ## 技术栈

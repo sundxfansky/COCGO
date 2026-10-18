@@ -1,19 +1,16 @@
 package com.coc.suncode.jar.code.universal.buildings.walls
 
 import com.coc.suncode.core.util.basic.delayWithMultiplier
-import com.coc.suncode.jar.code.colorschema.MyColors
 import com.coc.suncode.jar.code.universal.buildings.BaseType
 import com.coc.suncode.jar.code.universal.buildings.WorkerAndResearch
 import com.coc.suncode.jar.code.universal.buildings.upgrade.UpgradeResult
 import com.coc.suncode.jar.code.universal.buildings.upgrade.WallType
 import com.coc.suncode.jar.code.universal.buildings.upgrade.upgradeAllExistingBuildings
-import com.coc.suncode.jar.code.universal.colors.findMultiColors
 import com.coc.suncode.jar.code.universal.smalltools.getBooleanConfigRuntime
 import com.coc.suncode.jar.code.universal.smalltools.getConfigRuntime
 import com.coc.suncode.core.util.fileactions.LogHelper.logAndRestart
 import com.coc.suncode.jar.ui.schema.Schema
 import com.coc.suncode.core.util.basic.ShowMessage
-import kotlin.math.roundToInt
 
 suspend fun upgradeWalls(currentBase: BaseType): Boolean {
     // Check whether wall upgrade is enabled for the current base
@@ -71,35 +68,4 @@ suspend fun upgradeWalls(currentBase: BaseType): Boolean {
         delayWithMultiplier(300)
     }
     return true
-}
-
-data class ResourcesPercentage(
-    val gold: Int = 0, val elixir: Int = 0
-)
-
-// 100% resource bar position (x coordinate) and 0% position
-private const val RESOURCE_FULL_X = 1012
-private const val RESOURCE_EMPTY_X = 1261
-
-/**
- * Calculate the resource percentage based on the x coordinate of the resource bar.
- * Linear interpolation: x=1012 -> 100%, x=1268 -> 0%.
- */
-private fun calculatePercentage(x: Int): Int {
-    return ((RESOURCE_EMPTY_X - x) * 100.0 / (RESOURCE_EMPTY_X - RESOURCE_FULL_X)).roundToInt().coerceIn(0, 100)
-}
-
-suspend fun calculateResourcesPercentage(currentBase: BaseType): ResourcesPercentage {
-    val goldSchema = if (currentBase == BaseType.Builder) MyColors.BuilderBaseGold else MyColors.GoldColor
-    val elixirSchema = if (currentBase == BaseType.Builder) MyColors.BuilderBaseExiler else MyColors.ElixirColor
-
-    // Calculate gold percentage
-    val goldPosition = findMultiColors(schema = goldSchema)
-    val goldPercent = if (goldPosition != null) calculatePercentage(goldPosition.x) else 0
-
-    // Calculate elixir percentage
-    val elixirPosition = findMultiColors(schema = elixirSchema)
-    val elixirPercent = if (elixirPosition != null) calculatePercentage(elixirPosition.x) else 0
-
-    return ResourcesPercentage(gold = goldPercent, elixir = elixirPercent)
 }

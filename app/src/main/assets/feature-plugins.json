@@ -1,0 +1,118 @@
+[
+  {
+    "id": "login",
+    "name": "登录",
+    "entry": "com.coc.suncode.jar.features.login.Entry",
+    "prefixes": [
+      "com.coc.suncode.jar.features.login."
+    ]
+  },
+  {
+    "id": "main_attack",
+    "name": "主世界进攻",
+    "entry": "com.coc.suncode.jar.features.main_attack.Entry",
+    "prefixes": [
+      "com.coc.suncode.jar.features.main_attack.",
+      "com.coc.suncode.jar.code.mainbase.attack."
+    ]
+  },
+  {
+    "id": "builder_attack",
+    "name": "夜世界进攻",
+    "entry": "com.coc.suncode.jar.features.builder_attack.Entry",
+    "prefixes": [
+      "com.coc.suncode.jar.features.builder_attack.",
+      "com.coc.suncode.jar.code.builderbase.attack."
+    ]
+  },
+  {
+    "id": "clan",
+    "name": "部落",
+    "entry": "com.coc.suncode.jar.features.clan.Entry",
+    "prefixes": [
+      "com.coc.suncode.jar.features.clan.",
+      "com.coc.suncode.jar.code.mainbase.clan."
+    ]
+  },
+  {
+    "id": "main_research",
+    "name": "主世界研究",
+    "entry": "com.coc.suncode.jar.features.main_research.Entry",
+    "prefixes": [
+      "com.coc.suncode.jar.features.main_research.",
+      "com.coc.suncode.jar.code.mainbase.research."
+    ]
+  },
+  {
+    "id": "builder_research",
+    "name": "夜世界研究",
+    "entry": "com.coc.suncode.jar.features.builder_research.Entry",
+    "prefixes": [
+      "com.coc.suncode.jar.features.builder_research.",
+      "com.coc.suncode.jar.code.builderbase.research."
+    ]
+  },
+  {
+    "id": "upgrade",
+    "name": "建筑与城墙升级",
+    "entry": "com.coc.suncode.jar.features.upgrade.Entry",
+    "prefixes": [
+      "com.coc.suncode.jar.features.upgrade.",
+      "com.coc.suncode.jar.code.universal.buildings.upgrade.UpgradeBuildingsKt",
+      "com.coc.suncode.jar.code.universal.buildings.upgrade.UpgradeExistingBuildingsKt",
+      "com.coc.suncode.jar.code.universal.buildings.upgrade.FindNewBuildingsKt",
+      "com.coc.suncode.jar.code.universal.buildings.upgrade.DetectInstantBuildCostKt",
+      "com.coc.suncode.jar.code.universal.buildings.upgrade.WallType",
+      "com.coc.suncode.jar.code.universal.buildings.upgrade.UpgradeResult",
+      "com.coc.suncode.jar.code.universal.buildings.walls.UpgradeWallsKt"
+    ]
+  },
+  {
+    "id": "obstacles",
+    "name": "障碍清理",
+    "entry": "com.coc.suncode.jar.features.obstacles.Entry",
+    "prefixes": [
+      "com.coc.suncode.jar.features.obstacles.",
+      "com.coc.suncode.jar.code.mainbase.others.MainBaseRemoveObstaclesKt",
+      "com.coc.suncode.jar.code.builderbase.others.BuilderBaseRemoveObstaclesKt"
+    ]
+  },
+  {
+    "id": "collection",
+    "name": "资源与奖励收集",
+    "entry": "com.coc.suncode.jar.features.collection.Entry",
+    "prefixes": [
+      "com.coc.suncode.jar.features.collection.",
+      "com.coc.suncode.jar.code.builderbase.resources.",
+      "com.coc.suncode.jar.code.builderbase.precheck.",
+      "com.coc.suncode.jar.code.builderbase.others.ClickOttosPostKt"
+    ]
+  },
+  {
+    "id": "heroes",
+    "name": "英雄管理",
+    "entry": "com.coc.suncode.jar.features.heroes.Entry",
+    "prefixes": [
+      "com.coc.suncode.jar.features.heroes.",
+      "com.coc.suncode.jar.code.mainbase.herohall."
+    ]
+  },
+  {
+    "id": "tutorial",
+    "name": "教程检查",
+    "entry": "com.coc.suncode.jar.features.tutorial.Entry",
+    "prefixes": [
+      "com.coc.suncode.jar.features.tutorial.",
+      "com.coc.suncode.jar.code.mainbase.others.CheckTutorialsKt"
+    ]
+  },
+  {
+    "id": "account_create",
+    "name": "批量建号",
+    "entry": "com.coc.suncode.jar.features.account_create.Entry",
+    "prefixes": [
+      "com.coc.suncode.jar.features.account_create.",
+      "com.coc.suncode.jar.code.universal.create."
+    ]
+  }
+]

@@ -1,42 +1,30 @@
 package com.coc.suncode.jar.code.mainbase
 
 
-import com.coc.suncode.core.util.basic.delayWithMultiplier
-import com.coc.suncode.jar.code.mainbase.attack.mainBaseAttack
-import com.coc.suncode.jar.code.mainbase.attack.mainBaseTrainTroops
-import com.coc.suncode.jar.code.mainbase.clan.joinClan
-import com.coc.suncode.jar.code.mainbase.clan.donateToClan
-import com.coc.suncode.jar.code.mainbase.clan.requestReinforcements
-import com.coc.suncode.jar.code.mainbase.herohall.placeHeroBanners
-import com.coc.suncode.jar.code.mainbase.others.mainBaseCheckTutorials
-import com.coc.suncode.jar.code.mainbase.others.mainBaseRemoveObstacles
+import com.coc.suncode.jar.features.FeatureRuntime
 import com.coc.suncode.jar.code.mainbase.others.zoomSmallMainBase
-import com.coc.suncode.jar.code.mainbase.research.mainBaseResearch
-import com.coc.suncode.jar.code.universal.buildings.BaseType
-import com.coc.suncode.jar.code.universal.buildings.upgrade.upgradeBuildings
-import com.coc.suncode.jar.code.universal.buildings.walls.upgradeWalls
-import com.coc.suncode.jar.code.universal.clickRightBottom
 import com.coc.suncode.jar.code.universal.smalltools.enterMainBase
 import com.coc.suncode.jar.code.universal.smalltools.getBooleanConfigRuntime
 import com.coc.suncode.jar.ui.schema.Schema
 
 suspend fun playMainBase(): Boolean {
+    // Each step resolves its independently enabled feature before execution.
     // Disabling a world skips every action in its module, including training and maintenance.
     if (!getBooleanConfigRuntime(Schema.MAIN_BASE_SETTINGS.ENABLED.key)) return true
     if (!enterMainBase()) return false
 
     zoomSmallMainBase()
-    if (!mainBaseTrainTroops()) return false
-    if (!mainBaseAttack()) return false
-    if (!mainBaseRemoveObstacles()) return false
-    if (!joinClan()) return false
-    if (!requestReinforcements()) return false
-    if (!donateToClan()) return false
-    if (!upgradeWalls(BaseType.Main)) return false
-    if (!upgradeBuildings(BaseType.Main)) return false
-    if (!mainBaseResearch()) return false
-    if (!placeHeroBanners()) return false
-    if (!mainBaseCheckTutorials()) return false
+    if (!FeatureRuntime.run("main_attack", "train")) return false
+    if (!FeatureRuntime.run("main_attack", "attack")) return false
+    if (!FeatureRuntime.run("obstacles", "main")) return false
+    if (!FeatureRuntime.run("clan", "join")) return false
+    if (!FeatureRuntime.run("clan", "request")) return false
+    if (!FeatureRuntime.run("clan", "donate")) return false
+    if (!FeatureRuntime.run("upgrade", "main_walls")) return false
+    if (!FeatureRuntime.run("upgrade", "main_buildings")) return false
+    if (!FeatureRuntime.run("main_research", "research")) return false
+    if (!FeatureRuntime.run("heroes", "place")) return false
+    if (!FeatureRuntime.run("tutorial", "check")) return false
 //    if (!upgradeGears()) return false
     return true
 }

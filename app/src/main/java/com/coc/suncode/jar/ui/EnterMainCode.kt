@@ -18,6 +18,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.coc.suncode.core.data.database.GlobalVars
 import com.coc.suncode.core.util.basic.RunShell
+import com.coc.suncode.interfaces.FeaturePluginClient
+import com.coc.suncode.interfaces.FeatureResult
+import com.coc.suncode.jar.features.FeatureRuntime
 import com.coc.suncode.interfaces.MainCode
 import com.coc.suncode.interfaces.AccountSwitchState
 import com.coc.suncode.interfaces.RuntimeAccountSwitcher
@@ -39,11 +42,16 @@ import kotlinx.coroutines.flow.first
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 
-class EnterMainCode : MainCode, RuntimeAccountSwitcher {
+class EnterMainCode : MainCode, RuntimeAccountSwitcher, FeaturePluginClient {
+    override fun initializeFeatures(context: Context, bundledPlugins: Map<String, String>) =
+        FeatureRuntime.initialize(context, bundledPlugins)
+
+    override fun reloadFeatures() = FeatureRuntime.reload()
+
     // Keep account configuration and archive resolution inside the active dynamic module.
     override suspend fun accountSwitchState(): AccountSwitchState = RuntimeAccountSwitch.state()
 
-    override suspend fun switchToAccount(accountNumber: Int): Boolean = RuntimeAccountSwitch.switchTo(accountNumber)
+    override suspend fun switchToAccount(accountNumber: Int): Boolean = FeatureRuntime.execute("login", "switch", accountNumber) == FeatureResult.SUCCESS
 
     override fun refreshConfigs(actions: ServerActions) {
         ConfigManager.initializeAllConfigs(actions)

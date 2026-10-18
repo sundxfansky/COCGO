@@ -6,7 +6,7 @@ import com.coc.suncode.core.util.basic.delayWithMultiplier
 import com.coc.suncode.core.util.touchactions.TouchActions
 import com.coc.suncode.core.util.touchactions.TouchActions.pinchIn
 import com.coc.suncode.core.util.touchactions.TouchActions.swipe
-import com.coc.suncode.jar.code.builderbase.resources.collectBuilderBaseResources
+import com.coc.suncode.jar.features.FeatureRuntime
 import com.coc.suncode.core.system.screencapture.ScreenCaptureManager
 import com.coc.suncode.jar.code.colorschema.ColorSchema
 import com.coc.suncode.jar.code.colorschema.MyColors
@@ -79,7 +79,8 @@ suspend fun builderBaseAttack(): Boolean {
             if (!realAttack(attackType, index + 1, battleTimes)) return false
             if ((index + 1) % 5 == 0) {
                 if (!enterMainScreen()) return false
-                collectBuilderBaseResources()
+                // Nested collection respects the independently controlled collection plugin.
+                FeatureRuntime.run("collection", "resources")
             }
         }
     }

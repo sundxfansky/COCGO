@@ -1,3 +1,4 @@
+import groovy.json.JsonSlurper
 import java.util.Properties
 import java.io.File
 import java.nio.file.Files
@@ -87,24 +88,58 @@ kotlin {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11
     }
 }
-// Compile the plugin once, then dex only its package in a temporary directory.
-val buildJarTask = tasks.register("buildJar") {
-    group = "build"
-    description = "Build a portable standalone plugin without modifying APK assets"
+// A single catalog determines ownership for the compiler outputs and the runtime loader.
+@Suppress("UNCHECKED_CAST")
+val featureSpecs = JsonSlurper().parse(file("src/main/assets/feature-plugins.json")) as List<Map<String, Any>>
+fun owns(spec: Map<String, Any>, classFile: String): Boolean {
+    val name = classFile.removeSuffix(".class").replace('/', '.')
+    @Suppress("UNCHECKED_CAST")
+    return (spec["prefixes"] as List<String>).any {
+        if (it.endsWith('.')) name.startsWith(it) else name == it || name.startsWith(it + "$" )
+    }
+}
+
+val validateFeatureBoundaries = tasks.register<Exec>("validateFeatureBoundaries") {
+    group = "verification"
     dependsOn("compileDebugKotlin", "compileDebugJavaWithJavac")
-    val output = layout.buildDirectory.file("plugin/code.jar")
+    commandLine(
+        providers.gradleProperty("python").orElse("python3").get(),
+        rootProject.file("scripts/verify_feature_boundaries.py").path,
+        "--catalog", file("src/main/assets/feature-plugins.json").path,
+        layout.buildDirectory.dir("intermediates/built_in_kotlinc/debug/compileDebugKotlin/classes").get().asFile.path,
+        layout.buildDirectory.dir("tmp/kotlin-classes/debug").get().asFile.path
+    )
+}
+
+fun registerPluginBuild(artifactId: String, feature: Map<String, Any>?) = tasks.register(
+    if (feature == null) "buildJar" else "buildFeature" + artifactId.split('_').joinToString("") { it.replaceFirstChar(Char::uppercase) }
+) {
+    group = "build"
+    description = "Build the $artifactId dynamic plugin"
+    dependsOn("compileDebugKotlin", "compileDebugJavaWithJavac", validateFeatureBoundaries)
+    val output = layout.buildDirectory.file(if (feature == null) "plugin/code.jar" else "plugin/features/$artifactId.jar")
     outputs.file(output)
     inputs.files(provider { fileTree(layout.buildDirectory.dir("intermediates/built_in_kotlinc/debug/compileDebugKotlin/classes")) })
     inputs.files(configurations.named("debugRuntimeClasspath"))
+    inputs.file("src/main/assets/feature-plugins.json")
+    val featureVersion = providers.gradleProperty("featureVersion").orElse("1")
+    inputs.property("featureVersion", featureVersion)
     doLast {
         val sdk = androidComponents.sdkComponents.sdkDirectory.get().asFile
         val buildTools = File(sdk, "build-tools/${android.buildToolsVersion}")
         val d8 = File(buildTools, if (System.getProperty("os.name").startsWith("Windows")) "d8.bat" else "d8")
         require(d8.isFile) { "D8 not installed: $d8" }
         val classRoots = listOf("tmp/kotlin-classes/debug", "intermediates/built_in_kotlinc/debug/compileDebugKotlin/classes", "intermediates/javac/debug/compileDebugJavaWithJavac/classes").map { layout.buildDirectory.dir(it).get().asFile }
-        val classes = classRoots.flatMap { dir -> fileTree(dir) { include("com/coc/suncode/jar/**/*.class") }.files }.distinct()
+        val allClasses = linkedMapOf<String, File>()
+        classRoots.filter { it.exists() }.forEach { dir -> fileTree(dir) { include("**/*.class") }.forEach {
+            allClasses.putIfAbsent(it.relativeTo(dir).invariantSeparatorsPath, it)
+        } }
+        val classes = allClasses.filter { (name, _) ->
+            name.startsWith("com/coc/suncode/jar/") &&
+                (if (feature == null) featureSpecs.none { owns(it, name) } else owns(feature, name))
+        }.values.toList()
         check(classes.isNotEmpty()) { "No plugin classes were compiled" }
-        val stage = layout.buildDirectory.dir("plugin/staging").get().asFile.apply { deleteRecursively(); mkdirs() }
+        val stage = layout.buildDirectory.dir("plugin/staging-$artifactId").get().asFile.apply { deleteRecursively(); mkdirs() }
         val arguments = mutableListOf("--release", "--min-api", "24", "--lib", File(sdk, "platforms/android-36/android.jar").path, "--output", File(stage, "code.jar").path)
         configurations.getByName("debugRuntimeClasspath").files.forEachIndexed { index, dependency ->
             if (dependency.extension == "jar") arguments.addAll(listOf("--classpath", dependency.path))
@@ -117,13 +152,9 @@ val buildJarTask = tasks.register("buildJar") {
             }
         }
         val hostJar = File(stage, "host.jar")
-        val added = mutableSetOf<String>()
         JarOutputStream(hostJar.outputStream()).use { jar ->
-            classRoots.filter { it.exists() }.forEach { directory ->
-                fileTree(directory) { include("**/*.class"); exclude("com/coc/suncode/jar/**") }.forEach { source ->
-                    val entry = source.relativeTo(directory).invariantSeparatorsPath
-                    if (added.add(entry)) { jar.putNextEntry(JarEntry(entry)); source.inputStream().use { it.copyTo(jar) }; jar.closeEntry() }
-                }
+            allClasses.filterValues { it !in classes }.forEach { (entry, source) ->
+                jar.putNextEntry(JarEntry(entry)); source.inputStream().use { it.copyTo(jar) }; jar.closeEntry()
             }
         }
         arguments.addAll(listOf("--classpath", hostJar.path))
@@ -135,8 +166,67 @@ val buildJarTask = tasks.register("buildJar") {
         val exit = ProcessBuilder(d8.path, "@${flags.path}").redirectErrorStream(true).redirectOutput(log).start().waitFor()
         check(exit == 0) { "D8 failed; previous plugin remains intact:\n${log.readText().takeLast(12000)}" }
         val target = output.get().asFile.apply { parentFile.mkdirs() }
-        Files.move(File(stage, "code.jar").toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+        val packaged = File(stage, "packaged.jar")
+        JarOutputStream(packaged.outputStream()).use { jar ->
+            ZipFile(File(stage, "code.jar")).use { dex ->
+                dex.entries().asSequence().forEach { entry ->
+                    jar.putNextEntry(JarEntry(entry.name)); dex.getInputStream(entry).use { it.copyTo(jar) }; jar.closeEntry()
+                }
+            }
+            if (feature != null) {
+                require(featureVersion.get().toLong() > 0)
+                jar.putNextEntry(JarEntry("feature.properties"))
+                jar.write("id=$artifactId\nversion=${featureVersion.get()}\napi=1\n".toByteArray())
+                jar.closeEntry()
+            } else {
+                // A core release carries compatible fallbacks without defining their classes itself.
+                featureSpecs.forEach { spec ->
+                    val id = spec["id"] as String
+                    jar.putNextEntry(JarEntry("features/$id.jar"))
+                    layout.buildDirectory.file("plugin/features/$id.jar").get().asFile.inputStream().use { it.copyTo(jar) }
+                    jar.closeEntry()
+                }
+            }
+        }
+        Files.move(packaged.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
     }
+}
+val featureBuilds = featureSpecs.associate { it["id"] as String to registerPluginBuild(it["id"] as String, it) }
+val buildJarTask = registerPluginBuild("core", null)
+buildJarTask.configure {
+    dependsOn(featureBuilds.values)
+    inputs.files(featureBuilds.keys.map { layout.buildDirectory.file("plugin/features/$it.jar") })
+}
+tasks.register("buildFeaturePlugins") {
+    group = "build"
+    val selected = providers.gradleProperty("feature").orNull
+    require(selected == null || selected in featureBuilds) { "Unknown feature: $selected" }
+    dependsOn(if (selected == null) featureBuilds.values else listOf(featureBuilds.getValue(selected)))
+}
+
+tasks.register<Exec>("signFeaturePlugin") {
+    group = "build"
+    val selected = providers.gradleProperty("feature")
+    dependsOn("buildFeaturePlugins")
+    doFirst {
+        val id = selected.orNull ?: error("Pass -Pfeature=main_attack")
+        require(id in featureBuilds)
+        val key = providers.gradleProperty("signingKey").orNull ?: error("Pass -PsigningKey=/private/key.pem")
+        commandLine(providers.gradleProperty("python").orElse("python3").get(),
+            rootProject.file("scripts/sign_feature_plugin.py").path,
+            "--input", layout.buildDirectory.file("plugin/features/$id.jar").get().asFile.path, "--key", key)
+    }
+}
+
+// Device tests exercise the real split dex artifacts, not only the APK's bundled classes.
+val prepareFeatureTestAssets = tasks.register<Copy>("prepareFeatureTestAssets") {
+    dependsOn(buildJarTask)
+    from(layout.buildDirectory.file("plugin/code.jar"))
+    into(layout.buildDirectory.dir("generated/featureTestAssets"))
+}
+android.sourceSets.getByName("androidTest").assets.srcDir(layout.buildDirectory.dir("generated/featureTestAssets").get().asFile)
+tasks.configureEach {
+    if (name == "mergeDebugAndroidTestAssets") dependsOn(prepareFeatureTestAssets)
 }
 
 tasks.register("validateUploadJarGuard") {

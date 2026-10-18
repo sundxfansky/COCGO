@@ -11,6 +11,11 @@ import com.coc.suncode.core.data.websocket.ServerActions
 import com.coc.suncode.core.system.daemon.ServerApkInstaller
 import com.coc.suncode.core.ui.localcomponents.LocalCustomButton
 import com.coc.suncode.core.util.basic.ShowMessage
+import com.coc.suncode.interfaces.FeaturePluginClient
+import com.coc.suncode.loadjar.features.FeatureStore
+import com.coc.suncode.loadjar.features.FeatureArchive
+import com.coc.suncode.loadjar.features.readBytesLimited
+import java.util.zip.ZipInputStream
 import com.coc.suncode.interfaces.MainCode
 import com.coc.suncode.statehelper.AppMode
 import com.coc.suncode.statehelper.AppStateManager
@@ -77,7 +82,19 @@ class Loadjar(private val context: Context) {
         val installed = File(context.codeCacheDir, "plugin-$hash.jar")
         ServerApkInstaller.install(installed) { dex.inputStream() }
         val loader = PluginClassLoader(installed.path, context.codeCacheDir.path, context.classLoader)
-        publish(loader.loadClass(ENTRY).getDeclaredConstructor().newInstance() as MainCode)
+        val bundled = mutableMapOf<String, String>()
+        val featureStore = FeatureStore(context)
+        ZipInputStream(dex.inputStream()).use { zip ->
+            while (true) {
+                val entry = zip.nextEntry ?: break
+                if (!entry.name.startsWith("features/")) continue
+                val bytes = zip.readBytesLimited(FeatureArchive.LIMIT)
+                val metadata = FeatureArchive.metadata(bytes)
+                require(entry.name == "features/${metadata.id}.jar" && metadata.id !in bundled)
+                bundled[metadata.id] = featureStore.cache(bytes).path
+            }
+        }
+        publish(loader.loadClass(ENTRY).getDeclaredConstructor().newInstance() as MainCode, bundled)
         ShowMessage.record("插件加载成功：${file.name}，sha256=${hash.take(12)}，configLoaded=${GlobalVars.isConfigLoaded}")
         true
     } catch (error: Exception) {
@@ -90,7 +107,8 @@ class Loadjar(private val context: Context) {
         false
     }
 
-    private fun publish(instance: MainCode) {
+    private fun publish(instance: MainCode, bundled: Map<String, String> = emptyMap()) {
+        (instance as? FeaturePluginClient)?.initializeFeatures(context, bundled)
         // Validate the host ABI without resetting an open settings draft.
         require(instance.javaClass.getMethod("refreshConfigs", ServerActions::class.java).declaringClass != MainCode::class.java)
         val wasLoaded = GlobalVars.isConfigLoaded

@@ -1,15 +1,6 @@
 package com.coc.suncode.jar.code.builderbase
 
-import com.coc.suncode.jar.code.builderbase.attack.builderBaseAttack
-import com.coc.suncode.jar.code.builderbase.attack.builderBaseTrainWithConditions
-import com.coc.suncode.jar.code.builderbase.others.builderBaseRemoveObstacles
-import com.coc.suncode.jar.code.builderbase.others.clickOttosOutPost
-import com.coc.suncode.jar.code.builderbase.precheck.claimAchievement
-import com.coc.suncode.jar.code.builderbase.research.builderBaseResearch
-import com.coc.suncode.jar.code.builderbase.resources.collectBuilderBaseResources
-import com.coc.suncode.jar.code.universal.buildings.BaseType
-import com.coc.suncode.jar.code.universal.buildings.upgrade.upgradeBuildings
-import com.coc.suncode.jar.code.universal.buildings.walls.upgradeWalls
+import com.coc.suncode.jar.features.FeatureRuntime
 import com.coc.suncode.jar.code.universal.smalltools.enterBuilderBase
 import com.coc.suncode.jar.code.universal.smalltools.getBooleanConfigRuntime
 import com.coc.suncode.jar.ui.schema.Schema
@@ -17,18 +8,18 @@ import com.coc.suncode.jar.ui.schema.Schema
 suspend fun playBuilderBase(): Boolean {
     // The master switch also skips prechecks and auxiliary actions for this world.
     if (!getBooleanConfigRuntime(Schema.BUILDER_BASE_SETTINGS.ENABLED.key)) return true
-    if (!claimAchievement()) return false
+    if (!FeatureRuntime.run("collection", "achievements")) return false
     if (!enterBuilderBase(true)) return true
-    if (!collectBuilderBaseResources()) return false
+    if (!FeatureRuntime.run("collection", "resources")) return false
     if (!enterBuilderBase(false)) return true
-    if (!clickOttosOutPost()) return false
-    if (!builderBaseRemoveObstacles()) return false
+    if (!FeatureRuntime.run("collection", "otto")) return false
+    if (!FeatureRuntime.run("obstacles", "builder")) return false
     if (!enterBuilderBase(false)) return true
-    if (!upgradeWalls(BaseType.Builder)) return false
-    if (!upgradeBuildings(BaseType.Builder)) return false
-    if (!builderBaseResearch()) return false
+    if (!FeatureRuntime.run("upgrade", "builder_walls")) return false
+    if (!FeatureRuntime.run("upgrade", "builder_buildings")) return false
+    if (!FeatureRuntime.run("builder_research", "research")) return false
     if (!enterBuilderBase(false)) return true
-    if (!builderBaseTrainWithConditions()) return false
-    if (!builderBaseAttack()) return false
+    if (!FeatureRuntime.run("builder_attack", "train")) return false
+    if (!FeatureRuntime.run("builder_attack", "attack")) return false
     return true
 }

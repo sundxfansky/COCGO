@@ -1,5 +1,6 @@
 package com.coc.suncode.jar.code
 
+import com.coc.suncode.jar.features.FeatureRuntime
 import android.os.SystemClock
 import com.coc.suncode.core.data.database.GlobalVars
 import com.coc.suncode.core.util.basic.RunShell
@@ -10,18 +11,11 @@ import com.coc.suncode.jar.code.builderbase.playBuilderBase
 import com.coc.suncode.jar.code.mainbase.playMainBase
 import com.coc.suncode.jar.code.universal.GameVersion
 import com.coc.suncode.jar.code.universal.InGamesVars
-import com.coc.suncode.jar.code.universal.create.batchCreateAccounts
-import com.coc.suncode.jar.code.universal.enterMainScreen
 import com.coc.suncode.jar.code.universal.smalltools.StorageKeys
 import com.coc.suncode.jar.code.universal.smalltools.getConfigOrStop
 import com.coc.suncode.jar.code.universal.smalltools.readMemory
-import com.coc.suncode.jar.code.universal.smalltools.writeGameFiles
 import com.coc.suncode.jar.code.universal.smalltools.writeMemory
-import com.coc.suncode.jar.code.mainbase.clan.donateToClan
 import com.coc.suncode.core.util.fileactions.LogHelper.logAndRestart
-import com.coc.suncode.jar.code.mainbase.herohall.upgradeGearsAndPets
-import com.coc.suncode.jar.code.mainbase.others.mainBaseCheckTutorials
-import com.coc.suncode.jar.code.universal.colors.findMultiColors
 import com.coc.suncode.jar.ui.schema.Schema
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.currentCoroutineContext
@@ -31,6 +25,9 @@ import kotlinx.coroutines.isActive
 
 suspend fun runMainScript() {
     waitForPlay()
+    FeatureRuntime.reload()
+    // Login is a prerequisite; never rotate accounts or touch the game with it disabled.
+    FeatureRuntime.requireLogin()
     ShowMessage("检测到设置已更新\n即将重新运行")
     delay(200)
     // Read hot update preference and emit signal if "OnStart" mode is selected
@@ -73,22 +70,23 @@ suspend fun runMainScript() {
         )
     }
     InGamesVars.adTime = 10.coerceAtLeast(accountTotal * 8)
-    batchCreateAccounts()//Create all needed accounts first.
+    FeatureRuntime.run("account_create", "create")//Create all needed accounts first.
     // Track elapsed time for periodic hot update checks (updateOption 2)
     var lastUpdateCheckTime = System.currentTimeMillis()
     var nextUpdateInterval = (2 * 3600_000L) + (Math.random() * 3600_000L).toLong()
     while (currentCoroutineContext().isActive) {
+        FeatureRuntime.requireLogin()
 //        runTestCode()
 
         RunShell.runNoOutput("am kill-all")//clean up memory
         // Use labeled block to skip remaining steps on failure
         run stepBlock@{
-            if (!writeGameFiles()) {
+            if (!FeatureRuntime.run("login", "prepare")) {
                 delayWithMultiplier(2000)
                 return@stepBlock
             }
 
-            if (!enterMainScreen(true)) {
+            if (!FeatureRuntime.run("login", "enter")) {
                 ShowMessage("进入游戏失败")
                 return@stepBlock
             }
@@ -130,7 +128,7 @@ suspend fun runMainScript() {
 
 private suspend fun runTestCode() {
     while (true) {
-        upgradeGearsAndPets()
+        FeatureRuntime.run("heroes", "upgrade")
 //        ShowMessage(findMultiColors(MyColors.ElectroOwl).toString())
         delay(1000000)
     }

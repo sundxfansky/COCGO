@@ -89,3 +89,7 @@
 
 # Preserve the plugin entry point used by DexClassLoader and bundled fallback.
 -keep class com.coc.suncode.jar.ui.EnterMainCode { *; }
+
+# Feature implementations are selected reflectively, including APK fallback classes.
+-keep class com.coc.suncode.loadjar.** { *; }
+-keep class com.coc.suncode.jar.** { *; }

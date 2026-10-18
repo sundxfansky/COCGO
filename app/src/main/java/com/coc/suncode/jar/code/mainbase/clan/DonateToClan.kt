@@ -1,5 +1,6 @@
 package com.coc.suncode.jar.code.mainbase.clan
 
+import com.coc.suncode.jar.features.FeatureRuntime
 import com.coc.suncode.core.system.screencapture.ScreenCaptureManager
 import com.coc.suncode.core.util.basic.ShowMessage
 import com.coc.suncode.core.util.basic.delayWithMultiplier
@@ -12,7 +13,6 @@ import com.coc.suncode.jar.code.universal.buildings.BaseType
 import com.coc.suncode.jar.code.universal.buildings.walls.calculateResourcesPercentage
 import com.coc.suncode.jar.code.universal.clickRightBottom
 import com.coc.suncode.jar.code.universal.colors.findMultiColors
-import com.coc.suncode.jar.code.mainbase.attack.mainBaseAttack
 import com.coc.suncode.jar.code.universal.enterMainScreen
 import com.coc.suncode.jar.code.universal.smalltools.checkReconnections
 import com.coc.suncode.jar.code.universal.smalltools.getBooleanConfigRuntime
@@ -112,7 +112,7 @@ suspend fun donateToClan(): Boolean {
             if (timeSinceLastBattle >= 3 * 60 * 1000L) {
                 ShowMessage("账号${InGamesVars.currentAccountNumber}，资源不足，开始刷资源\n圣水：${resources.elixir}%，暗黑重油：${if (isDarkElixirUnlocked) "$darkElixirPercentage%" else "未解锁"}")
                 if (!enterMainScreen()) return false
-                if (!mainBaseAttack()) return false
+                if (!FeatureRuntime.run("main_attack", "attack")) return false
                 lastBattleTime = System.currentTimeMillis()
             }
         }

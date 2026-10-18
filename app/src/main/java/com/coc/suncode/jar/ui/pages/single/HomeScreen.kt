@@ -265,6 +265,9 @@ fun HomeScreen(
                         CloudSettings()
                     }
                     item {
+                        FeaturePluginsSettings()
+                    }
+                    item {
                         SettingSection {
                             BatchCreateAccount()
                         }

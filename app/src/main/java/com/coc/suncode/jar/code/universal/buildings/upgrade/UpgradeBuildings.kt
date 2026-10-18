@@ -28,9 +28,6 @@ import kotlin.math.sqrt
 private val upgradableBuildingsMap = ALL_BUILDINGS.associateWith { false }.toMutableMap()
 private var zoomOrNot: Boolean = true
 
-enum class BuildButtonType {
-    Tick, Cross
-}
 
 suspend fun upgradeBuildings(currentBase: BaseType): Boolean {
     if (currentBase == BaseType.Builder) {
