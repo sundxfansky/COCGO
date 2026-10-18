@@ -1,10 +1,8 @@
 package com.coc.suncode.jar.ui.pages.single
 
 import android.content.Context
-import android.graphics.BitmapFactory
 import android.os.Environment
 import com.coc.suncode.core.util.fileactions.SavePath
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -32,7 +30,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
@@ -64,16 +61,6 @@ fun SwitchAccount(onClose: () -> Unit) {
         sharedPreferences.edit { putString("accountNumber", accountNumber) }
     }
 
-    val imageBitmap = remember {
-        try {
-            context.assets.open("switch_explain.png").use {
-                BitmapFactory.decodeStream(it).asImageBitmap()
-            }
-        } catch (_: Exception) {
-            null
-        }
-    }
-
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -83,25 +70,12 @@ fun SwitchAccount(onClose: () -> Unit) {
 
         ) {
         Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-            // Top Text aligned to start
+            // Describe the current toolbar instead of showing the obsolete switch-picker icon.
             Text(
-                text = "小提示：在悬浮窗点击此按钮，即可回到切号工具。", color = Color.Black, modifier = Modifier
+                text = "运行时可通过悬浮工具条的 ⬆️ / ⬇️ 直接切换相邻账号，切号后辅助保持暂停。", color = Color.Black, modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 8.dp)
             )
-
-            // Image
-            if (imageBitmap != null) {
-                Image(
-                    bitmap = imageBitmap, contentDescription = "Switch Explain", modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 8.dp)
-                )
-            } else {
-                Text(
-                    text = "Image 'switch_explain.png' not found", color = Color.Red, modifier = Modifier.padding(bottom = 8.dp)
-                )
-            }
 
             // Divider
             HorizontalDivider(
