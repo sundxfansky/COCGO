@@ -18,6 +18,7 @@ import com.coc.suncode.jar.code.universal.ocr.PpOcrEngine
 import java.io.IOException
 import java.io.File
 import java.security.MessageDigest
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
@@ -31,6 +32,7 @@ internal class QqToolBackend(private val context: Context) : QqGameBackend, QqRe
         const val GAME = "com.tencent.tmgp.supercell.clashofclans"
         const val GAME_ACTIVITY = "com.supercell.titan.tencent.GameAppTencent"
         private const val CERTIFICATE = "a40da80a59d170caa950cf15c18c454d47a39b26989d8b640ecd745ba71bf5dc"
+        private const val BUNDLED_APK_ASSET = "qq/authorization-tool-v1.4.apk"
         fun quote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
     }
 
@@ -41,12 +43,17 @@ internal class QqToolBackend(private val context: Context) : QqGameBackend, QqRe
     private var gameDataDir = ""
 
     @Suppress("DEPRECATION")
-    fun verifyTool() {
+    suspend fun verifyTool() = withContext(Dispatchers.IO) {
         val pm = context.packageManager
         val info = try {
             pm.getPackageInfo(PACKAGE, if (Build.VERSION.SDK_INT >= 28) PackageManager.GET_SIGNING_CERTIFICATES else PackageManager.GET_SIGNATURES)
         } catch (_: PackageManager.NameNotFoundException) {
-            throw IOException("请先安装 QQ授权工具v1.4；它与正式 QQ 使用相同包名")
+            installBundledTool()
+            try {
+                pm.getPackageInfo(PACKAGE, if (Build.VERSION.SDK_INT >= 28) PackageManager.GET_SIGNING_CERTIFICATES else PackageManager.GET_SIGNATURES)
+            } catch (_: PackageManager.NameNotFoundException) {
+                throw IOException("Root 安装已完成，但未检测到 QQ 授权工具")
+            }
         }
         // Never stop or rewrite an official QQ installation which happens to share the package name.
         if (!hasToolSignature(info)) throw IOException("已安装的 QQ 包不是已分析的授权工具，未执行操作")
@@ -56,6 +63,17 @@ internal class QqToolBackend(private val context: Context) : QqGameBackend, QqRe
         dataDir = application.dataDir
         uid = application.uid
         ShowMessage.record("QQ 授权工具校验通过：uid=$uid，dataDir=$dataDir")
+    }
+
+    /** Install the bundled companion only when its package is absent; never replace another QQ app. */
+    private suspend fun installBundledTool() {
+        ShowMessage("未安装 QQ 授权工具，正在通过 Root 安装内置版本", isChecking = false)
+        QqToolInstaller(
+            cacheDirectory = context.cacheDir,
+            openApk = { context.assets.open(BUNDLED_APK_ASSET) },
+            execute = { ServerShell.exec(it) }
+        ).install(user)
+        ShowMessage.record("Root 已安装内置 QQ 授权工具")
     }
 
     @Suppress("DEPRECATION")
