@@ -22,7 +22,9 @@ class QqToolInstallerTest {
             calls++
             val staged = cache.listFiles()!!.single()
             assertTrue(staged.readBytes().contentEquals(bundledApk.readBytes()))
-            assertTrue(command.startsWith("pm install -R --user 10 -S ${bundledApk.length()} - < '"))
+            assertTrue(command.contains("pm install -R --user 10 -S ${bundledApk.length()} '/data/local/tmp/sun-qq-"))
+            assertTrue(command.contains("cp '"))
+            assertTrue(command.contains("rm -f -- '/data/local/tmp/sun-qq-"))
             assertTrue(command.contains("private cache"))
             ServerShell.Result(0, listOf("Success"))
         }.install(10)

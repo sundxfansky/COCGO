@@ -6,8 +6,9 @@ import java.io.File
 import java.io.IOException
 import java.io.InputStream
 import java.security.MessageDigest
+import java.util.concurrent.atomic.AtomicLong
 
-/** Stage only in private storage; all package installation is delegated to the host root pipe. */
+/** Read bundled assets in private storage; external staging and installation use the host Root pipe. */
 internal class QqToolInstaller(
     private val cacheDirectory: File,
     private val openApk: () -> InputStream,
@@ -15,6 +16,7 @@ internal class QqToolInstaller(
 ) {
     companion object {
         const val APK_SHA256 = "d90d7c9b9116f8d5f1dfb27dc3ad3a9312640766380384f80601c8b8c38e0731"
+        private val installSequence = AtomicLong()
     }
 
     suspend fun install(user: Int) {
@@ -36,9 +38,15 @@ internal class QqToolInstaller(
             if (digest.digest().joinToString("") { "%02x".format(it) } != APK_SHA256) {
                 throw IOException("内置 QQ 授权工具校验失败，已取消安装")
             }
-            // Root opens the private file; PackageManager consumes stdin without requiring file access.
+            // Some Android package-manager shells reject '-' as an install source. Copy the
+            // verified APK through the existing Root pipe to a temporary package-manager-readable path,
+            // then install by path and remove it in the same shell transaction.
+            val remote = "/data/local/tmp/sun-qq-${System.currentTimeMillis()}-${installSequence.incrementAndGet()}.apk"
             // Explicitly disable replacement, including packages installed concurrently or for another user.
-            val command = "pm install -R --user $user -S ${staged.length()} - < ${quote(staged.absolutePath)}"
+            val command = "cp ${quote(staged.absolutePath)} ${quote(remote)} && " +
+                "chmod 644 ${quote(remote)} && " +
+                "pm install -R --user $user -S ${staged.length()} ${quote(remote)}; " +
+                "status=\$?; rm -f -- ${quote(remote)}; exit \$status"
             val result = execute(command)
             if (!result.isSuccess || result.out.none { it.trim() == "Success" }) {
                 val detail = result.out.joinToString(" ").trim().take(240)
