@@ -1,5 +1,8 @@
 package com.coc.suncode.core.qq
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Process
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -39,9 +42,41 @@ class QqToolInstallationTest {
                 val remote = Regex("/data/local/tmp/sun-qq-[a-zA-Z0-9-]+\\.apk").find(commands.single())!!.value
                 assertTrue(ServerShell.exec("[ ! -e '$remote' ]").isSuccess)
             }
+            // Validate identity before changing permissions on a package shared with official QQ.
+            QqToolBackend(context).verifyTool()
+            // Simulate a clean install so verifyTool proves that Root repairs grants before launch.
+            val permissions = mutableListOf(
+                Manifest.permission.READ_EXTERNAL_STORAGE,
+                Manifest.permission.WRITE_EXTERNAL_STORAGE
+            )
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                permissions += listOf(Manifest.permission.POST_NOTIFICATIONS,
+                    Manifest.permission.READ_MEDIA_AUDIO, Manifest.permission.READ_MEDIA_VIDEO,
+                    Manifest.permission.READ_MEDIA_IMAGES)
+            }
+            val revoke = permissions.joinToString(" && ") { permission ->
+                "pm revoke --user ${Process.myUid() / 100_000} ${QqToolBackend.PACKAGE} $permission"
+            }
+            assertTrue(ServerShell.exec(revoke).isSuccess)
             // This validates the real installed signature and exported entry without resetting game data.
             QqToolBackend(context).verifyTool()
             QqToolBackend(context).verifyTool()
+            // Verification must prepare runtime grants without opening a permission activity.
+            assertEquals(PackageManager.PERMISSION_GRANTED, context.packageManager.checkPermission(
+                Manifest.permission.READ_EXTERNAL_STORAGE, QqToolBackend.PACKAGE
+            ))
+            assertEquals(PackageManager.PERMISSION_GRANTED, context.packageManager.checkPermission(
+                Manifest.permission.WRITE_EXTERNAL_STORAGE, QqToolBackend.PACKAGE
+            ))
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                for (permission in listOf(Manifest.permission.POST_NOTIFICATIONS,
+                    Manifest.permission.READ_MEDIA_AUDIO, Manifest.permission.READ_MEDIA_VIDEO,
+                    Manifest.permission.READ_MEDIA_IMAGES)) {
+                    assertEquals(PackageManager.PERMISSION_GRANTED, context.packageManager.checkPermission(
+                        permission, QqToolBackend.PACKAGE
+                    ))
+                }
+            }
         } finally {
             actions.sendActionSync(mapOf("actionType" to "file_action", "subAction" to "delete", "path" to directory.path))
             GlobalVars.serverActions = previous

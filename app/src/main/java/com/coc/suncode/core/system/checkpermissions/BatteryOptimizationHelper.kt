@@ -1,13 +1,11 @@
 package com.coc.suncode.core.system.checkpermissions
 
 import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import android.os.PowerManager
-import android.provider.Settings
 import android.util.Log
 import com.coc.suncode.core.util.basic.ShowMessage
-import com.topjohnwu.superuser.Shell
+import com.coc.suncode.core.util.basic.ServerShell
+import kotlinx.coroutines.CancellationException
 
 object BatteryOptimizationHelper {
     /**
@@ -18,30 +16,28 @@ object BatteryOptimizationHelper {
         return powerManager.isIgnoringBatteryOptimizations(context.packageName)
     }
 
-    /**
-     * Use root access to add to whitelist. If still false, then start an intent ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS.
-     */
-    fun requestIgnoreBatteryOptimizations(context: Context) {
+    /** Add the package to the device-idle whitelist without opening a settings screen. */
+    suspend fun requestIgnoreBatteryOptimizations(context: Context): Boolean {
         val packageName = context.packageName
-        if (!isIgnoringBatteryOptimizations(context)) {
-            // Try with root first
-            Shell.cmd(
-                "dumpsys deviceidle whitelist +$packageName",
-                "cmd deviceidle whitelist +$packageName"
-            ).exec()
-
-            // Check again. If still false, then start an intent ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
-            if (!isIgnoringBatteryOptimizations(context)) {
-                try {
-                    val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                        data = Uri.parse("package:$packageName")
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    }
-                    context.startActivity(intent)
-                } catch (e: Exception) {
-                    ShowMessage.record("Failed to request battery optimization exemption", Log.ERROR, throwable = e)
-                }
+        if (isIgnoringBatteryOptimizations(context)) return true
+        return try {
+            // Root can update device-idle state directly; no user-facing settings activity is needed.
+            val result = ServerShell.exec(
+                "cmd deviceidle whitelist +$packageName || dumpsys deviceidle whitelist +$packageName"
+            )
+            val granted = isIgnoringBatteryOptimizations(context)
+            if (!granted) {
+                ShowMessage.record(
+                    "Root 未能加入电池优化白名单：${result.out.joinToString(" ").take(240)}",
+                    Log.ERROR
+                )
             }
+            granted
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            ShowMessage.record("Root 设置电池优化白名单失败", Log.ERROR, throwable = error)
+            false
         }
     }
 }

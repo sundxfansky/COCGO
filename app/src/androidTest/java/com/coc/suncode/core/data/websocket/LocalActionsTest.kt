@@ -1,6 +1,16 @@
 package com.coc.suncode.core.data.websocket
 
+import android.Manifest
+import android.content.ComponentName
+import android.content.pm.PackageManager
+import android.os.Build
+import android.os.Process
+import android.os.PowerManager
+import android.provider.Settings
 import android.os.Environment
+import androidx.core.app.NotificationManagerCompat
+import com.coc.suncode.core.system.accessibility.MyAccessibilityService
+import com.coc.suncode.core.system.inputmethod.SunInputMethodService
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.coc.suncode.core.data.database.GlobalVars
@@ -90,7 +100,50 @@ class LocalActionsTest {
             val previous = GlobalVars.serverActions
             try {
                 val context = InstrumentationRegistry.getInstrumentation().targetContext
+                val previousServices = Settings.Secure.getString(
+                    context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+                ).orEmpty().split(':').filter { it.isNotBlank() }
+                val previousKeyboard = Settings.Secure.getString(
+                    context.contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD
+                )
                 assertEquals(RootStatus.GRANTED, PermissionManager.checkAndGrantPermissions(context) {})
+                assertTrue(Settings.canDrawOverlays(context))
+                assertTrue(NotificationManagerCompat.from(context).areNotificationsEnabled())
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    assertTrue(Environment.isExternalStorageManager())
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    assertEquals(PackageManager.PERMISSION_GRANTED, context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS))
+                }
+                val power = context.getSystemService(PowerManager::class.java)
+                assertTrue(power.isIgnoringBatteryOptimizations(context.packageName))
+                val enabledServices = Settings.Secure.getString(
+                    context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+                ).split(':')
+                assertTrue(enabledServices.containsAll(previousServices))
+                assertTrue(enabledServices.any {
+                    ComponentName.unflattenFromString(it) == ComponentName(context, MyAccessibilityService::class.java)
+                })
+                assertEquals(previousKeyboard, Settings.Secure.getString(
+                    context.contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD
+                ))
+                val enabledImes = Settings.Secure.getString(
+                    context.contentResolver, Settings.Secure.ENABLED_INPUT_METHODS
+                ).split(':')
+                assertTrue(enabledImes.any {
+                    ComponentName.unflattenFromString(it.substringBefore(';')) == ComponentName(context, SunInputMethodService::class.java)
+                })
+                val user = Process.myUid() / 100_000
+                val projection = ServerShell.exec("cmd appops get --user $user ${context.packageName} PROJECT_MEDIA")
+                assertTrue(projection.isSuccess)
+                assertTrue(projection.out.any { it.trim().startsWith("PROJECT_MEDIA: allow") })
+                // Repeated grants must leave the same backend alive and preserve enabled services.
+                val readyActions = GlobalVars.serverActions
+                assertEquals(RootStatus.GRANTED, PermissionManager.checkAndGrantPermissions(context) {})
+                assertTrue(readyActions === GlobalVars.serverActions)
+                assertEquals(enabledServices, Settings.Secure.getString(
+                    context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+                ).split(':'))
                 assertNotNull(GlobalVars.serverActions)
                 assertTrue(GlobalVars.serverActions!!.awaitReady())
                 val processCheck = ServerShell.exec("ps -A -o ARGS | grep '[c]om.coc.sunserver.ShellServer'")

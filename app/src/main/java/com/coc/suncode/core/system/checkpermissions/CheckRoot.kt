@@ -1,8 +1,6 @@
 package com.coc.suncode.core.system.checkpermissions
 
 import android.content.Intent
-import android.net.Uri
-import android.provider.Settings
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,7 +16,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -48,7 +45,8 @@ import com.coc.suncode.core.ui.floatingwindows.UIWindowService
 import com.coc.suncode.core.ui.localcomponents.LocalCustomButton
 import com.coc.suncode.statehelper.AppMode
 import com.coc.suncode.statehelper.AppStateManager
-import com.topjohnwu.superuser.Shell
+import android.os.Process
+import com.coc.suncode.core.util.basic.ServerShell
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -60,7 +58,7 @@ fun CheckRootScreen() {
     var checkRequest by remember { mutableIntStateOf(0) }
     val retryRootCheck by rememberUpdatedState(newValue = {
         // Update status immediately to prevent duplicate checks from resume and button events.
-        if (status == RootStatus.ROOT_DENIED || status == RootStatus.LOCAL_ERROR) {
+        if (status == RootStatus.ROOT_DENIED || status == RootStatus.PERMISSION_DENIED || status == RootStatus.LOCAL_ERROR) {
             status = RootStatus.CHECKING
             checkRequest++
         }
@@ -77,7 +75,8 @@ fun CheckRootScreen() {
         // Finish blocking preparation off the UI thread, then open the main window once.
         withContext(Dispatchers.IO) {
             if (GlobalVars.defaultInputMethod == null) {
-                val result = Shell.cmd("settings get secure default_input_method").exec()
+                val user = Process.myUid() / 100_000
+                val result = ServerShell.exec("settings --user $user get secure default_input_method")
                 if (result.isSuccess) GlobalVars.defaultInputMethod = result.out.firstOrNull()
             }
         }
@@ -90,7 +89,7 @@ fun CheckRootScreen() {
         (context as? MainActivity)?.requestMediaProjection()
     }
 
-    // Recheck after the user returns from granting access in their root manager.
+    // Recheck after Root becomes available or a transient grant operation fails.
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
@@ -133,18 +132,10 @@ fun CheckRootScreen() {
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 FullScreenMessage(
-                    "Root 授权成功，但仍需手动开启悬浮窗和通知权限。开启后请重启软件 。"
+                    "Root 自动授权失败，请查看日志或重试自动授权。"
                 )
                 Spacer(modifier = Modifier.height(16.dp))
-                Button(onClick = {
-                    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                        data = Uri.fromParts("package", context.packageName, null)
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    }
-                    context.startActivity(intent)
-                }) {
-                    Text("去设置中心开启")
-                }
+                LocalCustomButton(text = "重试自动授权", onClick = retryRootCheck)
             }
         }
 

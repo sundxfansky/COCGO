@@ -20,7 +20,7 @@ import android.util.DisplayMetrics
 import android.view.WindowManager
 import androidx.activity.result.ActivityResultLauncher
 import androidx.core.graphics.createBitmap
-import com.coc.suncode.core.system.accessibility.MyAccessibilityService
+import com.coc.suncode.core.util.basic.ShowMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -157,10 +157,12 @@ object ScreenCaptureManager {
             reset()
         }
 
-        // Keep the accessibility logic here
-        // Root shell calls and the accessibility rebind delay must not block startup rendering.
-        withContext(Dispatchers.IO) { AutoGrantTool.forceEnableAccessibility() }
-        MyAccessibilityService.isDetectionEnabled = true
+        // Do not launch a consent dialog if the Root grant failed.
+        val context = appContext ?: return
+        if (!RootProjectionPermission.grant(context)) {
+            ShowMessage("Root 屏幕捕获授权失败，请重试", isChecking = false)
+            return
+        }
 
         mediaProjectionManager?.let {
             val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {

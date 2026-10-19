@@ -1,5 +1,6 @@
 package com.coc.suncode.core.qq
 
+import android.Manifest
 import android.content.ComponentName
 import android.content.Context
 import android.content.pm.PackageManager
@@ -62,7 +63,39 @@ internal class QqToolBackend(private val context: Context) : QqGameBackend, QqRe
         val application = pm.getApplicationInfo(PACKAGE, 0)
         dataDir = application.dataDir
         uid = application.uid
+        // Grant only the verified companion's declared runtime permissions before opening its UI.
+        grantToolPermissions(application.targetSdkVersion)
         ShowMessage.record("QQ 授权工具校验通过：uid=$uid，dataDir=$dataDir")
+    }
+
+    @Suppress("DEPRECATION")
+    private suspend fun grantToolPermissions(targetSdk: Int) {
+        val requested = context.packageManager.getPackageInfo(PACKAGE, PackageManager.GET_PERMISSIONS)
+            .requestedPermissions.orEmpty().toSet()
+        val permissions = mutableListOf<String>()
+        // This companion targets Android 10, where storage runtime grants still apply on newer OSes.
+        if (Build.VERSION.SDK_INT < 33 || targetSdk < 33) permissions += Manifest.permission.READ_EXTERNAL_STORAGE
+        if (Build.VERSION.SDK_INT < 30 || targetSdk < 30) permissions += Manifest.permission.WRITE_EXTERNAL_STORAGE
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissions += listOf(
+                Manifest.permission.POST_NOTIFICATIONS,
+                Manifest.permission.READ_MEDIA_AUDIO,
+                Manifest.permission.READ_MEDIA_VIDEO,
+                Manifest.permission.READ_MEDIA_IMAGES
+            )
+        }
+        val declared = permissions.filter { it in requested }
+        val commands = declared.flatMap { permission ->
+            listOf(
+                "pm clear-permission-flags --user $user $PACKAGE $permission user-set user-fixed",
+                "pm grant --user $user $PACKAGE $permission"
+            )
+        } + "cmd appops set --user $user $PACKAGE POST_NOTIFICATION allow"
+        shell(commands.joinToString(" && "))
+        if (declared.any { context.packageManager.checkPermission(it, PACKAGE) != PackageManager.PERMISSION_GRANTED }) {
+            throw IOException("Root 未能授予 QQ 授权工具权限，已停止启动")
+        }
+        ShowMessage.record("Root 已自动授予 QQ 授权工具的存储、媒体和通知权限")
     }
 
     /** Install the bundled companion only when its package is absent; never replace another QQ app. */
