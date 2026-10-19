@@ -22,7 +22,7 @@ suspend fun batchCreateAccounts() {
     val globalPackageName = GameVersion.GLOBAL.packageName
 
     for (i in startID..endID) {
-        val path = "${Environment.getExternalStorageDirectory().path}/sunFiles/zkqGlobalGameSave/$i"
+        val path = "${Environment.getExternalStorageDirectory().path}/sunFiles/sunGlobalGameSave/$i"
         // Check if the folder exists using shell command
         val exists = RunShell.runAndGetFirst("[ -d \"$path\" ] && echo true || echo false")
         if (exists != "true") {

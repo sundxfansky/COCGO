@@ -116,9 +116,9 @@ class RuntimeAccountSwitchTest {
 
     @Test
     fun exactNeighboursRequireSavesAndNeverSkipAGap() = runBlocking {
-        transport.addSave("zkqCNGameSave", "save-1")
+        transport.addSave("sunCNGameSave", "save-1")
         assertEquals(AccountSwitchState(previousAccount = 1), RuntimeAccountSwitch.state())
-        transport.addSave("zkqCNGameSave", "save-3")
+        transport.addSave("sunCNGameSave", "save-3")
         assertEquals(AccountSwitchState(1, 3), RuntimeAccountSwitch.state())
         InGamesVars.currentAccountNumber = 1
         assertEquals(AccountSwitchState(), RuntimeAccountSwitch.state())
@@ -131,7 +131,7 @@ class RuntimeAccountSwitchTest {
         withTimeout(5000) {
             setConfig("game_version3", "1")
             setConfig("global_path3", "global-target")
-            transport.addSave("zkqGlobalGameSave", "global-target")
+            transport.addSave("sunGlobalGameSave", "global-target")
             assertTrue(RuntimeAccountSwitch.switchTo(3))
             assertEquals(3, InGamesVars.currentAccountNumber)
             assertEquals(GameVersion.GLOBAL, InGamesVars.currentGameVersion)
@@ -145,7 +145,7 @@ class RuntimeAccountSwitchTest {
 
     @Test
     fun cnRestoreIncludesDatabasesAndPersistsThePreviousAccount() = runBlocking {
-        transport.addSave("zkqCNGameSave", "save-1")
+        transport.addSave("sunCNGameSave", "save-1")
         assertTrue(RuntimeAccountSwitch.switchTo(1))
         assertEquals("1", transport.memory.get("accountNumber").asString)
         assertTrue(transport.commands.any { it.contains("cp -R") && it.contains("save-1/databases/.") })
@@ -154,7 +154,7 @@ class RuntimeAccountSwitchTest {
 
     @Test
     fun deletedSaveIsRecheckedBeforeStoppingTheGame() = runBlocking {
-        transport.addSave("zkqCNGameSave", "save-3")
+        transport.addSave("sunCNGameSave", "save-3")
         assertEquals(3, RuntimeAccountSwitch.state().nextAccount)
         transport.directories.clear()
         assertFalse(RuntimeAccountSwitch.switchTo(3))
@@ -165,7 +165,7 @@ class RuntimeAccountSwitchTest {
 
     @Test
     fun copyFailureDoesNotLaunchOrAdvanceTheAccount() = runBlocking {
-        transport.addSave("zkqCNGameSave", "save-3")
+        transport.addSave("sunCNGameSave", "save-3")
         transport.failPrefix = "cp -R"
         assertFalse(RuntimeAccountSwitch.switchTo(3))
         assertFalse(transport.commands.any { it.startsWith("am start") })
@@ -176,8 +176,8 @@ class RuntimeAccountSwitchTest {
 
     @Test
     fun incompleteSaveDoesNotClearGameData() = runBlocking {
-        transport.addSave("zkqCNGameSave", "save-3")
-        transport.directories.remove("${transport.sdPath}/sunFiles/zkqCNGameSave/save-3/databases")
+        transport.addSave("sunCNGameSave", "save-3")
+        transport.directories.remove("${transport.sdPath}/sunFiles/sunCNGameSave/save-3/databases")
         assertFalse(RuntimeAccountSwitch.switchTo(3))
         assertFalse(transport.commands.any { it.startsWith("rm ") || it.startsWith("cp ") || it.startsWith("am start") })
     }
@@ -188,11 +188,11 @@ class RuntimeAccountSwitchTest {
         setConfig("create_start_id", "10")
         setConfig("create_end_id", "12")
         InGamesVars.currentAccountNumber = 10
-        transport.addSave("zkqGlobalGameSave", "9")
-        transport.addSave("zkqGlobalGameSave", "11")
+        transport.addSave("sunGlobalGameSave", "9")
+        transport.addSave("sunGlobalGameSave", "11")
         assertEquals(AccountSwitchState(nextAccount = 11), RuntimeAccountSwitch.state())
         InGamesVars.currentAccountNumber = 12
-        transport.addSave("zkqGlobalGameSave", "13")
+        transport.addSave("sunGlobalGameSave", "13")
         assertEquals(AccountSwitchState(previousAccount = 11), RuntimeAccountSwitch.state())
     }
 

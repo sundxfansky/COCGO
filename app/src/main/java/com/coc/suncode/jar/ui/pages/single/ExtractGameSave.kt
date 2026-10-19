@@ -41,13 +41,13 @@ private enum class GameVariant(
 ) {
     CN(
         settingKey = GLOBAL_SETTINGS.EXTRACT_CN.key,
-        folderName = "zkqCNGameSave",
+        folderName = "sunCNGameSave",
         packageName = "com.tencent.tmgp.supercell.clashofclans",
         targetSubDirs = listOf("shared_prefs", "databases")
     ),
     GLOBAL(
         settingKey = GLOBAL_SETTINGS.EXTRACT_GLOBAL.key,
-        folderName = "zkqGlobalGameSave",
+        folderName = "sunGlobalGameSave",
         packageName = "com.supercell.clashofclans",
         targetSubDirs = listOf("shared_prefs")
     )
@@ -85,10 +85,10 @@ fun ExtractGameSaveContent() {
             val sdPath = Environment.getExternalStorageDirectory().path
 
             // [Modification] Base directory added a layer of sunFiles
-            // Path becomes: /sdcard/sunFiles/zkqCNGameSave
+            // Path becomes: /sdcard/sunFiles/sunCNGameSave
             val gameRootDir = "$sdPath/sunFiles/${variant.folderName}"
 
-            // Specific path for this save (e.g., /sdcard/sunFiles/zkqCNGameSave/001)
+            // Specific path for this save (e.g., /sdcard/sunFiles/sunCNGameSave/001)
             val targetSaveDir = "$gameRootDir/$suffix"
 
             // 1. Check if save already exists (use Shell to check shared_prefs folder)
@@ -101,7 +101,7 @@ fun ExtractGameSaveContent() {
             showMsg("提取中...")
 
             // 2. Ensure directory structure exists
-            // mkdir -p will recursively create directories: if sunFiles doesn't exist it will be created, if zkqCNGameSave doesn't exist it will also be created
+            // mkdir -p will recursively create directories: if sunFiles doesn't exist it will be created, if sunCNGameSave doesn't exist it will also be created
             ServerShell.exec("mkdir -p \"$gameRootDir\"")
 
             // Create directory for this save

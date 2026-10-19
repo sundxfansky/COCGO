@@ -101,7 +101,7 @@ private suspend fun checkPrivacy() {
 suspend fun reExtractGameSavings() {
     // 1. Configuration items
     val packageName = "com.supercell.clashofclans"
-    val folderName = "zkqGlobalGameSave"
+    val folderName = "sunGlobalGameSave"
     val targetSubDirs = listOf("shared_prefs")
 
     // 2. Environment path preparation

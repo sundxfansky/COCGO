@@ -1,4 +1,4 @@
-# ZKQbuilding — Detector Inference Service for Android
+# building — Detector Inference Service for Android
 
 **Version:** 1.11
 

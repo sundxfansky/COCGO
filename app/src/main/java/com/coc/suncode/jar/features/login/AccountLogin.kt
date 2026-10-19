@@ -42,7 +42,7 @@ suspend fun loginConfiguredAccount(context: Context, index: Int): AccountLoginRe
                 val save = getConfigOrStop("${if (cn) ACCOUNT_SETTINGS.CN_PATH.key else ACCOUNT_SETTINGS.GLOBAL_PATH.key}$index")
                 check(ServerShell.exec("am force-stop ${version.packageName}").isSuccess)
                 if (!writeGameFilesCore(
-                    version.packageName, save, if (cn) "zkqCNGameSave" else "zkqGlobalGameSave",
+                    version.packageName, save, if (cn) "sunCNGameSave" else "sunGlobalGameSave",
                     if (cn) listOf("shared_prefs", "databases") else listOf("shared_prefs"), killGame = false
                 )) return AccountLoginResult.FAILED
             }

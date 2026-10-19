@@ -46,8 +46,8 @@ suspend fun writeGameFiles(): Boolean {
     val version = InGamesVars.currentGameVersion
 
     val (folderName, subDirs) = when (version) {
-        GameVersion.CN -> "zkqCNGameSave" to listOf("shared_prefs", "databases")
-        GameVersion.GLOBAL -> "zkqGlobalGameSave" to listOf("shared_prefs")
+        GameVersion.CN -> "sunCNGameSave" to listOf("shared_prefs", "databases")
+        GameVersion.GLOBAL -> "sunGlobalGameSave" to listOf("shared_prefs")
         // nothing to write
         else -> return true
     }

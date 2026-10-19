@@ -15,7 +15,7 @@ pub extern "system" fn JNI_OnLoad(vm: JavaVM, _reserved: *mut c_void) -> jint {
     android_logger::init_once(
         Config::default()
             .with_max_level(LevelFilter::Info) // Filter out verbose internal logs
-            .with_tag("zkq_rust"), // More unique tag
+            .with_tag("sun_rust"), // More unique tag
     );
 
     log::info!("Rust logging system initialized successfully!");

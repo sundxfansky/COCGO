@@ -17,7 +17,7 @@ object RuntimeAccountSwitch {
         val version: GameVersion,
         val name: String
     ) {
-        val folder get() = if (version == GameVersion.CN) "zkqCNGameSave" else "zkqGlobalGameSave"
+        val folder get() = if (version == GameVersion.CN) "sunCNGameSave" else "sunGlobalGameSave"
         val subDirs get() = if (version == GameVersion.CN) listOf("shared_prefs", "databases") else listOf("shared_prefs")
         val source get() = "${Environment.getExternalStorageDirectory().path}/sunFiles/$folder/$name"
     }

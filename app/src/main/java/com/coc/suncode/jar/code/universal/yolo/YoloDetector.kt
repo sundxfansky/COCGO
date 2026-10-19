@@ -8,7 +8,7 @@ import com.coc.suncode.core.util.basic.ShowMessage
 import com.coc.suncode.jar.code.universal.yolo.local.LocalYoloEngine
 import kotlin.coroutines.cancellation.CancellationException
 
-/** Compatibility facade replacing the former com.coc.zkqyolo HTTP service. */
+/** Compatibility facade replacing the former com.coc.sunyolo HTTP service. */
 object YoloDetector {
     @Volatile
     private var initialized = false

@@ -37,7 +37,7 @@ fun getGameFilePath(): String {
  *
  * @param packageName  Game package name (e.g. "com.supercell.clashofclans")
  * @param savePathName Archive folder suffix identifying the account save (e.g. "001")
- * @param folderName   Top-level archive folder on SD card (e.g. "zkqGlobalGameSave")
+ * @param folderName   Top-level archive folder on SD card (e.g. "sunGlobalGameSave")
  * @param subDirs      Subdirectories to copy (e.g. ["shared_prefs", "databases"])
  */
 @SuppressLint("SdCardPath")
