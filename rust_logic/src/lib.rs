@@ -59,6 +59,11 @@ pub extern "system" fn JNI_OnLoad(vm: JavaVM, _reserved: *mut c_void) -> jint {
             sig: "(Ljava/nio/ByteBuffer;IIIIIIIII[III)[I".into(),
             fn_ptr: color::multi_colors_raw::find_multi_colors_raw as *mut c_void,
         },
+        NativeMethod {
+            name: "findBlockTemplateRaw".into(),
+            sig: "(Ljava/nio/ByteBuffer;IIIIIIIIII[ID)[I".into(),
+            fn_ptr: color::block_match_raw::find_block_template_raw as *mut c_void,
+        },
     ];
 
     // Execute registration

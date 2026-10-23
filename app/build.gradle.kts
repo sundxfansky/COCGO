@@ -124,6 +124,9 @@ fun registerPluginBuild(artifactId: String, feature: Map<String, Any>?) = tasks.
     inputs.file("src/main/assets/feature-plugins.json")
     val featureVersion = providers.gradleProperty("featureVersion").orElse("1")
     inputs.property("featureVersion", featureVersion)
+    // Block-match template images travel with the core plugin so hot updates ship new images.
+    val templateDir = file("src/main/resources/com/coc/suncode/jar/templates")
+    if (feature == null) inputs.files(fileTree(templateDir) { include("*.png") })
     doLast {
         val sdk = androidComponents.sdkComponents.sdkDirectory.get().asFile
         val buildTools = File(sdk, "build-tools/${android.buildToolsVersion}")
@@ -179,6 +182,9 @@ fun registerPluginBuild(artifactId: String, feature: Map<String, Any>?) = tasks.
                 jar.write("id=$artifactId\nversion=${featureVersion.get()}\napi=1\n".toByteArray())
                 jar.closeEntry()
             } else {
+                templateDir.listFiles { f -> f.isFile && f.name.endsWith(".png") }.orEmpty().sortedBy { it.name }.forEach { png ->
+                    jar.putNextEntry(JarEntry("com/coc/suncode/jar/templates/${png.name}")); png.inputStream().use { it.copyTo(jar) }; jar.closeEntry()
+                }
                 // A core release carries compatible fallbacks without defining their classes itself.
                 featureSpecs.forEach { spec ->
                     val id = spec["id"] as String
