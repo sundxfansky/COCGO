@@ -11,9 +11,6 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -35,14 +32,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntRect
-import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.PopupPositionProvider
 import com.coc.suncode.core.data.database.GlobalVars
-import com.coc.suncode.core.ui.localcomponents.LocalCustomAlertDialog
 import com.coc.suncode.core.util.basic.ShowMessage
 import com.coc.suncode.core.util.exit.AppExitHelper
 import com.coc.suncode.core.util.exit.AppExitHelper.restoreDefaultInputMethod
@@ -111,7 +102,6 @@ fun ControlWindow(
     }
     var internalInteractionCount by remember { mutableIntStateOf(0) }
     var isPlaying by remember { GlobalVars.isPlaying }
-    var showExitConfirmation by remember { mutableStateOf(false) }
     var showLogs by remember { mutableStateOf(false) }
     var logInteractionEnabled by remember { mutableStateOf(false) }
     val logLines by ShowMessage.logLines.collectAsState()
@@ -161,8 +151,8 @@ fun ControlWindow(
         }
     }
 
-    LaunchedEffect(internalInteractionCount, externalInteractionCount, isDragging, showExitConfirmation) {
-        if (isDragging || showExitConfirmation) return@LaunchedEffect
+    LaunchedEffect(internalInteractionCount, externalInteractionCount, isDragging) {
+        if (isDragging) return@LaunchedEffect
         delay(2500)
         setExpanded(false)
     }
@@ -247,14 +237,8 @@ fun ControlWindow(
                                 .size(iconSize)
                                 .padding(4.dp)
                                 .clickable {
-                                    internalInteractionCount++
-                                    // Skip confirmation and exit immediately when ad is playing
-                                    if (GlobalVars.isAdPlaying) {
-                                        AppExitHelper.exitApplication(context)
-                                        return@clickable
-                                    }
-                                    pauseForInteraction()
-                                    showExitConfirmation = true
+                                    // Exit immediately without a confirmation dialog.
+                                    AppExitHelper.exitApplication(context)
                                 }
                         )
                         Image(
@@ -367,14 +351,8 @@ fun ControlWindow(
                                 .size(iconSize)
                                 .padding(4.dp)
                                 .clickable {
-                                    internalInteractionCount++
-                                    // Skip confirmation and exit immediately when ad is playing
-                                    if (GlobalVars.isAdPlaying) {
-                                        AppExitHelper.exitApplication(context)
-                                        return@clickable
-                                    }
-                                    pauseForInteraction()
-                                    showExitConfirmation = true
+                                    // Exit immediately without a confirmation dialog.
+                                    AppExitHelper.exitApplication(context)
                                 }
                         )
                     }
@@ -391,60 +369,6 @@ fun ControlWindow(
             interactive = logInteractionEnabled,
             onClear = ShowMessage::clearLogs,
             onDismiss = { showLogs = false }
-        )
-    }
-
-    if (showExitConfirmation) {
-        LocalCustomAlertDialog(
-            popupPositionProvider = object : PopupPositionProvider {
-                override fun calculatePosition(
-                    anchorBounds: IntRect,
-                    windowSize: IntSize,
-                    layoutDirection: LayoutDirection,
-                    popupContentSize: IntSize
-                ): IntOffset {
-                    // anchorBounds is the position of the ControlWindow icons relative to the floating window
-                    // windowSize is the size of the floating window (which is WRAP_CONTENT, so it fits the icons)
-
-                    // We want to center the popup on the SCREEN
-                    // Popup is relative to the anchor (the top-left of the Row in ControlWindow)
-                    // The anchor's screen position is (currentX, currentY)
-
-                    val screenCenterX = screenWidth / 2
-                    val screenCenterY = screenHeight / 2
-
-                    val targetX = screenCenterX - currentX - popupContentSize.width / 2
-                    val targetY = screenCenterY - currentY - popupContentSize.height / 2
-
-                    return IntOffset(targetX, targetY)
-                }
-            },
-            onDismissRequest = { showExitConfirmation = false },
-            title = {
-                Text(
-                    text = "退出提示",
-                    style = MaterialTheme.typography.titleMedium
-                )
-            },
-            text = {
-                Text(
-                    text = "确认要退出吗？",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            },
-            confirmButton = {
-                Row {
-                    TextButton(onClick = { showExitConfirmation = false }) {
-                        Text("取消")
-                    }
-                    TextButton(onClick = {
-                        showExitConfirmation = false
-                        AppExitHelper.exitApplication(context)
-                    }) {
-                        Text("确认")
-                    }
-                }
-            }
         )
     }
 }

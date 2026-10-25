@@ -137,8 +137,6 @@ fun HomeScreen(
         }
     }
 
-    // Exit Confirmation Dialog State
-    var showExitConfirmation by rememberSaveable { mutableStateOf(false) }
     // Clean All Data Confirmation Dialog State
     var showCleanAllConfirmation by rememberSaveable { mutableStateOf(false) }
     var isClearingData by remember { mutableStateOf(false) }
@@ -302,38 +300,15 @@ fun HomeScreen(
                     })
                 CustomButton(
                     text = "保存并退出", enable = busyAccount == null, onClick = {
-                        showExitConfirmation = true
-                    })
-            }
-
-        }
-
-        if (showExitConfirmation) {
-            CustomAlertDialog(onDismissRequest = { showExitConfirmation = false }, title = {
-                Text(
-                    text = "退出提示", style = MaterialTheme.typography.titleMedium
-                )
-            }, text = {
-                Text(
-                    text = "确认要退出吗？", style = MaterialTheme.typography.bodyMedium
-                )
-            }, confirmButton = {
-                Row {
-                    TextButton(onClick = { showExitConfirmation = false }) {
-                        Text("取消")
-                    }
-                    TextButton(onClick = {
-                        showExitConfirmation = false
+                        // Save, then exit immediately without a confirmation dialog.
                         scope.launch {
                             ConfigManager.saveAndRun {
                                 AppExitHelper.exitApplication(context)
                             }
                         }
-                    }) {
-                        Text("确认")
-                    }
-                }
-            })
+                    })
+            }
+
         }
 
         // Confirmation dialog for clearing all data
