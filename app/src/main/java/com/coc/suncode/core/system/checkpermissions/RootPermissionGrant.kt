@@ -52,14 +52,16 @@ internal object RootPermissionGrant {
                 commands += "pm grant --user $user $packageName android.permission.WRITE_EXTERNAL_STORAGE"
             }
         }
-        // Enable our IME without changing the current keyboard; plugins switch it only when needed.
-        val ime = ComponentName(context, SunInputMethodService::class.java)
-        commands += "ime enable --user $user ${ime.flattenToShortString()}"
         val commandResult = ServerShell.exec(commands.joinToString(" && "))
         if (!commandResult.isSuccess) {
             ShowMessage.record("Root 权限命令返回失败：${commandResult.out.joinToString(" ").take(240)}")
             return false
         }
+
+        // Enable our IME without changing the current keyboard; plugins switch it only when needed.
+        // Run it separately so emulators that block `ime enable` do not abort the remaining grants.
+        val ime = ComponentName(context, SunInputMethodService::class.java)
+        enableInputMethod(user, ime)
 
         val battery = BatteryOptimizationHelper.requestIgnoreBatteryOptimizations(context)
         val accessibility = AccessibilityPermissionHelper.enableAccessibilityWithRoot(
@@ -88,5 +90,43 @@ internal object RootPermissionGrant {
         }
         if (granted) ShowMessage.record("Root 已自动授予全部运行权限（悬浮窗、通知、存储、电池、无障碍、屏幕捕获、输入法）")
         return granted
+    }
+
+    /**
+     * Enables [ime] for [user]. Some emulators (e.g. MuMu) reject `ime enable` even as root,
+     * so fall back to appending the component to the secure `enabled_input_methods` setting.
+     * Failures are only logged; the final check in [grantPermissions] reports the result.
+     */
+    private suspend fun enableInputMethod(user: Int, ime: ComponentName) {
+        val component = ime.flattenToShortString()
+        val enableResult = ServerShell.exec("ime enable --user $user $component")
+        if (enableResult.isSuccess) return
+        ShowMessage.record("ime enable 不可用，改用 settings 回退：${enableResult.out.joinToString(" ").take(240)}")
+
+        val current = ServerShell.exec("settings --user $user get secure enabled_input_methods")
+        if (!current.isSuccess) {
+            ShowMessage.record("读取已启用输入法失败：${current.out.joinToString(" ").take(240)}")
+            return
+        }
+        // Entries are "component[;subtypeId...]" joined by ':'; "null" means the setting is unset.
+        val entries = current.out.joinToString("").trim()
+            .takeUnless { it.isEmpty() || it == "null" }
+            ?.split(':')
+            ?.filter { it.isNotBlank() }
+            .orEmpty()
+        if (entries.any { ComponentName.unflattenFromString(it.substringBefore(';')) == ime }) return
+
+        val updated = (entries + component).joinToString(":")
+        // Single quotes keep ';' and '$' from being interpreted by the root shell.
+        val putResult = ServerShell.exec("settings --user $user put secure enabled_input_methods '$updated'")
+        if (!putResult.isSuccess) {
+            ShowMessage.record("settings 回退启用输入法失败：${putResult.out.joinToString(" ").take(240)}")
+            return
+        }
+        // MuMu's system_server silently drops this write for non-system IMEs while still returning 0.
+        val verify = ServerShell.exec("settings --user $user get secure enabled_input_methods")
+        if (verify.out.none { line -> line.split(':').any { ComponentName.unflattenFromString(it.substringBefore(';')) == ime } }) {
+            ShowMessage.record("系统拦截了输入法启用（模拟器限制），请在系统设置 > 语言和输入法中手动启用")
+        }
     }
 }
