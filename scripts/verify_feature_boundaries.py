@@ -44,11 +44,13 @@ def owner(specs, name):
 
 
 def verify(catalog, roots):
-    specs = json.loads(catalog.read_text())
+    # Explicit UTF-8 so the Chinese names in the catalog also load under non-UTF-8 locales (e.g. GBK Windows).
+    specs = json.loads(catalog.read_text(encoding='utf-8'))
     classes = {}
     for root in roots:
         for path in root.rglob('*.class'):
-            name = str(path.relative_to(root).with_suffix('')).replace('/', '.')
+            # Join path parts so the class name is correct with both '/' and '\\' separators.
+            name = '.'.join(path.relative_to(root).with_suffix('').parts)
             if name.startswith('com.coc.suncode.jar.'):
                 classes[name] = path
     if not classes:

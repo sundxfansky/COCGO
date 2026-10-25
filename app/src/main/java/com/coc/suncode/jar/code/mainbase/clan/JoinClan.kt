@@ -1,10 +1,8 @@
 package com.coc.suncode.jar.code.mainbase.clan
 
-import com.coc.suncode.core.system.inputmethod.SunInputMethodService
 import com.coc.suncode.core.util.basic.RunShell
 import com.coc.suncode.core.util.basic.ShowMessage
 import com.coc.suncode.core.util.basic.delayWithMultiplier
-import com.coc.suncode.core.util.fileactions.LogHelper.logAndRestart
 import com.coc.suncode.core.util.touchactions.TouchActions
 import com.coc.suncode.jar.code.colorschema.MyColors
 import com.coc.suncode.jar.code.universal.InGamesVars
@@ -16,7 +14,7 @@ import com.coc.suncode.jar.code.universal.smalltools.StorageKeys
 import com.coc.suncode.jar.code.universal.smalltools.checkMemoryFile
 import com.coc.suncode.jar.code.universal.smalltools.getBooleanConfigRuntime
 import com.coc.suncode.jar.code.universal.smalltools.getConfigRuntime
-import com.coc.suncode.jar.code.universal.smalltools.setSUNInputMethod
+import com.coc.suncode.jar.code.universal.smalltools.inputGameText
 import com.coc.suncode.jar.code.universal.smalltools.writeMemory
 import com.coc.suncode.jar.ui.schema.Schema
 import kotlinx.coroutines.delay
@@ -56,11 +54,11 @@ suspend fun joinClan(): Boolean {
         if (joinOrExitButton != null) {
             val joinClanButton = findMultiColors(schema = MyColors.JoinClanButton)
             if (joinClanButton != null) {
-                setSUNInputMethod()
                 TouchActions.tap(joinClanButton.x, joinClanButton.y, delayTime = 500)
                 TouchActions.tap(642, 165, delayTime = 300)//input message
+                // ASCII goes through `input text`; the custom IME is only used for other characters.
                 if (!clanCode.isBlank())
-                    SunInputMethodService.instance?.inputText(clanCode) ?: logAndRestart("获取输入法失败")
+                    inputGameText(clanCode)
                 delayWithMultiplier(200)
                 TouchActions.tap(787, 327, delayTime = 300)//send message
                 clickRightBottom(1)

@@ -1,6 +1,5 @@
 package com.coc.suncode.jar.code.universal.tutorial
 
-import com.coc.suncode.core.system.inputmethod.SunInputMethodService
 import com.coc.suncode.core.system.screencapture.ScreenCaptureManager
 import com.coc.suncode.core.util.basic.ShowMessage
 import com.coc.suncode.core.util.basic.delayWithMultiplier
@@ -13,7 +12,7 @@ import com.coc.suncode.jar.code.universal.clickRightBottom
 import com.coc.suncode.jar.code.universal.colors.findMultiColorsUntil
 import com.coc.suncode.jar.code.universal.smalltools.getStaticConfig
 import com.coc.suncode.jar.code.universal.smalltools.reExtractGameSavings
-import com.coc.suncode.jar.code.universal.smalltools.setSUNInputMethod
+import com.coc.suncode.jar.code.universal.smalltools.inputGameText
 import com.coc.suncode.jar.ui.schema.Schema
 
 
@@ -148,7 +147,6 @@ suspend fun mainBaseTutorial(): Boolean {
 
     // Village Naming Logic
     findMultiColors(schema = MyColors.MyVillageIsCalled, increment = 1)?.let {
-        setSUNInputMethod()
         TouchActions.tap(625, 297, delayTime = 200)
 
         var gameName = getStaticConfig(Schema.GLOBAL_SETTINGS.CREATE_PREFIX.key)
@@ -158,7 +156,8 @@ suspend fun mainBaseTutorial(): Boolean {
             gameName += InGamesVars.currentAccountNumber
         }
 
-        SunInputMethodService.instance?.inputText(gameName) ?: logAndRestart("获取输入法失败")
+        // ASCII names go through `input text`; the custom IME is only used for other characters.
+        inputGameText(gameName)
         TouchActions.tap(641, 368, delayTime = 300)
     }
 
