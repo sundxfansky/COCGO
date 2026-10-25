@@ -82,13 +82,18 @@ internal object RootPermissionGrant {
         val inputMethod = enabledImes.isSuccess && enabledImes.out.any { line ->
             line.trim().split(':').any { ComponentName.unflattenFromString(it.substringBefore(';')) == ime }
         }
-        val granted = overlay && notifications && storage && battery && accessibility && projection && inputMethod
+        // The IME is optional: ASCII text is typed via `input text`, so only non-ASCII input needs it.
+        // Emulators that block third-party IMEs (e.g. MuMu) must not lock the app on the permission screen.
+        val granted = overlay && notifications && storage && battery && accessibility && projection
         if (!granted) {
             ShowMessage.record(
                 "Root 权限检查未完成：悬浮窗=$overlay，通知=$notifications，存储=$storage，电池=$battery，无障碍=$accessibility，屏幕捕获=$projection，输入法=$inputMethod"
             )
+        } else if (!inputMethod) {
+            ShowMessage.record("Root 已授予必需运行权限；输入法未启用，仅影响非 ASCII 文本输入")
+        } else {
+            ShowMessage.record("Root 已自动授予全部运行权限（悬浮窗、通知、存储、电池、无障碍、屏幕捕获、输入法）")
         }
-        if (granted) ShowMessage.record("Root 已自动授予全部运行权限（悬浮窗、通知、存储、电池、无障碍、屏幕捕获、输入法）")
         return granted
     }
 
