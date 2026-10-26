@@ -85,12 +85,14 @@ internal class QqToolBackend(private val context: Context) : QqGameBackend, QqRe
             )
         }
         val declared = permissions.filter { it in requested }
+        // clear-permission-flags and the POST_NOTIFICATION op are missing on older OS builds (e.g. Android 12),
+        // so they are best-effort; the checkPermission verification below decides success.
         val commands = declared.flatMap { permission ->
             listOf(
-                "pm clear-permission-flags --user $user $PACKAGE $permission user-set user-fixed",
+                "{ pm clear-permission-flags --user $user $PACKAGE $permission user-set user-fixed >/dev/null 2>&1 || true; }",
                 "pm grant --user $user $PACKAGE $permission"
             )
-        } + "cmd appops set --user $user $PACKAGE POST_NOTIFICATION allow"
+        } + "{ cmd appops set --user $user $PACKAGE POST_NOTIFICATION allow >/dev/null 2>&1 || true; }"
         shell(commands.joinToString(" && "))
         if (declared.any { context.packageManager.checkPermission(it, PACKAGE) != PackageManager.PERMISSION_GRANTED }) {
             throw IOException("Root 未能授予 QQ 授权工具权限，已停止启动")
