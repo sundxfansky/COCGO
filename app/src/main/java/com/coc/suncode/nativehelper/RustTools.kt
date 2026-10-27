@@ -32,4 +32,18 @@ object RustTools {
         direction: Int,
         increment: Int
     ): IntArray?
+
+    /**
+     * Block-mean template search. [means] holds 0xRRGGBB block means in row-major order.
+     * Returns [x, y, score * 10000] of the template's top-left corner, or null.
+     */
+    external fun findBlockTemplateRaw(
+        byteBuffer: java.nio.ByteBuffer,
+        width: Int, height: Int,
+        stride: Int,
+        x1: Int, y1: Int, x2: Int, y2: Int,
+        block: Int, cols: Int, rows: Int,
+        means: IntArray,
+        minScore: Double
+    ): IntArray?
 }
