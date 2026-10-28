@@ -1,0 +1,3 @@
+# Local dependency cache created by ImageMatchTool.bat
+.venv/
+__pycache__/

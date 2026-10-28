@@ -202,6 +202,13 @@ class ImageCanvas(ttk.Frame):
             part = self.image.crop((ix0, iy0, ix1, iy1)).resize((out_w, out_h), Image.Resampling.NEAREST)
             self._photo = ImageTk.PhotoImage(part)
             c.create_image(left, top, image=self._photo, anchor=tk.NW)
+        self.draw_overlays()
+
+    def draw_overlays(self) -> None:
+        """Redraws only the selection rectangles, so dragging does not rescale the image."""
+        self.canvas.delete("overlay")
+        if self.image is None:
+            return
         if self.search_rect:
             self._stroke(self.search_rect, "#FF3B30", dashed=False)
         if self.template_rect:
@@ -211,9 +218,12 @@ class ImageCanvas(ttk.Frame):
 
     def _stroke(self, r: PixelRect, color: str, dashed: bool) -> None:
         z = self.zoom
+        # Keep at least a visible 1px box when a tiny rect is drawn at low zoom.
+        x0, y0 = r.x * z, r.y * z
+        x1, y1 = max(x0 + 2, (r.x + r.w) * z), max(y0 + 2, (r.y + r.h) * z)
         self.canvas.create_rectangle(
-            r.x * z + 1, r.y * z + 1, (r.x + r.w) * z - 1, (r.y + r.h) * z - 1,
-            outline=color, width=2, dash=(6, 4) if dashed else None,
+            x0 + 1, y0 + 1, x1 - 1, y1 - 1,
+            outline=color, width=2, dash=(6, 4) if dashed else None, tags=("overlay",),
         )
 
     # ----- Mouse -----
@@ -253,6 +263,8 @@ class ImageCanvas(ttk.Frame):
         else:
             self.template_rect = rect
         self.on_selection_changed()
+        # Show the rectangle live while dragging (the callback also clears match_rect).
+        self.draw_overlays()
 
     def _end_drag(self, _event) -> None:
         self._drag_start = None
@@ -615,7 +627,7 @@ class MainWindow:
 
     def _fields_committed(self) -> None:
         self.canvas.match_rect = None
-        self.canvas.schedule_render()
+        self.canvas.draw_overlays()
         self.regenerate()
 
     def update_hover(self, p: Optional[Tuple[int, int]]) -> None:
@@ -730,11 +742,11 @@ class MainWindow:
     def show_result(self, r: Optional[MatchResult], tpl: BlockTemplate, threshold: float) -> None:
         if r is None:
             self.canvas.match_rect = None
-            self.canvas.schedule_render()
+            self.canvas.draw_overlays()
             self.result_var.set("搜索区域比目标图片小，无法匹配。")
             return
         self.canvas.match_rect = PixelRect(r.x, r.y, tpl.pixel_width, tpl.pixel_height)
-        self.canvas.schedule_render()
+        self.canvas.draw_overlays()
         text = f"最佳位置 {r.x}, {r.y}   相似度 {r.score:.4f}   {'✅ 命中' if r.score >= threshold else '❌ 低于阈值'}\n"
         if r.second_score is not None:
             # A large gap between the best and the runner-up means the threshold is easy to pick.
