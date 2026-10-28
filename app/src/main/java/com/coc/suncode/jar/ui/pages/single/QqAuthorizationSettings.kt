@@ -18,6 +18,8 @@ import com.coc.suncode.core.util.basic.ShowMessage
 import com.coc.suncode.jar.ui.components.CustomButton
 import com.coc.suncode.jar.ui.components.SettingNumberStepper
 import com.coc.suncode.jar.ui.components.SettingSection
+import com.coc.suncode.jar.ui.schema.ConfigManager
+import com.coc.suncode.jar.ui.schema.Schema
 import com.coc.suncode.jar.ui.schema.Schema.GLOBAL_SETTINGS
 import com.coc.suncode.jar.ui.schema.Schema.ACCOUNT_SETTINGS
 import kotlinx.coroutines.CoroutineStart
@@ -32,7 +34,7 @@ fun QqAuthorizationSettings() {
         Text("QQ 全局授权库", style = MaterialTheme.typography.titleSmall)
         QqAuthorizationSlotSelector(GLOBAL_SETTINGS.QQ_ACCOUNT_SLOT.key)
         val slot = GlobalVars.configStates[GLOBAL_SETTINGS.QQ_ACCOUNT_SLOT.key]?.value?.toIntOrNull()
-        Text("授权按序号保存。账号设置可选择任意已保存序号，多个账号可复用同一份授权。", style = MaterialTheme.typography.labelMedium)
+        Text("授权按序号保存。账号 N 固定使用序号 N 的授权，例如账号 1 只读取授权 1。", style = MaterialTheme.typography.labelMedium)
         QqAuthorizationActions(slot)
     }
 }
@@ -60,10 +62,14 @@ private fun QqAuthorizationSlotSelector(key: String) {
 
 @Composable
 fun QqAccountAuthorizationSettings(index: Int) {
-    val key = "${ACCOUNT_SETTINGS.QQ_AUTHORIZATION_SLOT.key}$index"
-    QqAuthorizationSlotSelector(key)
-    Text("直接复用全局授权库中的授权；新增或更新授权请到主页设置。", style = MaterialTheme.typography.labelMedium)
-    QqAuthorizationActions(GlobalVars.configStates[key]?.value?.toIntOrNull(), library = false)
+    // The slot is pinned to the account index, so it is shown read-only instead of as a stepper.
+    val slot = ConfigManager.qqAuthorizationSlot(index)
+    Text(
+        "${Schema.getDisplayName(ACCOUNT_SETTINGS.QQ_AUTHORIZATION_SLOT.key)}：$slot（固定）",
+        style = MaterialTheme.typography.labelMedium
+    )
+    Text("账号 $index 固定读取全局授权库中序号 $slot 的授权；新增或更新授权请到主页设置。", style = MaterialTheme.typography.labelMedium)
+    QqAuthorizationActions(slot, library = false)
 }
 
 /** Both entry points resolve the same host-private authorization library by slot. */

@@ -11,6 +11,7 @@ import com.coc.suncode.core.util.basic.ServerShell
 import com.coc.suncode.core.util.basic.ShowMessage
 import com.coc.suncode.jar.code.universal.GameVersion
 import com.coc.suncode.jar.ui.schema.Schema.ACCOUNT_SETTINGS
+import com.coc.suncode.jar.ui.schema.ConfigManager
 import kotlinx.coroutines.CancellationException
 
 
@@ -30,8 +31,9 @@ suspend fun loginConfiguredAccount(context: Context, index: Int): AccountLoginRe
         }
         when (getConfigOrStop("${ACCOUNT_SETTINGS.START_METHOD.key}$index")) {
             "2" -> {
-                val slot = getConfigOrStop("${ACCOUNT_SETTINGS.QQ_AUTHORIZATION_SLOT.key}$index").toIntOrNull()
-                if (version != GameVersion.CN || slot == null || slot !in 1..10_000) {
+                // Account N always uses QQ grant N.
+                val slot = ConfigManager.qqAuthorizationSlot(index)
+                if (version != GameVersion.CN || slot !in 1..10_000) {
                     ShowMessage("账号 $index 的 QQ 登录配置无效，请重新配置", false)
                     return AccountLoginResult.FAILED
                 }

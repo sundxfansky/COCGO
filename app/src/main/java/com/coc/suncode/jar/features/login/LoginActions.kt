@@ -10,6 +10,7 @@ import com.coc.suncode.jar.code.universal.GameVersion
 import com.coc.suncode.jar.code.universal.InGamesVars
 import com.coc.suncode.jar.ui.schema.Schema
 import com.coc.suncode.jar.ui.schema.Schema.ACCOUNT_SETTINGS
+import com.coc.suncode.jar.ui.schema.ConfigManager
 import com.coc.suncode.core.util.basic.ServerShell
 import com.coc.suncode.core.qq.QqAuthorizationManager
 
@@ -31,10 +32,10 @@ suspend fun writeGameFiles(): Boolean {
             return false
         }
         val context = ShowMessage.getContext() ?: return false
-        // Multiple automation accounts may deliberately share the same global authorization slot.
+        // Account N always uses QQ grant N, regardless of any stale value in the config file.
         val account = InGamesVars.currentAccountNumber
-        val slot = getConfigOrStop("${ACCOUNT_SETTINGS.QQ_AUTHORIZATION_SLOT.key}$account").toIntOrNull()
-        if (slot == null || slot !in 1..10_000) {
+        val slot = ConfigManager.qqAuthorizationSlot(account)
+        if (slot !in 1..10_000) {
             ShowMessage("账号 $account 的 QQ 授权序号无效，本轮跳过")
             return false
         }

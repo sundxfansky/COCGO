@@ -75,22 +75,50 @@ class QqAuthorizationConfigTest {
     }
 
     @Test
-    fun sharedReferencesAndLibrarySelectionSurviveExportAndReload() {
-        load(JsonObject().apply { addProperty("account_count", "3") })
-        listOf("7", "7", "2").forEachIndexed { i, slot ->
-            GlobalVars.configStates["${ACCOUNT_SETTINGS.QQ_AUTHORIZATION_SLOT.key}${i + 1}"]!!.value = slot
-        }
+    fun accountQqSlotsArePinnedToAccountIndexWhileLibrarySelectionSurvivesReload() {
+        // Legacy configs that shared or remapped grants are normalized to account N -> grant N on load.
+        load(JsonObject().apply {
+            addProperty("account_count", "3")
+            addProperty("${ACCOUNT_SETTINGS.QQ_AUTHORIZATION_SLOT.key}1", "7")
+            addProperty("${ACCOUNT_SETTINGS.QQ_AUTHORIZATION_SLOT.key}2", "7")
+            addProperty("${ACCOUNT_SETTINGS.QQ_AUTHORIZATION_SLOT.key}3", "2")
+        })
+        assertEquals(listOf("1", "2", "3"), (1..3).map {
+            GlobalVars.configStates["${ACCOUNT_SETTINGS.QQ_AUTHORIZATION_SLOT.key}$it"]?.value
+        })
+        assertEquals(listOf(1, 2, 3), (1..3).map { ConfigManager.qqAuthorizationSlot(it) })
         GlobalVars.configStates[GLOBAL_SETTINGS.QQ_ACCOUNT_SLOT.key]!!.value = "7"
         val saved = JsonParser.parseString(SchemaExporter.exportSchemasToJson(accountCount = 3)).asJsonObject
         GlobalVars.configStates.clear()
         load(saved)
-        assertEquals(listOf("7", "7", "2"), (1..3).map {
-            GlobalVars.configStates["${ACCOUNT_SETTINGS.QQ_AUTHORIZATION_SLOT.key}$it"]?.value
-        })
         assertEquals("7", GlobalVars.configStates[GLOBAL_SETTINGS.QQ_ACCOUNT_SLOT.key]?.value)
         ConfigManager.expandAccountConfigs(4)
-        assertEquals("7", GlobalVars.configStates["${ACCOUNT_SETTINGS.QQ_AUTHORIZATION_SLOT.key}1"]?.value)
         assertEquals("4", GlobalVars.configStates["${ACCOUNT_SETTINGS.QQ_AUTHORIZATION_SLOT.key}4"]?.value)
+    }
+
+    @Test
+    fun syncCopiesMainWorldAndOptionalBuilderBaseToRangeWithoutTouchingAccountSettings() {
+        load(JsonObject().apply { addProperty("account_count", "5") })
+        fun state(key: String) = GlobalVars.configStates[key]!!
+        val gold = MAIN_BASE_SETTINGS.GOLD_REQUIREMENT.key
+        val builderEnabled = BUILDER_BASE_SETTINGS.ENABLED.key
+        state("${gold}_c2").value = "222"
+        state("${builderEnabled}_c2").value = "0"
+        state("${ACCOUNT_SETTINGS.REMARK.key}4").value = "keep"
+
+        // Main world only: builder base of targets stays untouched; source inside the range is skipped.
+        assertEquals(2, ConfigManager.syncAccountProfiles(2, 2..4, includeBuilderBase = false))
+        assertEquals(listOf("222", "222", "222"), (2..4).map { state("${gold}_c$it").value })
+        assertEquals(MAIN_BASE_SETTINGS.GOLD_REQUIREMENT.defaultValue.toString(), state("${gold}_c5").value)
+        assertEquals("1", state("${builderEnabled}_c3").value)
+        assertEquals("keep", state("${ACCOUNT_SETTINGS.REMARK.key}4").value)
+
+        // Including builder base copies it too; targets are independent copies afterwards.
+        assertEquals(2, ConfigManager.syncAccountProfiles(2, 4..5, includeBuilderBase = true))
+        assertEquals(listOf("0", "0"), (4..5).map { state("${builderEnabled}_c$it").value })
+        state("${gold}_c5").value = "555"
+        assertEquals("222", state("${gold}_c4").value)
+        assertEquals(0, ConfigManager.syncAccountProfiles(2, 2..2, includeBuilderBase = true))
     }
 
     @Test

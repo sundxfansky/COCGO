@@ -70,7 +70,44 @@ object ConfigManager {
         GlobalVars.configStates[Schema.GLOBAL_SETTINGS.ACCOUNT_PROFILES_VERSION.key]?.value = "1"
         for (i in 1..accountCount) {
             GlobalVars.configStates["${Schema.ACCOUNT_SETTINGS.ACCOUNT_CONFIG.key}$i"]?.value = i.toString()
+            // Account N is bound to QQ grant N; older configs that shared or remapped grants are normalized here.
+            GlobalVars.configStates["${Schema.ACCOUNT_SETTINGS.QQ_AUTHORIZATION_SLOT.key}$i"]?.value = qqAuthorizationSlot(i).toString()
         }
+    }
+
+    /** The QQ grant slot an account reads; fixed to the account index and not user-editable. */
+    fun qqAuthorizationSlot(account: Int): Int = account
+
+    /** World profile modules copied by [syncAccountProfiles], split by world. */
+    private val MAIN_BASE_MODULES = setOf(
+        "MAIN_BASE_SETTINGS", "MAIN_BASE_TROOPS_AND_SPELLS", "MAIN_BASE_BUILDINGS", "MAIN_BASE_PETS", "MAIN_BASE_BUILDING_PRIORITIES"
+    )
+    private val BUILDER_BASE_MODULES = setOf(
+        "BUILDER_BASE_SETTINGS", "BUILDER_BASE_TROOPS", "BUILDER_BASE_BUILDINGS", "BUILDER_BASE_BUILDINGS_PRIORITY"
+    )
+
+    /**
+     * Copies the main-world profile (and optionally the builder-base profile) of [source] into every account of
+     * [targets] except the source itself. Only in-memory states change; the caller saves them like any other edit.
+     * @return the number of accounts that were overwritten.
+     */
+    fun syncAccountProfiles(source: Int, targets: IntRange, includeBuilderBase: Boolean): Int {
+        val modules = SchemaRegistry.ALL_MODULES.filter {
+            it.scope == Scope.PROFILE && (it.name in MAIN_BASE_MODULES || (includeBuilderBase && it.name in BUILDER_BASE_MODULES))
+        }
+        val accounts = targets.filter { it != source }
+        if (accounts.isEmpty()) return 0
+        // Make sure every target has its own states before writing into them.
+        expandProfileConfigs(maxOf(source, targets.last))
+        for (target in accounts) {
+            modules.forEach { module ->
+                module.settings.forEach { def ->
+                    val value = GlobalVars.configStates["${def.key}_c$source"]?.value ?: def.defaultValue.toString()
+                    GlobalVars.configStates.getOrPut("${def.key}_c$target") { mutableStateOf(value) }.value = value
+                }
+            }
+        }
+        return accounts.size
     }
 
     fun expandAccountConfigs(newCount: Int) {
@@ -91,7 +128,7 @@ object ConfigManager {
     }
 
     private fun accountDefault(def: SettingDef, index: Int): String = when (def.key) {
-        // Preserve existing numbered grants when upgrading from account-bound authorization.
+        // Numbered defaults: account N uses save N and QQ grant N.
         "global_path", "cn_path", "data_content", Schema.ACCOUNT_SETTINGS.QQ_AUTHORIZATION_SLOT.key,
         Schema.ACCOUNT_SETTINGS.ACCOUNT_CONFIG.key -> index.toString()
         else -> def.defaultValue.toString()
