@@ -82,6 +82,9 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/settings", s.settings)
 	mux.HandleFunc("PUT /api/v1/settings", s.settings)
 	mux.HandleFunc("POST /api/v1/settings/test-email", s.testEmail)
+	if root := os.Getenv("WEB_DIR"); root != "" {
+		mux.Handle("/", webHandler(root))
+	}
 	return cors(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		limit := int64(1 << 20)

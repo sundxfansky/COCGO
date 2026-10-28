@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -328,11 +329,8 @@ func env(key, fallback string) string {
 }
 
 func dir(path string) string {
-	index := strings.LastIndex(path, "/")
-	if index < 0 {
-		return "."
-	}
-	return path[:index]
+	// filepath.Dir also understands Windows separators such as data\sun.db.
+	return filepath.Dir(path)
 }
 
 func cors(next http.Handler) http.Handler {
