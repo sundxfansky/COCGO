@@ -22,6 +22,30 @@ PORT=8080 docker compose up -d --build
 
 API 和网站使用同一入口：`/api/v1` 为 API，`/healthz` 为健康检查。后端仅在 Compose 内部网络提供服务，不单独暴露 `8080`。
 
+## Windows 本地部署（无需 Docker）
+
+后端设置 `WEB_DIR` 后会直接托管前端静态文件，一个 `sun-cloud.exe` 进程即可替代 Compose 中的 backend + nginx，API、网站和 `/healthz` 仍是同一入口。
+
+前提：安装 Go 1.22+ 和 Node.js 22（仅构建时需要）：
+
+```bat
+winget install -e --id GoLang.Go
+winget install -e --id OpenJS.NodeJS.LTS
+```
+
+在项目根目录运行（首次自动构建，之后直接启动）：
+
+```bat
+scripts\windows\sun-server.bat
+```
+
+- 打开 `http://127.0.0.1:3280`，安装码打印在该控制台窗口中，后续初始化步骤与下文相同。
+- 数据默认保存在 `backend\data\sun.db`（已 gitignore）；可用 `-DataDir D:\sun-data` 指定其他目录，`-Port 8080` 换端口。
+- `git pull` 后加 `-Rebuild` 重新构建；`-BuildOnly` 只生成 `build\sun-server\`。该目录可整体复制到没有 Go/Node 的 Windows 电脑，双击其中的 `start.bat` 运行，数据保存在旁边的 `data\`。
+- 手机/模拟器访问时，客户端云端地址填 `http://<电脑局域网 IP>:3280/api/v1`。首次启动 Windows 防火墙会弹窗询问，需允许专用网络；只在本机使用可传 `-Listen 127.0.0.1:3280` 不对外监听。
+- 本地部署为明文 HTTP，只建议在可信局域网使用；需要公网访问时请在前面加 HTTPS 反向代理。
+- 备份：停止服务后复制数据目录下的 `sun.db*` 文件即可。
+
 ## 首次网页初始化
 
 1. 打开网站，自动进入初始化页面。
