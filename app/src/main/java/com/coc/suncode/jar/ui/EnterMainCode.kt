@@ -3,8 +3,15 @@
 package com.coc.suncode.jar.ui
 
 import android.content.Context
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Text
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -96,38 +103,47 @@ class EnterMainCode : MainCode, RuntimeAccountSwitcher, FeaturePluginClient {
             // Older plugins may retain the retired mode; route it to the ordinary settings page.
             AppMode.Main, AppMode.SwitchAccount -> {
                 val navController = rememberNavController()
-                NavHost(navController = navController, startDestination = "home") {
-                    composable("home") {
-                        HomeScreen(
-                            onSaveSuccess = onClose,
-                            onNavigateAccount = { index -> navController.navigate("account/$index") }
-                        )
+                // Any touch on any settings page (tabs, scrolling, blank areas) stops the auto-run countdown.
+                // Observed in the Initial pass without consuming, so child controls still receive the event.
+                Box(Modifier.fillMaxSize().pointerInput(Unit) {
+                    awaitEachGesture {
+                        awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                        GlobalVars.isAutoRunEnabled = false
                     }
-                    composable("account/{index}") { entry ->
-                        AccountDetailScreen(
-                            initialIndex = entry.arguments?.getString("index")?.toIntOrNull() ?: 1,
-                            onBack = { navController.popBackStack() },
-                            onNavigatePriority = { index -> navController.navigate("priority/$index") },
-                            onNavigateBuilderBasePriority = { index -> navController.navigate("builder_base_priority/$index") }
-                        )
-                    }
-                    composable("priority/{index}") { backStackEntry ->
-                        val index = backStackEntry.arguments?.getString("index")?.toIntOrNull() ?: 1
-                        MainBaseUpgradePriority(
-                            index = index,
-                            onSaveSuccess = {
-                                navController.popBackStack()
-                            }
-                        )
-                    }
-                    composable("builder_base_priority/{index}") { backStackEntry ->
-                        val index = backStackEntry.arguments?.getString("index")?.toIntOrNull() ?: 1
-                        BuilderBaseUpgradePriority(
-                            index = index,
-                            onSaveSuccess = {
-                                navController.popBackStack()
-                            }
-                        )
+                }) {
+                    NavHost(navController = navController, startDestination = "home") {
+                        composable("home") {
+                            HomeScreen(
+                                onSaveSuccess = onClose,
+                                onNavigateAccount = { index -> navController.navigate("account/$index") }
+                            )
+                        }
+                        composable("account/{index}") { entry ->
+                            AccountDetailScreen(
+                                initialIndex = entry.arguments?.getString("index")?.toIntOrNull() ?: 1,
+                                onBack = { navController.popBackStack() },
+                                onNavigatePriority = { index -> navController.navigate("priority/$index") },
+                                onNavigateBuilderBasePriority = { index -> navController.navigate("builder_base_priority/$index") }
+                            )
+                        }
+                        composable("priority/{index}") { backStackEntry ->
+                            val index = backStackEntry.arguments?.getString("index")?.toIntOrNull() ?: 1
+                            MainBaseUpgradePriority(
+                                index = index,
+                                onSaveSuccess = {
+                                    navController.popBackStack()
+                                }
+                            )
+                        }
+                        composable("builder_base_priority/{index}") { backStackEntry ->
+                            val index = backStackEntry.arguments?.getString("index")?.toIntOrNull() ?: 1
+                            BuilderBaseUpgradePriority(
+                                index = index,
+                                onSaveSuccess = {
+                                    navController.popBackStack()
+                                }
+                            )
+                        }
                     }
                 }
             }

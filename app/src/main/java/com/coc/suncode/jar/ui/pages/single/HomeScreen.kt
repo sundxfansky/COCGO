@@ -167,7 +167,8 @@ fun HomeScreen(
         ) {
             tabs.forEachIndexed { index, title ->
                 Tab(
-                    enabled = busyAccount == null, selected = selectedTabIndex == index, onClick = { selectedTabIndex = index }, modifier = Modifier
+                    // Switching tabs also stops the countdown (covers non-touch input such as keyboard/accessibility).
+                    enabled = busyAccount == null, selected = selectedTabIndex == index, onClick = { GlobalVars.isAutoRunEnabled = false; selectedTabIndex = index }, modifier = Modifier
                         .wrapContentWidth() // Allows the tab to wrap its content
                         .widthIn(min = 0.dp), // BREAKS the default minimum width constraint
                     selectedContentColor = Color.White, unselectedContentColor = Color.White.copy(alpha = 0.75f), content = {
@@ -201,7 +202,7 @@ fun HomeScreen(
                                     modifier = Modifier.padding(top = 8.dp)
                                 )
                                 CustomButton(
-                                    text = "修改任意配置停止计时", onClick = { GlobalVars.isAutoRunEnabled = false })
+                                    text = "触摸任意位置停止计时", onClick = { GlobalVars.isAutoRunEnabled = false })
                             }
                         }
                         SettingSection {
