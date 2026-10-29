@@ -23,7 +23,7 @@ import com.coc.suncode.jar.ui.components.SettingInputRow
 import com.coc.suncode.jar.ui.schema.Schema.BUILDER_BASE_SETTINGS
 
 fun LazyListScope.BuilderBaseConfig(
-    index: Int, isExpanded: Boolean, onToggleExpanded: () -> Unit, onNavigateBuilderBasePriority: (Int) -> Unit = {},
+    index: Int, isExpanded: Boolean, onToggleExpanded: () -> Unit,
     onScrollToBottom: () -> Unit = {}, showHeader: Boolean = true
 ) {
     val enabled = GlobalVars.configStates["${BUILDER_BASE_SETTINGS.ENABLED.key}_c$index"]?.value != "0"
@@ -119,7 +119,7 @@ fun LazyListScope.BuilderBaseConfig(
                 prevBuilderBaseBuildVisible.value = builderBaseBuildVisible
             }
             AnimatedVisibility(visible = builderBaseBuildVisible) {
-                BuilderBaseUpgradeConfigs(index = index, onNavigatePriority = onNavigateBuilderBasePriority)
+                BuilderBaseUpgradeConfigs(index = index)
             }
         }
     }

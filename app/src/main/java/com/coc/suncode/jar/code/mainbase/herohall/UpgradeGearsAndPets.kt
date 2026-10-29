@@ -9,6 +9,10 @@ import com.coc.suncode.jar.code.colorschema.ColorSchema
 import com.coc.suncode.jar.code.colorschema.MyColors
 import com.coc.suncode.jar.code.colorschema.colorpackage.mainbase.MainBaseResearchColors
 import com.coc.suncode.jar.ui.schema.details.MainBasePets
+import com.coc.suncode.jar.ui.schema.details.priorityKey
+import com.coc.suncode.jar.ui.schema.SettingDef
+import com.coc.suncode.jar.code.universal.smalltools.getConfigRuntime
+import android.graphics.Point
 import com.coc.suncode.jar.code.universal.InGamesVars
 import com.coc.suncode.jar.code.universal.clickRightBottom
 import com.coc.suncode.jar.code.universal.colors.findMultiColors
@@ -56,7 +60,9 @@ private suspend fun checkPets() {
         MainBasePets.GREEDY_RAVEN to MyColors.GreedyRaven
     )
 
+    // Enabled pets ordered by the configured pet priority (lower rank upgrades first).
     val enabledPets = petColorMap.filter { getBooleanConfigRuntime(it.first.key) }
+        .sortedBy { (pet, _) -> getConfigRuntime(priorityKey(pet)).toIntOrNull() ?: (MainBasePets.all.indexOf(pet) + 1) }
 
     if (enabledPets.isEmpty()) {
         ShowMessage("账号${InGamesVars.currentAccountNumber}，没有启用的战宠")
@@ -65,43 +71,75 @@ private suspend fun checkPets() {
 
     ShowMessage("账号${InGamesVars.currentAccountNumber}，已启用 ${enabledPets.size} 个战宠")
 
-    repeat(3) {
+    // Pass 1: scan all pages and collect affordable pets; the top-priority pet is upgraded as soon as it is seen.
+    val affordable = mutableSetOf<SettingDef>()
+    for (page in 0 until PET_PAGES) {
         val screenBuffer = ScreenCaptureManager.capture(asBitmap = false) as? ScreenCaptureManager.CaptureResult ?: logAndRestart("checkPets: Screen Capture Failed.")
-
         for ((pet, colorSchema) in enabledPets) {
-            val result = findMultiColors(schema = colorSchema, byteBuffer = screenBuffer, increment = 1)
-            if (result != null) {
-                val insufficientLeft = result.x
-                val insufficientTop = result.y
-                val insufficientRight = minOf(result.x + 100, screenBuffer.width - 1)
-                val insufficientBottom = minOf(result.y + 40, screenBuffer.height - 1)
-
-                val insufficientSchema = ColorSchema.rescope(
-                    MainBaseResearchColors.MainBaseResearchInsufficientColors, insufficientLeft, insufficientTop, insufficientRight, insufficientBottom
-                )
-
-                if (findMultiColors(byteBuffer = screenBuffer, schema = insufficientSchema, increment = 1) != null) {
-                    ShowMessage("账号${InGamesVars.currentAccountNumber}，跳过 ${pet.displayName}: 资源不足")
-                    continue
-                }
-
-                TouchActions.tap(result.x, result.y, delayTime = 500)
-                val confirmUpgrade = findMultiColorsUntil(schemas = listOf(MyColors.ConfirmUpgradePet), duration = 1000)
-                if (confirmUpgrade == null) {
-                    ShowMessage("账号${InGamesVars.currentAccountNumber}，跳过 ${pet.displayName}: 无法升级")
-                    continue
-                }
-
-                ShowMessage("账号${InGamesVars.currentAccountNumber}，升级 ${pet.displayName}")
-                TouchActions.tap(confirmUpgrade.x, confirmUpgrade.y)
-                clickRightBottom(1)
-                return
+            if (pet in affordable) continue
+            val result = findAffordablePet(pet, colorSchema, screenBuffer) ?: continue
+            if (pet == enabledPets.first().first) {
+                if (tryUpgradePet(pet, result.x, result.y)) return
+                continue
             }
+            affordable += pet
         }
-
-        TouchActions.swipe(800, 600, 180, 600)
-        delayWithMultiplier(100)
+        if (page < PET_PAGES - 1) {
+            TouchActions.swipe(800, 600, 180, 600)
+            delayWithMultiplier(100)
+        }
     }
+
+    // Pass 2: scroll back to the first page and try the affordable pets in priority order.
+    for ((pet, colorSchema) in enabledPets.filter { it.first in affordable }) {
+        repeat(PET_PAGES) { TouchActions.swipe(180, 600, 1200, 600) }
+        delayWithMultiplier(100)
+        for (page in 0 until PET_PAGES) {
+            val result = findMultiColors(colorSchema)
+            if (result != null) {
+                if (tryUpgradePet(pet, result.x, result.y)) return
+                break
+            }
+            TouchActions.swipe(800, 600, 180, 600)
+            delayWithMultiplier(100)
+        }
+    }
+}
+
+private const val PET_PAGES = 3
+
+/** Returns the pet's position when it is visible and its upgrade cost is affordable. */
+private suspend fun findAffordablePet(pet: SettingDef, colorSchema: ColorSchema, screenBuffer: ScreenCaptureManager.CaptureResult): Point? {
+    val result = findMultiColors(schema = colorSchema, byteBuffer = screenBuffer, increment = 1) ?: return null
+    val insufficientLeft = result.x
+    val insufficientTop = result.y
+    val insufficientRight = minOf(result.x + 100, screenBuffer.width - 1)
+    val insufficientBottom = minOf(result.y + 40, screenBuffer.height - 1)
+
+    val insufficientSchema = ColorSchema.rescope(
+        MainBaseResearchColors.MainBaseResearchInsufficientColors, insufficientLeft, insufficientTop, insufficientRight, insufficientBottom
+    )
+
+    if (findMultiColors(byteBuffer = screenBuffer, schema = insufficientSchema, increment = 1) != null) {
+        ShowMessage("账号${InGamesVars.currentAccountNumber}，跳过 ${pet.displayName}: 资源不足")
+        return null
+    }
+    return result
+}
+
+/** Opens the pet and confirms the upgrade; returns false when the upgrade button is unavailable. */
+private suspend fun tryUpgradePet(pet: SettingDef, x: Int, y: Int): Boolean {
+    TouchActions.tap(x, y, delayTime = 500)
+    val confirmUpgrade = findMultiColorsUntil(schemas = listOf(MyColors.ConfirmUpgradePet), duration = 1000)
+    if (confirmUpgrade == null) {
+        ShowMessage("账号${InGamesVars.currentAccountNumber}，跳过 ${pet.displayName}: 无法升级")
+        return false
+    }
+
+    ShowMessage("账号${InGamesVars.currentAccountNumber}，升级 ${pet.displayName}")
+    TouchActions.tap(confirmUpgrade.x, confirmUpgrade.y)
+    clickRightBottom(1)
+    return true
 }
 
 private suspend fun upgradeGearsAction() {

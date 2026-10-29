@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -69,6 +70,10 @@ import kotlinx.coroutines.delay
 // Disabled world sections propagate to every reusable setting control, including nested groups.
 private val LocalSettingsEnabled = compositionLocalOf { true }
 
+/** Lets other component files honour the enclosing section's enabled state. */
+@Composable
+internal fun LocalSettingsEnabledReader(): Boolean = LocalSettingsEnabled.current
+
 
 @Composable
 fun InputRowWithCheckBox(
@@ -123,37 +128,39 @@ fun InputRowWithCheckBox(
 }
 
 
+// Bubbles use a dark tooltip style so they read as attached hints rather than standalone windows.
+private val BubbleColor = Color(0xF2303236)
+private val BubbleTextColor = Color.White
+private val BubbleActionColor = Color(0xFF8FD3FF)
+
+/**
+ * A speech bubble anchored to the layout that emits it (place it beside the control that opened it).
+ * Tapping outside dismisses it; [actions] holds optional text buttons, e.g. cancel/confirm.
+ */
 @Composable
-fun CustomAlertDialog(
-    onDismissRequest: () -> Unit, title: @Composable (() -> Unit)? = null, text: @Composable (() -> Unit)? = null, confirmButton: @Composable () -> Unit
+fun CustomBubble(
+    onDismissRequest: () -> Unit, title: String? = null, text: String, actions: @Composable (() -> Unit)? = null
 ) {
     Popup(
-        popupPositionProvider = WindowCenterPositionProvider(), onDismissRequest = onDismissRequest, properties = PopupProperties(focusable = true)
+        popupPositionProvider = AnchoredBubblePositionProvider(), onDismissRequest = onDismissRequest, properties = PopupProperties(focusable = true)
     ) {
         Surface(
-            modifier = Modifier
-                .wrapContentSize()
-                .padding(16.dp), shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 6.dp
+            modifier = Modifier.widthIn(max = 320.dp), shape = RoundedCornerShape(10.dp), color = BubbleColor, shadowElevation = 6.dp
         ) {
-            Column(modifier = Modifier.padding(24.dp)) {
-                title?.let {
-                    Box(modifier = Modifier.padding(bottom = 16.dp)) {
-                        it()
+            Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                title?.let { Text(text = it, color = BubbleTextColor, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(bottom = 4.dp)) }
+                Text(text = text, color = BubbleTextColor, style = MaterialTheme.typography.bodySmall)
+                actions?.let {
+                    Row(modifier = Modifier.align(Alignment.End)) {
+                        CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides BubbleActionColor) { it() }
                     }
-                }
-                text?.let {
-                    Box(modifier = Modifier.padding(bottom = 24.dp)) {
-                        it()
-                    }
-                }
-                Row(modifier = Modifier.align(Alignment.End)) {
-                    confirmButton()
                 }
             }
         }
     }
 }
 
+/** A transient bubble near the bottom of the window for short status messages. */
 @Composable
 fun CustomNotificationWindow(
     message: String, onDismissRequest: () -> Unit
@@ -164,31 +171,31 @@ fun CustomNotificationWindow(
     }
 
     Popup(
-
-        alignment = Alignment.Center, onDismissRequest = onDismissRequest, properties = PopupProperties(focusable = false)
+        alignment = Alignment.BottomCenter, offset = IntOffset(0, -120), onDismissRequest = onDismissRequest, properties = PopupProperties(focusable = false)
     ) {
         Surface(
-            modifier = Modifier
-                .wrapContentSize()
-                .padding(16.dp), shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 6.dp
+            modifier = Modifier.widthIn(max = 320.dp), shape = RoundedCornerShape(10.dp), color = BubbleColor, shadowElevation = 6.dp
         ) {
-            Box(modifier = Modifier.padding(24.dp), contentAlignment = Alignment.Center) {
-                Text(text = message, style = MaterialTheme.typography.bodyMedium)
-            }
+            Text(text = message, color = BubbleTextColor, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
         }
     }
 }
 
-class WindowCenterPositionProvider : PopupPositionProvider {
+/** Places a bubble just below its anchor, flipping above it when there is no room, and keeps it inside the window. */
+class AnchoredBubblePositionProvider(private val gap: Int = 8) : PopupPositionProvider {
     override fun calculatePosition(
         anchorBounds: IntRect, windowSize: IntSize, layoutDirection: LayoutDirection, popupContentSize: IntSize
     ): IntOffset {
-        val windowCenter = IntOffset(
-            windowSize.width / 2, windowSize.height / 2
-        )
-        return IntOffset(
-            windowCenter.x - popupContentSize.width / 2, windowCenter.y - popupContentSize.height / 2
-        )
+        val maxX = (windowSize.width - popupContentSize.width).coerceAtLeast(0)
+        val x = anchorBounds.left.coerceIn(0, maxX)
+        val below = anchorBounds.bottom + gap
+        val above = anchorBounds.top - gap - popupContentSize.height
+        val y = when {
+            below + popupContentSize.height <= windowSize.height -> below
+            above >= 0 -> above
+            else -> (windowSize.height - popupContentSize.height).coerceAtLeast(0)
+        }
+        return IntOffset(x, y)
     }
 }
 
@@ -375,20 +382,7 @@ fun CustomButton(
                     tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
 
                 if (showExplanation) {
-                    CustomAlertDialog(onDismissRequest = { showExplanation = false }, title = {
-                        Text(
-                            text = "注意事项", style = MaterialTheme.typography.titleMedium
-                        )
-                    }, text = {
-                        Text(
-                            text = explain, style = MaterialTheme.typography.bodyMedium
-                        )
-                    }, confirmButton = {
-                        TextButton(
-                            onClick = { showExplanation = false }) {
-                            Text("明白了")
-                        }
-                    })
+                    CustomBubble(onDismissRequest = { showExplanation = false }, text = explain)
                 }
             }
         }
@@ -496,20 +490,7 @@ private fun CustomSwitch(
                     tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
 
                 if (showExplanation) {
-                    CustomAlertDialog(onDismissRequest = { showExplanation = false }, title = {
-                        Text(
-                            text = "注意事项", style = MaterialTheme.typography.titleMedium
-                        )
-                    }, text = {
-                        Text(
-                            text = explain, style = MaterialTheme.typography.bodyMedium
-                        )
-                    }, confirmButton = {
-                        TextButton(
-                            onClick = { showExplanation = false }) {
-                            Text("明白了")
-                        }
-                    })
+                    CustomBubble(onDismissRequest = { showExplanation = false }, text = explain)
                 }
             }
         }

@@ -8,14 +8,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import com.coc.suncode.jar.ui.components.CustomButton
-import com.coc.suncode.jar.ui.components.SettingToggleButton
+import com.coc.suncode.jar.ui.components.ReorderableToggleGrid
 import com.coc.suncode.core.data.database.GlobalVars
 import com.coc.suncode.jar.ui.schema.Schema
 import kotlin.collections.set
 
 @Composable
-fun BuilderBaseUpgradeConfigs(index: Int, onNavigatePriority: (Int) -> Unit = {}){
+fun BuilderBaseUpgradeConfigs(index: Int){
     val items = Schema.BUILDER_BASE_BUILDINGS.all
+    // Building ranks are matched by display name, as the upgrade runtime does.
+    val priorities = remember { Schema.BUILDER_BASE_BUILDINGS_PRIORITY.all.associateBy { it.displayName } }
     val isExpanded = remember { mutableStateOf(true) }
 
     // 一键全选
@@ -52,15 +54,7 @@ fun BuilderBaseUpgradeConfigs(index: Int, onNavigatePriority: (Int) -> Unit = {}
 
         AnimatedVisibility(visible = isExpanded.value) {
             Column {
-                CustomButton(
-                    onClick = { onNavigatePriority(index) },
-                    text = "点击调整夜世界升级优先度"
-                )
-                FlowRow {
-                    items.forEach { item ->
-                        SettingToggleButton(key = "${item.key}_c${index}")
-                    }
-                }
+                ReorderableToggleGrid(index, items) { item -> priorities[item.displayName] }
             }
         }
     }

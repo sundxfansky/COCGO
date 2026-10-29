@@ -24,7 +24,7 @@ import com.coc.suncode.jar.ui.components.SettingSection
 import com.coc.suncode.jar.ui.schema.Schema.MAIN_BASE_SETTINGS
 
 fun LazyListScope.MainBaseConfig(
-    index: Int, isExpanded: Boolean, onToggleExpanded: () -> Unit, onNavigatePriority: (Int) -> Unit = {}, showHeader: Boolean = true
+    index: Int, isExpanded: Boolean, onToggleExpanded: () -> Unit, showHeader: Boolean = true
 ) {
     val enabled = GlobalVars.configStates["${MAIN_BASE_SETTINGS.ENABLED.key}_c$index"]?.value != "0"
     // The detail editor supplies its own world title and master switch.
@@ -183,7 +183,7 @@ fun LazyListScope.MainBaseConfig(
             }
 
             AnimatedVisibility(visible = GlobalVars.configStates["${MAIN_BASE_SETTINGS.BUILD_SETTING.key}_c$index"]?.value == "1") {
-                MainBaseUpgradeConfigs(index, onNavigatePriority)
+                MainBaseUpgradeConfigs(index)
             }
         }
     }

@@ -12,22 +12,18 @@ fun LazyListScope.GameConfig(
     onToggleMainExpanded: () -> Unit,
     isBuilderBaseExpanded: Boolean,
     onToggleBuilderBaseExpanded: () -> Unit,
-    onNavigatePriority: (Int) -> Unit = {},
-    onNavigateBuilderBasePriority: (Int) -> Unit = {},
     onScrollToBottom: () -> Unit = {}
 ) {
 
     MainBaseConfig(
         index = index,
         isExpanded = isMainExpanded,
-        onToggleExpanded = onToggleMainExpanded,
-        onNavigatePriority = onNavigatePriority
+        onToggleExpanded = onToggleMainExpanded
     )
     BuilderBaseConfig(
         index = index,
         isExpanded = isBuilderBaseExpanded,
         onToggleExpanded = onToggleBuilderBaseExpanded,
-        onNavigateBuilderBasePriority = onNavigateBuilderBasePriority,
         onScrollToBottom = onScrollToBottom
     )
 }

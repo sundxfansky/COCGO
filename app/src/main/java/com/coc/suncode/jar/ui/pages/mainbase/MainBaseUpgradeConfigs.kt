@@ -7,16 +7,20 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import com.coc.suncode.jar.ui.components.CustomButton
-import com.coc.suncode.jar.ui.components.SettingToggleButton
+import androidx.compose.runtime.remember
+import com.coc.suncode.jar.ui.components.ReorderableToggleGrid
 import com.coc.suncode.core.data.database.GlobalVars
+import com.coc.suncode.jar.ui.schema.Schema
 import com.coc.suncode.jar.ui.schema.Schema.MAIN_BASE_BUILDINGS
 import androidx.compose.runtime.saveable.rememberSaveable
 import com.coc.suncode.jar.ui.components.InputRowWithCheckBox
 import com.coc.suncode.jar.ui.schema.Schema.MAIN_BASE_SETTINGS
 
 @Composable
-fun MainBaseUpgradeConfigs(index: Int, onNavigatePriority: (Int) -> Unit = {}) {
+fun MainBaseUpgradeConfigs(index: Int) {
     val items = MAIN_BASE_BUILDINGS.all
+    // Building ranks are matched by display name, as the upgrade runtime does.
+    val priorities = remember { Schema.MAIN_BASE_BUILDING_PRIORITIES.all.associateBy { it.displayName } }
 
     val isExpanded = rememberSaveable { mutableStateOf(true) }
 
@@ -54,15 +58,7 @@ fun MainBaseUpgradeConfigs(index: Int, onNavigatePriority: (Int) -> Unit = {}) {
 
         AnimatedVisibility(visible = isExpanded.value) {
             Column {
-                CustomButton(
-                    onClick = { onNavigatePriority(index) },
-                    text = "点击调整主世界升级优先度"
-                )
-                FlowRow {
-                    items.forEach { item ->
-                        SettingToggleButton(key = "${item.key}_c${index}")
-                    }
-                }
+                ReorderableToggleGrid(index, items) { item -> priorities[item.displayName] }
             }
         }
         InputRowWithCheckBox(checkBoxKey = "${MAIN_BASE_SETTINGS.INSTANT_UPGRADE.key}_c$index", inputKey = "${MAIN_BASE_SETTINGS.INSTANT_UPGRADE_THRESHOLD.key}_c$index")

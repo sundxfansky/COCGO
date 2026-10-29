@@ -35,7 +35,8 @@ import androidx.compose.ui.unit.dp
 import com.coc.suncode.jar.ui.schema.ConfigManager
 import com.coc.suncode.core.data.database.GlobalVars
 import com.coc.suncode.jar.ui.schema.Schema.GLOBAL_SETTINGS
-import com.coc.suncode.jar.ui.components.CustomAlertDialog
+import androidx.compose.foundation.layout.Box
+import com.coc.suncode.jar.ui.components.CustomBubble
 import com.coc.suncode.jar.ui.components.CustomNotificationWindow
 import com.coc.suncode.jar.ui.components.CustomButton
 import com.coc.suncode.jar.ui.components.SettingSwitchIcon
@@ -145,6 +146,31 @@ fun HomeScreen(
         showCleanAllConfirmation = true
     }
 
+    val confirmCleanAllData: () -> Unit = {
+        isClearingData = true
+        GlobalVars.isAutoRunEnabled = false
+        GlobalVars.isPlaying.value = false
+        // Stop writers before deleting data, then exit without saving the in-memory draft.
+        CloudSyncManager.stop()
+        scope.launch {
+            val sdPath = Environment.getExternalStorageDirectory().path
+            try {
+                withContext(Dispatchers.IO) {
+                    // QQ grants live outside sunFiles and must be cleared with ordinary app data.
+                    QqAuthorizationManager.clearSavedAuthorizations(context)
+                    val path = "'$sdPath/sunFiles'"
+                    check(ServerShell.exec("rm -rf -- $path && [ ! -e $path ]").isSuccess)
+                }
+            } catch (error: Exception) {
+                isClearingData = false
+                ShowMessage.record("全部数据清除未完成：${error.javaClass.simpleName}")
+                showMsg("数据清除未完成，请确认 QQ 授权操作已结束、Root 权限正常后重试")
+                return@launch
+            }
+            AppExitHelper.exitApplication(context)
+        }
+    }
+
     // Auto-Run Timer Logic
     LaunchedEffect(GlobalVars.isAutoRunEnabled, GlobalVars.autoRunTimer) {
         if (GlobalVars.isAutoRunEnabled) {
@@ -246,9 +272,25 @@ fun HomeScreen(
                                     onClick = { cleanMemory() },
                                     explain = "本辅助会记住账号信息，例如记住当前账号是否已完成突袭，是否已完成部落竞赛等等。如果换号后不清空记忆，那么本辅助就会保留先前账号错误的记忆，进而可能发生某些异常操作。"
                                 )
-                                CustomButton(
-                                    text = "清除全部数据", enable = busyAccount == null, onClick = { cleanAllData() }, explain = "删除辅助设置、账号信息、全部 QQ 授权及授权工具缓存，用于保护用户隐私。"
-                                )
+                                // The confirmation bubble is anchored to this button.
+                                Box {
+                                    CustomButton(
+                                        text = "清除全部数据", enable = busyAccount == null, onClick = { cleanAllData() }, explain = "删除辅助设置、账号信息、全部 QQ 授权及授权工具缓存，用于保护用户隐私。"
+                                    )
+                                    if (showCleanAllConfirmation) {
+                                        CustomBubble(
+                                            onDismissRequest = { if (!isClearingData) showCleanAllConfirmation = false },
+                                            title = "清除全部数据",
+                                            text = "确认要删除所有数据吗？\n此操作不可撤销，将删除辅助设置、账号信息、全局 QQ 授权库及授权工具缓存。\n\n清除数据后，辅助将自动关闭，请手动重启辅助。",
+                                            actions = {
+                                                TextButton(enabled = !isClearingData, onClick = { showCleanAllConfirmation = false }) { Text("取消") }
+                                                TextButton(enabled = !isClearingData, onClick = confirmCleanAllData) {
+                                                    Text(if (isClearingData) "正在清除..." else "确认")
+                                                }
+                                            }
+                                        )
+                                    }
+                                }
                             }
                             Text(
                                 text = "换机或设备到期前必须清空全部数据！部分云机在设备到期后不会清空用户数据，严重威胁隐私安全！",
@@ -310,51 +352,6 @@ fun HomeScreen(
                     })
             }
 
-        }
-
-        // Confirmation dialog for clearing all data
-        if (showCleanAllConfirmation) {
-            CustomAlertDialog(onDismissRequest = { if (!isClearingData) showCleanAllConfirmation = false }, title = {
-                Text(
-                    text = "清除全部数据", style = MaterialTheme.typography.titleMedium
-                )
-            }, text = {
-                Text(
-                    text = "确认要删除所有数据吗？\n此操作不可撤销，将删除辅助设置、账号信息、全局 QQ 授权库及授权工具缓存。\n\n清除数据后，辅助将自动关闭，请手动重启辅助。", style = MaterialTheme.typography.bodyMedium
-                )
-            }, confirmButton = {
-                Row {
-                    TextButton(enabled = !isClearingData, onClick = { showCleanAllConfirmation = false }) {
-                        Text("取消")
-                    }
-                    TextButton(enabled = !isClearingData, onClick = {
-                        isClearingData = true
-                        GlobalVars.isAutoRunEnabled = false
-                        GlobalVars.isPlaying.value = false
-                        // Stop writers before deleting data, then exit without saving the in-memory draft.
-                        CloudSyncManager.stop()
-                        scope.launch {
-                            val sdPath = Environment.getExternalStorageDirectory().path
-                            try {
-                                withContext(Dispatchers.IO) {
-                                    // QQ grants live outside sunFiles and must be cleared with ordinary app data.
-                                    QqAuthorizationManager.clearSavedAuthorizations(context)
-                                    val path = "'$sdPath/sunFiles'"
-                                    check(ServerShell.exec("rm -rf -- $path && [ ! -e $path ]").isSuccess)
-                                }
-                            } catch (error: Exception) {
-                                isClearingData = false
-                                ShowMessage.record("全部数据清除未完成：${error.javaClass.simpleName}")
-                                showMsg("数据清除未完成，请确认 QQ 授权操作已结束、Root 权限正常后重试")
-                                return@launch
-                            }
-                            AppExitHelper.exitApplication(context)
-                        }
-                    }) {
-                        Text(if (isClearingData) "正在清除..." else "确认")
-                    }
-                }
-            })
         }
 
         // Floating notification overlay, auto-dismissed after 1200ms

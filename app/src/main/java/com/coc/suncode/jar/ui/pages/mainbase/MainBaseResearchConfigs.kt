@@ -9,14 +9,16 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import com.coc.suncode.jar.ui.components.CustomButton
 import com.coc.suncode.jar.ui.components.SettingDropdown
-import com.coc.suncode.jar.ui.components.SettingToggleButton
+import com.coc.suncode.jar.ui.components.ReorderableToggleGrid
 import com.coc.suncode.core.data.database.GlobalVars
+import com.coc.suncode.jar.ui.schema.Schema
 import com.coc.suncode.jar.ui.schema.Schema.MAIN_BASE_TROOPS_AND_SPELLS
 import com.coc.suncode.jar.ui.schema.Schema.MAIN_BASE_SETTINGS
 
 @Composable
 fun MainBaseResearchConfigs(index: Int) {
     val items = MAIN_BASE_TROOPS_AND_SPELLS.all
+    val priorities = remember { MAIN_BASE_TROOPS_AND_SPELLS.all.zip(Schema.MAIN_BASE_RESEARCH_PRIORITIES.all).associate { (item, rank) -> item.key to rank } }
     val isExpanded = remember { mutableStateOf(true) }
 
     // 一键全选
@@ -58,10 +60,8 @@ fun MainBaseResearchConfigs(index: Int) {
         )
 
         AnimatedVisibility(visible = isExpanded.value) {
-            FlowRow {
-                items.forEach { item ->
-                    SettingToggleButton(key = "${item.key}_c${index}")
-                }
+            Column {
+                ReorderableToggleGrid(index, items) { item -> priorities[item.key] }
             }
         }
     }

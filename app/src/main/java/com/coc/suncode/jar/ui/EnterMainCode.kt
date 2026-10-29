@@ -35,8 +35,6 @@ import com.coc.suncode.jar.code.universal.smalltools.RuntimeAccountSwitch
 import com.coc.suncode.core.data.websocket.ServerActions
 import com.coc.suncode.jar.code.runMainScript
 import com.coc.suncode.jar.ui.components.CustomButton
-import com.coc.suncode.jar.ui.pages.mainbase.MainBaseUpgradePriority
-import com.coc.suncode.jar.ui.pages.builderbase.BuilderBaseUpgradePriority
 import com.coc.suncode.jar.ui.pages.single.HomeScreen
 import com.coc.suncode.jar.ui.pages.single.AccountDetailScreen
 import com.coc.suncode.jar.ui.pages.single.BugReport
@@ -121,27 +119,7 @@ class EnterMainCode : MainCode, RuntimeAccountSwitcher, FeaturePluginClient {
                         composable("account/{index}") { entry ->
                             AccountDetailScreen(
                                 initialIndex = entry.arguments?.getString("index")?.toIntOrNull() ?: 1,
-                                onBack = { navController.popBackStack() },
-                                onNavigatePriority = { index -> navController.navigate("priority/$index") },
-                                onNavigateBuilderBasePriority = { index -> navController.navigate("builder_base_priority/$index") }
-                            )
-                        }
-                        composable("priority/{index}") { backStackEntry ->
-                            val index = backStackEntry.arguments?.getString("index")?.toIntOrNull() ?: 1
-                            MainBaseUpgradePriority(
-                                index = index,
-                                onSaveSuccess = {
-                                    navController.popBackStack()
-                                }
-                            )
-                        }
-                        composable("builder_base_priority/{index}") { backStackEntry ->
-                            val index = backStackEntry.arguments?.getString("index")?.toIntOrNull() ?: 1
-                            BuilderBaseUpgradePriority(
-                                index = index,
-                                onSaveSuccess = {
-                                    navController.popBackStack()
-                                }
+                                onBack = { navController.popBackStack() }
                             )
                         }
                     }

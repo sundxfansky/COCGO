@@ -26,7 +26,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.coc.suncode.core.data.database.GlobalVars
 import com.coc.suncode.core.ui.theme.AppColors
-import com.coc.suncode.jar.ui.components.CustomAlertDialog
+import androidx.compose.foundation.layout.Box
+import com.coc.suncode.jar.ui.components.CustomBubble
 import com.coc.suncode.jar.ui.components.CustomButton
 import com.coc.suncode.jar.ui.components.SettingNumberStepper
 import com.coc.suncode.jar.ui.components.SettingSection
@@ -100,30 +101,27 @@ private fun SyncAccountProfiles() {
     }
     SettingSwitchIcon(key = GLOBAL_SETTINGS.SYNC_INCLUDE_BUILDER_BASE.key, afterChange = { result = "" })
     if (error != null) Text(error, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
-    CustomButton(text = "开始同步", enable = error == null, onClick = { confirming = true })
-    if (result.isNotEmpty()) Text(result, style = MaterialTheme.typography.labelMedium)
-
-    if (confirming && error == null) {
-        CustomAlertDialog(
-            onDismissRequest = { confirming = false },
-            title = { Text("确认同步配置", style = MaterialTheme.typography.titleMedium) },
-            text = {
-                Text(
-                    "将用账号 $source 的${worldText}配置覆盖账号 $start 至 $end（跳过账号 $source）。\n此操作会覆盖目标账号的现有配置，保存后生效。",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = { confirming = false }) { Text("取消") }
-                TextButton(onClick = {
-                    confirming = false
-                    GlobalVars.isAutoRunEnabled = false
-                    val synced = ConfigManager.syncAccountProfiles(source!!, start!!..end!!, includeBuilderBase)
-                    result = "已将${sourceName} $source 的${worldText}配置同步到 $synced 个账号，请点击保存使其生效。"
-                }) { Text("确认同步") }
-            }
-        )
+    // The confirmation bubble is anchored to the button that opened it.
+    Box {
+        CustomButton(text = "开始同步", enable = error == null, onClick = { confirming = true })
+        if (confirming && error == null) {
+            CustomBubble(
+                onDismissRequest = { confirming = false },
+                title = "确认同步配置",
+                text = "将用账号 $source 的${worldText}配置覆盖账号 $start 至 $end（跳过账号 $source）。\n此操作会覆盖目标账号的现有配置，保存后生效。",
+                actions = {
+                    TextButton(onClick = { confirming = false }) { Text("取消") }
+                    TextButton(onClick = {
+                        confirming = false
+                        GlobalVars.isAutoRunEnabled = false
+                        val synced = ConfigManager.syncAccountProfiles(source!!, start!!..end!!, includeBuilderBase)
+                        result = "已将${sourceName} $source 的${worldText}配置同步到 $synced 个账号，请点击保存使其生效。"
+                    }) { Text("确认同步") }
+                }
+            )
+        }
     }
+    if (result.isNotEmpty()) Text(result, style = MaterialTheme.typography.labelMedium)
 }
 
 private fun setAllAccounts(next: (Boolean) -> Boolean) {

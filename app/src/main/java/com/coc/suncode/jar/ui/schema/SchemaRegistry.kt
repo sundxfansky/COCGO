@@ -31,6 +31,12 @@ object SchemaRegistry {
             Scope.PROFILE,
             Schema.MAIN_BASE_BUILDING_PRIORITIES.all
         ),
+        ConfigModule(
+            "MAIN_BASE_RESEARCH_PRIORITIES",
+            Scope.PROFILE,
+            Schema.MAIN_BASE_RESEARCH_PRIORITIES.all
+        ),
+        ConfigModule("MAIN_BASE_PET_PRIORITIES", Scope.PROFILE, Schema.MAIN_BASE_PET_PRIORITIES.all),
         ConfigModule("BUILDER_BASE_BUILDINGS", Scope.PROFILE, Schema.BUILDER_BASE_BUILDINGS.all),
         ConfigModule(
             "BUILDER_BASE_BUILDINGS_PRIORITY",

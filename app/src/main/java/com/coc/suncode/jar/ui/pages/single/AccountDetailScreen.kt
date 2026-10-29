@@ -48,8 +48,7 @@ import kotlinx.coroutines.launch
 /** A separate destination keeps the home tabs and account list out of this editor. */
 @Composable
 fun AccountDetailScreen(
-    initialIndex: Int, onBack: () -> Unit,
-    onNavigatePriority: (Int) -> Unit, onNavigateBuilderBasePriority: (Int) -> Unit
+    initialIndex: Int, onBack: () -> Unit
 ) {
     val count = GlobalVars.configStates[Schema.GLOBAL_SETTINGS.ACCOUNT_COUNT.key]?.value?.toIntOrNull()?.coerceAtLeast(1) ?: 1
     var index by rememberSaveable { mutableIntStateOf(initialIndex.coerceIn(1, count)) }
@@ -90,8 +89,8 @@ fun AccountDetailScreen(
                     }
                 }
             }
-            if (world == 0) MainBaseConfig(index, true, {}, onNavigatePriority, showHeader = false)
-            else BuilderBaseConfig(index, true, {}, onNavigateBuilderBasePriority, showHeader = false)
+            if (world == 0) MainBaseConfig(index, true, {}, showHeader = false)
+            else BuilderBaseConfig(index, true, {}, showHeader = false)
         }
         Row {
             CustomButton(text = if (saving) "正在保存..." else "保存配置", enable = !saving, onClick = {

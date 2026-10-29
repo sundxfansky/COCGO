@@ -55,6 +55,8 @@ object Schema {
     val MAIN_BASE_PETS = MainBasePets
     val MAIN_BASE_BUILDINGS = MainBaseBuildings
     val MAIN_BASE_BUILDING_PRIORITIES = MainBaseBuildingPriorities
+    val MAIN_BASE_RESEARCH_PRIORITIES = MainBaseResearchPriorities
+    val MAIN_BASE_PET_PRIORITIES = MainBasePetPriorities
 
     val BUILDER_BASE_SETTINGS = BuilderBaseSettings
     val BUILDER_BASE_TROOPS = BuilderBaseTroops

@@ -8,14 +8,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import com.coc.suncode.jar.ui.components.CustomButton
-import com.coc.suncode.jar.ui.components.SettingToggleButton
+import com.coc.suncode.jar.ui.components.ReorderableToggleGrid
 import com.coc.suncode.core.data.database.GlobalVars
+import com.coc.suncode.jar.ui.schema.Schema
 import com.coc.suncode.jar.ui.schema.Schema.MAIN_BASE_PETS
 
 @Composable
 fun MainBasePetConfigs(index: Int) {
     // Render pet toggles directly from the schema list so new pets appear automatically.
     val items = MAIN_BASE_PETS.all
+    val priorities = remember { MAIN_BASE_PETS.all.zip(Schema.MAIN_BASE_PET_PRIORITIES.all).associate { (item, rank) -> item.key to rank } }
     val isExpanded = remember { mutableStateOf(true) }
 
     // 一键全选
@@ -51,10 +53,8 @@ fun MainBasePetConfigs(index: Int) {
         }
 
         AnimatedVisibility(visible = isExpanded.value) {
-            FlowRow {
-                items.forEach { item ->
-                    SettingToggleButton(key = "${item.key}_c${index}")
-                }
+            Column {
+                ReorderableToggleGrid(index, items) { item -> priorities[item.key] }
             }
         }
     }

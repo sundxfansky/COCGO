@@ -20,6 +20,9 @@ import com.coc.suncode.jar.code.universal.smalltools.getConfigRuntime
 import com.coc.suncode.jar.ui.schema.Schema
 import com.coc.suncode.jar.ui.schema.details.MainBaseSettings
 import com.coc.suncode.jar.ui.schema.details.MainBaseTroopsAndSpells
+import com.coc.suncode.jar.ui.schema.details.priorityKey
+import com.coc.suncode.jar.ui.schema.SettingDef
+import android.graphics.Point
 
 /**
  * Maps research level numbers to their corresponding color schemas via MyColors.
@@ -66,16 +69,17 @@ suspend fun mainBaseResearch(): Boolean {
     return enterMainScreen()
 }
 
-private suspend fun findAllResearchItems() {
-    // Build a map from display name to setting key for filtering enabled items
-    val displayNameToKey = MainBaseTroopsAndSpells.all.associate { it.displayName to it.key }
+private const val RESEARCH_PAGES = 8
 
-    // Filter research colors to only include enabled items
-    val enabledResearchColors = MainBaseResearchColors.allResearchColors.filter { schema ->
-        val displayName = schema.name ?: return@filter false
-        val key = displayNameToKey[displayName] ?: return@filter false
-        getBooleanConfigRuntime(key)
-    }
+private suspend fun findAllResearchItems() {
+    // Build a map from display name to setting def for filtering enabled items
+    val displayNameToDef = MainBaseTroopsAndSpells.all.associateBy { it.displayName }
+
+    // Filter research colors to only include enabled items, ordered by the configured research priority
+    val enabledResearchColors = MainBaseResearchColors.allResearchColors.mapNotNull { schema ->
+        val def = displayNameToDef[schema.name ?: return@mapNotNull null] ?: return@mapNotNull null
+        if (getBooleanConfigRuntime(def.key)) schema to configuredPriority(def) else null
+    }.sortedBy { it.second }.map { it.first }
 
     if (enabledResearchColors.isEmpty()) {
         ShowMessage("账号${InGamesVars.currentAccountNumber}，没有启用的研究项目")
@@ -83,86 +87,127 @@ private suspend fun findAllResearchItems() {
     }
 
     ShowMessage("账号${InGamesVars.currentAccountNumber}，已启用 ${enabledResearchColors.size} 个研究项目")
-    repeat(8) {
-        // Capture screenshot for searching
+
+    // Pass 1: scan every page and record which enabled items can be researched right now.
+    // The list is priority-ordered, so the top item can be started as soon as it is seen.
+    val researchable = mutableSetOf<ColorSchema>()
+    for (page in 0 until RESEARCH_PAGES) {
         val screenBuffer = ScreenCaptureManager.capture(asBitmap = false) as? ScreenCaptureManager.CaptureResult
             ?: logAndRestart("findAllResearchItems: Screen Capture Failed.")
-
-        // Search for enabled research items on current screen
         for (schema in enabledResearchColors) {
-            val result = findMultiColors(schema = schema, byteBuffer = screenBuffer, increment = 1)
-            if (result != null) {
-                val insufficientLeft = (result.x - 25).coerceAtLeast(0)
-                val insufficientTop = (result.y + 60).coerceAtLeast(0)
-                val insufficientRight = minOf(result.x + 100, screenBuffer.width - 1)
-                val insufficientBottom = minOf(result.y + 100, screenBuffer.height - 1)
-
-                val insufficientSchema = ColorSchema.rescope(
-                    MyColors.MainBaseResearchInsufficientColors,
-                    insufficientLeft, insufficientTop, insufficientRight, insufficientBottom
-                )
-
-                if (findMultiColors(byteBuffer = screenBuffer, schema = insufficientSchema, increment = 1) != null) {
-                    ShowMessage("账号${InGamesVars.currentAccountNumber}，跳过 ${schema.name}: 资源不足")
-                    continue
-                }
-
-                // Compute the crop region around the found item (full-screen coordinates)
-                val cropLeft = (result.x - 25).coerceAtLeast(0)
-                val cropTop = (result.y + 20).coerceAtLeast(0)
-                val cropWidth = minOf(40, screenBuffer.width - cropLeft)
-                val cropHeight = minOf(40, screenBuffer.height - cropTop)
-                if (cropWidth > 0 && cropHeight > 0) {
-                    // Iterate through all level entries; each level may have multiple schemas.
-                    // A level is matched if ANY of its schemas is found in the crop area.
-                    var detectedLevel: Int? = null
-                    outer@ for ((level, levelSchemas) in ResearchLevelColors) {
-                        for (levelColorSchema in levelSchemas) {
-                            val levelSchema = ColorSchema.rescope(
-                                levelColorSchema,
-                                cropLeft, cropTop, cropLeft + cropWidth - 1, cropTop + cropHeight - 1
-                            )
-                            val levelResult = findMultiColors(byteBuffer = screenBuffer, schema = levelSchema, increment = 1)
-                            if (levelResult != null) {
-                                detectedLevel = level
-                                break@outer
-                            }
-                        }
-                    }
-                    // Read target level offset from config and compute the target level
-                    val researchLevelStr = getConfigRuntime(MainBaseSettings.RESEARCH_LEVEL.key)
-                    val researchLevelOffset = researchLevelStr.toIntOrNull()
-                        ?: logAndRestart("研究等级至 配置值无效: $researchLevelStr")
-                    val maxLevel = MainBaseResearchMaxLevel.getMaxLevel(schema.name ?: "")
-                        ?: logAndRestart("未找到 ${schema.name} 的最大等级")
-                    val targetLevel = maxLevel - researchLevelOffset
-
-                    // Skip items with unknown level (cannot determine if upgrade is needed)
-                    if (detectedLevel == null) {
-                        ShowMessage("账号${InGamesVars.currentAccountNumber}，跳过 ${schema.name}: 未知等级，无法判断是否需要升级")
-                        continue
-                    }
-
-                    // Skip items already at or above the target level
-                    if (detectedLevel >= targetLevel) {
-                        ShowMessage("账号${InGamesVars.currentAccountNumber}，跳过 ${schema.name}: 当前等级$detectedLevel >= 目标等级$targetLevel (最大等级$maxLevel - $researchLevelOffset)")
-                        continue
-                    }
-
-                    ShowMessage("账号${InGamesVars.currentAccountNumber}，找到研究项目: ${schema.name}, 等级$detectedLevel, 目标等级$targetLevel")
-                    TouchActions.tap(result.x, result.y, delayTime = 500)
-                    TouchActions.tap(894, 617, delayTime = 500)
-                    clickRightBottom(3)
-                    return
-                }
+            if (schema in researchable) continue
+            val result = findResearchable(schema, screenBuffer) ?: continue
+            if (schema == enabledResearchColors.first()) {
+                startResearch(schema, result.x, result.y)
+                return
             }
+            researchable += schema
         }
+        if (page < RESEARCH_PAGES - 1) {
+            TouchActions.swipe(860, 500, 400, 500, delayTime = 500)
+            delayWithMultiplier(300)
+        }
+    }
 
-        // No enabled item found on current screen, swipe to see more items
+    val best = enabledResearchColors.firstOrNull { it in researchable }
+    if (best == null) {
+        ShowMessage("账号${InGamesVars.currentAccountNumber}，未找到任何已启用的研究项目")
+        clickRightBottom(3)
+        return
+    }
+
+    // Pass 2: scroll back to the start and tap the highest-priority researchable item.
+    ShowMessage("账号${InGamesVars.currentAccountNumber}，按优先度选择研究项目: ${best.name}")
+    repeat(2) { TouchActions.swipe(240, 500, 4000, 500) }
+    delayWithMultiplier(300)
+    repeat(RESEARCH_PAGES) {
+        val screenBuffer = ScreenCaptureManager.capture(asBitmap = false) as? ScreenCaptureManager.CaptureResult
+            ?: logAndRestart("findAllResearchItems: Screen Capture Failed.")
+        val result = findMultiColors(schema = best, byteBuffer = screenBuffer, increment = 1)
+        if (result != null) {
+            startResearch(best, result.x, result.y)
+            return
+        }
         TouchActions.swipe(860, 500, 400, 500, delayTime = 500)
         delayWithMultiplier(300)
     }
 
-    ShowMessage("账号${InGamesVars.currentAccountNumber}，未找到任何已启用的研究项目")
+    ShowMessage("账号${InGamesVars.currentAccountNumber}，未能重新定位研究项目: ${best.name}")
     clickRightBottom(3)
+}
+
+/** The configured rank of a research item; lower runs first, falling back to list order. */
+private fun configuredPriority(def: SettingDef): Int =
+    getConfigRuntime(priorityKey(def)).toIntOrNull() ?: (MainBaseTroopsAndSpells.all.indexOf(def) + 1)
+
+private suspend fun startResearch(schema: ColorSchema, x: Int, y: Int) {
+    ShowMessage("账号${InGamesVars.currentAccountNumber}，开始研究: ${schema.name}")
+    TouchActions.tap(x, y, delayTime = 500)
+    TouchActions.tap(894, 617, delayTime = 500)
+    clickRightBottom(3)
+}
+
+/** Returns the item's position when it is visible, affordable and below the target level; logs why otherwise. */
+private suspend fun findResearchable(schema: ColorSchema, screenBuffer: ScreenCaptureManager.CaptureResult): Point? {
+    val result = findMultiColors(schema = schema, byteBuffer = screenBuffer, increment = 1) ?: return null
+
+    val insufficientLeft = (result.x - 25).coerceAtLeast(0)
+    val insufficientTop = (result.y + 60).coerceAtLeast(0)
+    val insufficientRight = minOf(result.x + 100, screenBuffer.width - 1)
+    val insufficientBottom = minOf(result.y + 100, screenBuffer.height - 1)
+
+    val insufficientSchema = ColorSchema.rescope(
+        MyColors.MainBaseResearchInsufficientColors,
+        insufficientLeft, insufficientTop, insufficientRight, insufficientBottom
+    )
+
+    if (findMultiColors(byteBuffer = screenBuffer, schema = insufficientSchema, increment = 1) != null) {
+        ShowMessage("账号${InGamesVars.currentAccountNumber}，跳过 ${schema.name}: 资源不足")
+        return null
+    }
+
+    // Compute the crop region around the found item (full-screen coordinates)
+    val cropLeft = (result.x - 25).coerceAtLeast(0)
+    val cropTop = (result.y + 20).coerceAtLeast(0)
+    val cropWidth = minOf(40, screenBuffer.width - cropLeft)
+    val cropHeight = minOf(40, screenBuffer.height - cropTop)
+    if (cropWidth <= 0 || cropHeight <= 0) return null
+
+    // Iterate through all level entries; each level may have multiple schemas.
+    // A level is matched if ANY of its schemas is found in the crop area.
+    var detectedLevel: Int? = null
+    outer@ for ((level, levelSchemas) in ResearchLevelColors) {
+        for (levelColorSchema in levelSchemas) {
+            val levelSchema = ColorSchema.rescope(
+                levelColorSchema,
+                cropLeft, cropTop, cropLeft + cropWidth - 1, cropTop + cropHeight - 1
+            )
+            if (findMultiColors(byteBuffer = screenBuffer, schema = levelSchema, increment = 1) != null) {
+                detectedLevel = level
+                break@outer
+            }
+        }
+    }
+    // Read target level offset from config and compute the target level
+    val researchLevelStr = getConfigRuntime(MainBaseSettings.RESEARCH_LEVEL.key)
+    val researchLevelOffset = researchLevelStr.toIntOrNull()
+        ?: logAndRestart("研究等级至 配置值无效: $researchLevelStr")
+    val maxLevel = MainBaseResearchMaxLevel.getMaxLevel(schema.name ?: "")
+        ?: logAndRestart("未找到 ${schema.name} 的最大等级")
+    val targetLevel = maxLevel - researchLevelOffset
+
+    // Skip items with unknown level (cannot determine if upgrade is needed)
+    if (detectedLevel == null) {
+        ShowMessage("账号${InGamesVars.currentAccountNumber}，跳过 ${schema.name}: 未知等级，无法判断是否需要升级")
+        return null
+    }
+
+    // Skip items already at or above the target level
+    if (detectedLevel >= targetLevel) {
+        ShowMessage("账号${InGamesVars.currentAccountNumber}，跳过 ${schema.name}: 当前等级$detectedLevel >= 目标等级$targetLevel (最大等级$maxLevel - $researchLevelOffset)")
+        return null
+    }
+
+    ShowMessage("账号${InGamesVars.currentAccountNumber}，找到研究项目: ${schema.name}, 等级$detectedLevel, 目标等级$targetLevel")
+    return result
 }
