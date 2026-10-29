@@ -22,7 +22,11 @@ internal object ServerApkInstaller {
                 openAsset().use { input -> input.copyTo(output) }
             }
             if (!temporaryFile.renameTo(destination)) {
-                throw IOException("Cannot replace the installed server APK")
+                // Some file systems (e.g. Windows) refuse to rename over an existing or read-only file.
+                destination.setWritable(true)
+                if (!destination.delete() || !temporaryFile.renameTo(destination)) {
+                    throw IOException("Cannot replace the installed server APK")
+                }
             }
             return true
         } finally {
