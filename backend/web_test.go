@@ -32,7 +32,7 @@ func TestWebDirServesFrontendWithSPAFallback(test *testing.T) {
 	}
 
 	for _, path := range []string{"/", "/config/center"} {
-		if response := get(path); response.Code != 200 || !strings.Contains(response.Body.String(), "app") {
+		if response := get(path); response.Code != 200 || !strings.Contains(response.Body.String(), "app") || response.Header().Get("Cache-Control") != "no-cache" {
 			test.Fatalf("%s: %d %s", path, response.Code, response.Body.String())
 		}
 	}
@@ -41,6 +41,11 @@ func TestWebDirServesFrontendWithSPAFallback(test *testing.T) {
 	}
 	if response := get("/assets/main.js"); response.Code != 200 || !strings.Contains(response.Header().Get("Cache-Control"), "immutable") {
 		test.Fatalf("asset: %d %v", response.Code, response.Header())
+	}
+	for _, path := range []string{"/assets/missing.js", "/assets", "/missing.css", "/schema.json"} {
+		if response := get(path); response.Code != 404 || strings.Contains(response.Body.String(), "<html>") || strings.Contains(response.Header().Get("Cache-Control"), "immutable") {
+			test.Fatalf("missing asset fell back to HTML: %s: %d %s", path, response.Code, response.Body.String())
+		}
 	}
 	if response := get("/api/v1/missing"); response.Code != 404 || strings.Contains(response.Body.String(), "app") {
 		test.Fatalf("unknown api fell back to index: %d %s", response.Code, response.Body.String())

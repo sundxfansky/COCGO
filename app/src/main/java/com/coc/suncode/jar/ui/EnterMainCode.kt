@@ -20,9 +20,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
 import com.coc.suncode.core.data.database.GlobalVars
 import com.coc.suncode.core.util.basic.RunShell
 import com.coc.suncode.interfaces.FeaturePluginClient
@@ -35,8 +32,7 @@ import com.coc.suncode.jar.code.universal.smalltools.RuntimeAccountSwitch
 import com.coc.suncode.core.data.websocket.ServerActions
 import com.coc.suncode.jar.code.runMainScript
 import com.coc.suncode.jar.ui.components.CustomButton
-import com.coc.suncode.jar.ui.pages.single.HomeScreen
-import com.coc.suncode.jar.ui.pages.single.AccountDetailScreen
+import com.coc.suncode.jar.ui.pages.single.WebSettingsScreen
 import com.coc.suncode.jar.ui.pages.single.BugReport
 import com.coc.suncode.jar.ui.schema.ConfigManager
 import com.coc.suncode.statehelper.AppMode
@@ -100,7 +96,6 @@ class EnterMainCode : MainCode, RuntimeAccountSwitcher, FeaturePluginClient {
             }
             // Older plugins may retain the retired mode; route it to the ordinary settings page.
             AppMode.Main, AppMode.SwitchAccount -> {
-                val navController = rememberNavController()
                 // Any touch on any settings page (tabs, scrolling, blank areas) stops the auto-run countdown.
                 // Observed in the Initial pass without consuming, so child controls still receive the event.
                 Box(Modifier.fillMaxSize().pointerInput(Unit) {
@@ -109,20 +104,7 @@ class EnterMainCode : MainCode, RuntimeAccountSwitcher, FeaturePluginClient {
                         GlobalVars.isAutoRunEnabled = false
                     }
                 }) {
-                    NavHost(navController = navController, startDestination = "home") {
-                        composable("home") {
-                            HomeScreen(
-                                onSaveSuccess = onClose,
-                                onNavigateAccount = { index -> navController.navigate("account/$index") }
-                            )
-                        }
-                        composable("account/{index}") { entry ->
-                            AccountDetailScreen(
-                                initialIndex = entry.arguments?.getString("index")?.toIntOrNull() ?: 1,
-                                onBack = { navController.popBackStack() }
-                            )
-                        }
-                    }
+                    WebSettingsScreen(onClose = onClose)
                 }
             }
             else -> {}

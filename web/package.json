@@ -1,7 +1,10 @@
 {
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "vite build",
+    "build": "node scripts/build.mjs",
+    "schema": "node scripts/export-schema.mjs",
+    "schema:check": "node scripts/export-schema.mjs --check",
+    "test": "node --test src/*.test.mjs",
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {

@@ -78,7 +78,13 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/auth/login", s.login)
 	mux.HandleFunc("GET /api/v1/auth/me", s.me)
 	mux.HandleFunc("POST /api/v1/auth/logout", s.logout)
+	mux.HandleFunc("POST /api/v1/auth/device-token", s.deviceToken)
+	mux.HandleFunc("/api/v1/config/version", s.configVersion)
 	mux.HandleFunc("/api/v1/config", s.config)
+	mux.HandleFunc("/api/v1/devices", s.devices)
+	mux.HandleFunc("/api/v1/devices/{device}", s.renameDevice)
+	mux.HandleFunc("/api/v1/devices/{device}/config", s.deviceConfig)
+	mux.HandleFunc("/api/v1/devices/{device}/config/version", s.deviceConfigVersion)
 	mux.HandleFunc("GET /api/v1/settings", s.settings)
 	mux.HandleFunc("PUT /api/v1/settings", s.settings)
 	mux.HandleFunc("POST /api/v1/settings/test-email", s.testEmail)
@@ -88,6 +94,11 @@ func (s *server) routes() http.Handler {
 	return cors(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		limit := int64(1 << 20)
+		if r.Method == http.MethodPut && (r.URL.Path == "/api/v1/config" ||
+			(strings.HasPrefix(r.URL.Path, "/api/v1/devices/") && strings.HasSuffix(r.URL.Path, "/config"))) {
+			// Match the Android sync limit while keeping unrelated API bodies small.
+			limit = 8 << 20
+		}
 		if r.URL.Path == "/api/v1/plugins" && r.Method == http.MethodPost {
 			limit = 90 << 20
 		}

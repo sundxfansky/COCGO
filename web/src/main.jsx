@@ -1,236 +1,197 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import schema from './schema.json';
+import SettingsEditor, { acceptRuntimeSchema } from './SettingsEditor.jsx';
+import { Help, Icon, Modal, Toggle } from './components.jsx';
+import { canApplySnapshot, countAccounts, fetchChangedConfig, normalizeConfig, validateConfig } from './model.js';
+import { apiRequest, isLocal, nativeRequest } from './transport.js';
 import './style.css';
 
-// Production and local development both proxy this same-origin API path.
-const API = '/api/v1';
-const EMPTY_SMTP = { host: '', port: '587', user: '', password: '', from: '', security: 'starttls' };
+const LOCAL = isLocal();
+const readToken = () => { try { return localStorage.getItem('token') || ''; } catch { return ''; } };
 
-function App() {
-  const [token, setToken] = useState(localStorage.token || '');
+function Brand({ compact = false }) {
+  return <div className={`brand ${compact ? 'compact' : ''}`}><span className="brand-mark"><Icon name="sun" size={25}/></span><div><strong>太阳 <span>控制台</span></strong>{!compact && <small>SUN CONFIGURATION</small>}</div></div>;
+}
+
+function Auth({ onLogin }) {
   const [status, setStatus] = useState(null);
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [setupToken, setSetupToken] = useState('');
-  const [code, setCode] = useState('');
-  const [mode, setMode] = useState('login');
-  const [config, setConfig] = useState('{}');
-  const [version, setVersion] = useState(0);
+  const request = apiRequest('');
+  async function load() { try { setStatus(await request('/setup')); setMessage(''); } catch (error) { setMessage(error.message); } }
+  useEffect(() => { load(); }, []);
+  const setup = status && !status.initialized;
+  return <main className="auth-layout"><div className="auth-art"><Brand/><div className="auth-intro"><span className="eyebrow">每台设备，各自井然有序</span><h1>设置很轻。<br/>掌控很简单。</h1><p>一个工作台，管理你的所有设备。</p><div className="illustration" aria-hidden="true"><div className="illustration-card one"><Icon name="cloud" size={29}/><span>连接就绪</span><i/></div><div className="illustration-card two"><span className="illustration-avatar">01</span><div><b>我的设备</b><span className="illustration-lines"/></div><Icon name="check"/></div><div className="illustration-card three"><Icon name="settings"/><span>每个账号，独立配置</span></div></div></div><small className="auth-footnote">让重复变简单，让设置更清晰。</small></div><section className="auth-panel"><Brand compact/><div className="auth-form-wrap"><span className="eyebrow">{setup ? '开始使用' : '欢迎回来'}</span><h2>{setup ? '创建管理账号' : '登录你的工作台'}</h2><p>{setup ? '完成一次初始化，即可接入设备。' : '继续管理设备与自动化设置。'}</p>
+    {!status ? <div className="loading-state" role="status"><span className="spinner"/>{message || '正在连接服务…'}{message && <button type="button" onClick={load}>重试</button>}</div> : <form onSubmit={async (event) => { event.preventDefault(); setBusy(true); setMessage(''); try { const body = await request(setup ? '/setup' : '/auth/login', { method: 'POST', body: JSON.stringify({ email, password, ...(setup ? { setupToken } : {}) }) }); onLogin(body.token); } catch (error) { setMessage(error.message); } finally { setBusy(false); } }}>
+      {setup && <label><span className="inline-label">一次性安装码<Help>在服务端启动日志中查看一次性安装码。升级已有部署时，可填写原账号邮箱和密码，保留原有配置。</Help></span><input type="password" value={setupToken} onChange={(event) => setSetupToken(event.target.value)} required autoComplete="off"/></label>}
+      <label>邮箱<input type="email" placeholder="name@example.com" value={email} onChange={(event) => setEmail(event.target.value)} required autoComplete="username"/></label>
+      <label>密码<input type="password" placeholder="输入管理账号密码" minLength={8} maxLength={72} value={password} onChange={(event) => setPassword(event.target.value)} required autoComplete={setup ? 'new-password' : 'current-password'}/></label>
+      <button className="auth-submit" disabled={busy}>{busy ? '正在连接…' : setup ? '创建并进入工作台' : '进入工作台'}<Icon name="arrow" size={18}/></button>
+    </form>}{message && status && <p className="notice error" role="alert">{message}</p>}<div className="auth-security"><Icon name="shield" size={16}/><span>设备与配置，只在你的账号内共享</span></div></div></section></main>;
+}
+
+function ConnectionCard({ connection, sync, busy, dirty, onSave }) {
+  const [endpoint, setEndpoint] = useState(connection?.endpoint || '');
+  const [deviceName, setDeviceName] = useState(connection?.deviceName || '');
+  const [token, setToken] = useState('');
+  const [enabled, setEnabled] = useState(Boolean(connection?.enabled));
+  const [confirming, setConfirming] = useState(false);
+  const [editing, setEditing] = useState(false);
+  useEffect(() => { if (!editing) { setEndpoint(connection?.endpoint || ''); setDeviceName(connection?.deviceName || ''); setEnabled(Boolean(connection?.enabled)); } }, [connection?.endpoint, connection?.deviceName, connection?.enabled, editing]);
+  async function submit() { if (await onSave({ endpoint, token, enabled, deviceName })) { setToken(''); setEditing(false); setConfirming(false); } }
+  return <details className="card connection-card accent-blue"><summary><span className="card-icon"><Icon name="cloud"/></span><div><h3>远端同步</h3><span className="muted">{connection?.enabled ? sync?.message || '由服务端管理配置' : '使用本地设置'}</span></div><span className={`status-pill ${connection?.enabled ? 'teal' : 'neutral'}`}>{connection?.enabled ? '已启用' : '未启用'}</span><Icon name="arrow" size={16}/></summary><div className="module-body"><form onSubmit={(event) => { event.preventDefault(); if (dirty) setConfirming(true); else submit(); }}>
+    <div className="field-grid"><label>服务端地址<input type="url" placeholder="https://config.example.com" value={endpoint} disabled={busy} onChange={(event) => { setEditing(true); setEndpoint(event.target.value); }} required={enabled}/></label><label>设备名称<input maxLength={80} value={deviceName} disabled={busy} onChange={(event) => { setEditing(true); setDeviceName(event.target.value); }} placeholder="例如：客厅手机"/></label><label className="full-width"><span className="inline-label">访问 Token<Help>在服务端工作台的“接入设备”中复制访问 Token。同一服务端留空可保留现有 Token；换服务端时请重新填写。</Help></span><input type="password" value={token} disabled={busy} placeholder={connection?.tokenSet ? '已设置，留空保持不变' : '粘贴服务端访问 Token'} autoComplete="off" onChange={(event) => { setEditing(true); setToken(event.target.value); }}/></label></div>
+    <div className="connection-actions"><span className="inline-label">启用远端配置<Help>启用后本地设置只读，客户端定时检查服务端版本并应用新配置。请在服务端对应设备下编辑和保存。</Help></span><Toggle label="启用远端配置" checked={enabled} disabled={busy} onChange={(value) => { setEditing(true); setEnabled(value); }}/><button disabled={busy}>保存连接</button></div>
+    {connection?.deviceId && <div className="device-code"><span>设备标识</span><code>{connection.deviceId}</code></div>}
+  </form></div>{confirming && <Modal title="切换配置来源" onClose={() => setConfirming(false)}><p>当前有未保存的本地草稿。保存连接将重新加载配置，并丢弃这份草稿。</p><div className="actions"><button type="button" className="secondary" onClick={() => setConfirming(false)}>取消</button><button type="button" disabled={busy} onClick={submit}>保存连接并重新加载</button></div></Modal>}</details>;
+}
+
+function DeviceWorkspace({ device, token, active, onDeviceState }) {
+  const [catalog, setCatalog] = useState(schema);
+  const [config, setConfig] = useState(null);
+  const [version, setVersion] = useState(null);
+  const [metadata, setMetadata] = useState({});
+  const [dirty, setDirty] = useState(false);
   const [conflict, setConflict] = useState(null);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [settings, setSettings] = useState({ registrationEnabled: false, smtp: EMPTY_SMTP });
-  const [passwordSet, setPasswordSet] = useState(false);
-  const [settingsLoaded, setSettingsLoaded] = useState(false);
-  const dirty = useRef(false);
-  const configRevision = useRef(0);
-
-  async function request(path, options = {}) {
-    const response = await fetch(API + path, {
-      ...options,
-      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...options.headers },
+  const [reloadConfirm, setReloadConfirm] = useState(false);
+  const [lastChecked, setLastChecked] = useState(null);
+  const revision = useRef(0);
+  const fetchedVersion = useRef(null);
+  const current = useRef({ config, version, dirty, metadata, busy, catalog });
+  current.current = { config, version, dirty, metadata, busy, catalog };
+  const baseRequest = apiRequest(token);
+  const request = (path, options) => baseRequest(path.replace(/^\/config/, `/devices/${encodeURIComponent(device.id)}/config`), options);
+  function apply(body) {
+    const nextCatalog = body.schema ? acceptRuntimeSchema(body.schema) : current.current.catalog;
+    setCatalog(nextCatalog);
+    setConfig(normalizeConfig(body.config, nextCatalog));
+    setVersion(body.version); setMetadata(body); setDirty(false); setConflict(null); revision.current++;
+    fetchedVersion.current = body.version;
+    onDeviceState?.(device.id, { version: body.version, ...(body.connection?.deviceName ? { name: body.connection.deviceName } : {}) });
+  }
+  async function load(force = false) {
+    if (LOCAL) {
+      const summary = force || current.current.config === null ? null : await nativeRequest('getVersion');
+      if (summary) {
+        if (String(summary.version) === String(fetchedVersion.current ?? current.current.version) && summary.readOnly === current.current.metadata.readOnly) return { ...summary, unchanged: true };
+      }
+      return nativeRequest('getState');
+    }
+    return fetchChangedConfig(request, fetchedVersion.current ?? current.current.version, force || current.current.config === null);
+  }
+  useEffect(() => {
+    if (!active) return undefined;
+    let cancelled = false;
+    let timer;
+    async function poll() {
+      const started = revision.current;
+      try {
+        if (current.current.busy) return;
+        const body = await load();
+        if (cancelled || started !== revision.current) return;
+        setLastChecked(Date.now());
+        if (!body) return;
+        if (body.unchanged) { setMetadata((prior) => ({ ...prior, ...body })); return; }
+        fetchedVersion.current = body.version;
+        // Remote mode is authoritative even if another native control changed the source mid-draft.
+        if ((LOCAL && body.readOnly) || canApplySnapshot(current.current.dirty, started, revision.current)) apply(body);
+        else if (String(body.version) !== String(current.current.version) || body.readOnly) setConflict(body);
+        if (LOCAL) setMetadata(body);
+      } catch (error) { if (!cancelled) setMessage(error.message); }
+      finally { if (!cancelled) timer = setTimeout(poll, LOCAL ? 5000 : 30000); }
+    }
+    poll();
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [active, token, device.id]);
+  useEffect(() => { if (!dirty) return undefined; const warn = (event) => { event.preventDefault(); event.returnValue = ''; }; window.addEventListener('beforeunload', warn); return () => window.removeEventListener('beforeunload', warn); }, [dirty]);
+  function edit(next) { if (current.current.metadata.readOnly || current.current.busy) return; setConfig(next); setDirty(true); revision.current++; }
+  async function perform(action) { setBusy(true); setMessage(''); try { await action(); return true; } catch (error) { setMessage(error.message); return false; } finally { setBusy(false); } }
+  async function save() {
+    await perform(async () => {
+      const submitted = normalizeConfig(validateConfig(current.current.config), current.current.catalog);
+      const started = revision.current;
+      try {
+        const body = LOCAL ? await nativeRequest('saveConfig', { config: submitted, version: current.current.version }) : await request('/config', { method: 'PUT', headers: { 'If-Match': String(current.current.version) }, body: JSON.stringify({ config: submitted }) });
+        const nextCatalog = body.schema ? acceptRuntimeSchema(body.schema) : current.current.catalog;
+        setCatalog(nextCatalog);
+        if (started === revision.current) { setConfig(body.config ? normalizeConfig(body.config, nextCatalog) : submitted); setDirty(false); }
+        setVersion(body.version); setConflict(null); revision.current++;
+        fetchedVersion.current = body.version;
+        if (LOCAL) setMetadata(body);
+        onDeviceState?.(device.id, { version: body.version });
+        setMessage(LOCAL ? '设置已保存到此设备' : '配置已发布，设备将在下次检查时应用');
+      } catch (error) {
+        if (error.status === 409) { const latest = await load(true); fetchedVersion.current = latest.version; setConflict(latest); }
+        throw error;
+      }
     });
-    const body = await response.json();
-    if (!response.ok) { const error = Error(body.error || '请求失败'); error.status = response.status; throw error; }
-    return body;
   }
-
-  async function perform(action) {
-    setBusy(true);
-    setMessage('');
-    try {
-      await action();
-    } catch (error) {
-      setMessage(error.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function acceptLogin(body) {
-    localStorage.token = body.token;
-    setToken(body.token);
-    setPassword('');
-    setSetupToken('');
-    setMessage('');
-    dirty.current = false;
-  }
-
-  async function logout() {
-    // Revoke the server session before forgetting the local credential.
-    try { await request('/auth/logout', { method: 'POST' }); }
-    catch (error) { if (error.status !== 401) throw error; }
-    localStorage.removeItem('token');
-    setToken('');
-    setIsAdmin(false);
-    setSettingsLoaded(false);
-    setConfig('{}');
-    setVersion(0);
-    setConflict(null);
-    setMode('login');
-    dirty.current = false;
-  }
-
-  useEffect(() => {
-    let cancelled = false;
-    request('/setup').then((body) => { if (!cancelled) setStatus(body); })
-      .catch((error) => { if (!cancelled) setMessage(error.message); });
-    return () => { cancelled = true; };
-  }, [token]);
-
-  useEffect(() => {
-    if (!token) return undefined;
-    let cancelled = false;
-    async function loadConfig() {
-      const revision = configRevision.current;
-      const body = await request('/config');
-      // Ignore polls started before a local edit or save completed.
-      if (!cancelled && !dirty.current && revision === configRevision.current) {
-        setConfig(JSON.stringify(body.config, null, 2));
-        setVersion(body.version);
-      }
-    }
-    request('/auth/me').then(async (body) => {
-      if (cancelled) return;
-      setIsAdmin(body.isAdmin);
-      if (body.isAdmin) {
-        const result = await request('/settings');
-        if (!cancelled) {
-          setSettings(result.settings);
-          setPasswordSet(result.smtpPasswordSet);
-          setSettingsLoaded(true);
-        }
-      }
-    }).catch((error) => { if (!cancelled) setMessage(error.message); });
-    loadConfig().catch((error) => { if (!cancelled) setMessage(error.message); });
-    const timer = setInterval(() => loadConfig().catch(() => {}), 30000);
-    return () => { cancelled = true; clearInterval(timer); };
-  }, [token]);
-
-  function smtpField(key, value) {
-    setSettings((current) => ({ ...current, smtp: { ...current.smtp, [key]: value } }));
-  }
-
-  if (!status) return <main className="auth"><h1>太阳云配置</h1><p role="status">{message || '正在连接平台…'}</p>{message && <button onClick={() => perform(async () => setStatus(await request('/setup')))}>重试</button>}</main>;
-
-  if (!status.initialized) return (
-    <main className="auth">
-      <h1>初始化太阳云配置</h1>
-      <p>无需预先配置邮箱或域名。先建立管理员账号，后续在网页管理部署设置。</p>
-      <p>请从平台的后端容器日志复制一次性安装码，或运行 <code>docker compose logs backend</code>。</p>
-      <form onSubmit={(event) => {
-        event.preventDefault();
-        perform(async () => {
-          const body = await request('/setup', { method: 'POST', body: JSON.stringify({ setupToken, email, password }) });
-          setStatus({ initialized: true, registrationEnabled: false });
-          acceptLogin(body);
-        });
-      }}>
-        <label>一次性安装码<input type="password" value={setupToken} onChange={(event) => setSetupToken(event.target.value)} autoComplete="off" required /></label>
-        <label>管理员邮箱<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="username" required /></label>
-        <label>管理员密码<input type="password" minLength={8} maxLength={72} value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="new-password" required /></label>
-        <small>升级已有部署时，可填写原账号邮箱和原密码，将该账号设为管理员。</small>
-        <button disabled={busy}>完成初始化</button>
-      </form>
-      <p role="status">{message}</p>
-    </main>
-  );
-
-  if (!token) return (
-    <main className="auth">
-      <h1>太阳云配置</h1>
-      {mode !== 'verify' ? <form onSubmit={(event) => {
-        event.preventDefault();
-        perform(async () => {
-          const body = await request(`/auth/${mode}`, { method: 'POST', body: JSON.stringify({ email, password }) });
-          if (mode === 'register') {
-            setMode('verify');
-            setMessage(body.message);
-          } else acceptLogin(body);
-        });
-      }}>
-        <label>邮箱<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="username" required /></label>
-        <label>密码<input type="password" minLength={8} maxLength={72} value={password} onChange={(event) => setPassword(event.target.value)} autoComplete={mode === 'register' ? 'new-password' : 'current-password'} required /></label>
-        <button disabled={busy}>{mode === 'register' ? '注册' : '登录'}</button>
-      </form> : <form onSubmit={(event) => {
-        event.preventDefault();
-        perform(async () => {
-          await request('/auth/verify', { method: 'POST', body: JSON.stringify({ email, code }) });
-          setMode('login');
-          setMessage('验证成功，请登录');
-        });
-      }}>
-        <label>邮箱验证码<input value={code} onChange={(event) => setCode(event.target.value)} autoComplete="one-time-code" required /></label>
-        <button disabled={busy}>验证邮箱</button>
-      </form>}
-      {(status.registrationEnabled || mode !== 'login') && <button className="link" disabled={busy} onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setMessage(''); }}>{mode === 'login' ? '创建账号' : '返回登录'}</button>}
-      {!status.registrationEnabled && <p>管理员尚未开放注册。</p>}
-      <p role="status">{message}</p>
-    </main>
-  );
-
-  return (
-    <main>
-      <header><div><h1>配置中心</h1><p>配置保存在远端数据库，客户端会自动同步。</p></div><button disabled={busy} onClick={() => perform(logout)}>退出</button></header>
-      <p className="notice" role="status">{message}</p>
-      <section>
-        <div className="bar"><span>当前版本 v{version}</span><button disabled={busy} onClick={() => perform(async () => {
-          const revision = configRevision.current;
-          const parsed = JSON.parse(config);
-          if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object' || Object.values(parsed).some((value) => typeof value !== 'string')) throw Error('配置必须是键和值均为字符串的 JSON 对象');
-          let body;
-          try {
-            body = await request('/config', { method: 'PUT', headers: { 'If-Match': String(version) }, body: JSON.stringify({ config: parsed }) });
-          } catch (error) {
-            if (error.status === 409) setConflict(await request('/config'));
-            throw error;
-          }
-          setConflict(null);
-          setVersion(body.version);
-          // A newer draft must remain dirty even when the earlier save succeeds.
-          dirty.current = configRevision.current !== revision;
-          configRevision.current++;
-          setMessage(dirty.current ? '已下发保存时的配置；新修改尚未保存' : '配置已下发');
-        })}>保存并下发</button></div>
-        {conflict && <div role="alert">
-          <p>云端已更新为 v{conflict.version}。你的草稿已保留，请对照下方内容合并。</p>
-          <pre>{JSON.stringify(conflict.config, null, 2)}</pre>
-          <button disabled={busy} onClick={() => { setVersion(conflict.version); setConflict(null); }}>已手动合并，使用此版本再次保存</button>
-          <button disabled={busy} onClick={() => { setConfig(JSON.stringify(conflict.config, null, 2)); setVersion(conflict.version); dirty.current = false; configRevision.current++; setConflict(null); }}>用云端内容替换当前草稿</button>
-        </div>}
-        <textarea aria-label="客户端配置 JSON" value={config} onChange={(event) => { dirty.current = true; configRevision.current++; setConfig(event.target.value); }} spellCheck="false" />
-      </section>
-      {isAdmin && settingsLoaded && <section className="settings">
-        <h2>部署设置</h2>
-        <p>保存后立即生效，无需重启容器。管理员无需 SMTP 即可使用配置中心。</p>
-        <form onSubmit={(event) => {
-          event.preventDefault();
-          perform(async () => {
-            const body = await request('/settings', { method: 'PUT', body: JSON.stringify(settings) });
-            setSettings(body.settings);
-            setPasswordSet(body.smtpPasswordSet);
-            setStatus(await request('/setup'));
-            setMessage('部署设置已保存');
-          });
-        }}>
-          <div className="settings-grid">
-            <label>SMTP 主机<input placeholder="smtp.example.com" value={settings.smtp.host} onChange={(event) => smtpField('host', event.target.value)} /></label>
-            <label>SMTP 端口<input type="number" min="1" max="65535" value={settings.smtp.port} onChange={(event) => smtpField('port', event.target.value)} required /></label>
-            <label>加密方式<select value={settings.smtp.security} onChange={(event) => smtpField('security', event.target.value)}><option value="starttls">STARTTLS（通常为 587）</option><option value="tls">TLS（通常为 465）</option></select></label>
-            <label>SMTP 用户名<input value={settings.smtp.user} onChange={(event) => smtpField('user', event.target.value)} autoComplete="off" /></label>
-            <label>SMTP 密码 / 授权码<input type="password" placeholder={passwordSet ? '已保存，留空保持不变' : '尚未设置'} value={settings.smtp.password} onChange={(event) => smtpField('password', event.target.value)} autoComplete="new-password" /></label>
-            <label>发件人邮箱<input type="email" placeholder="默认使用 SMTP 用户名" value={settings.smtp.from} onChange={(event) => smtpField('from', event.target.value)} /></label>
-          </div>
-          <label className="checkbox"><input type="checkbox" checked={settings.registrationEnabled} onChange={(event) => setSettings({ ...settings, registrationEnabled: event.target.checked })} />开放用户注册（需要完整 SMTP 配置）</label>
-          <div className="actions"><button disabled={busy}>保存部署设置</button><button type="button" disabled={busy} onClick={() => perform(async () => {
-            const body = await request('/settings/test-email', { method: 'POST' });
-            setMessage(body.message);
-          })}>使用已保存设置发送测试邮件</button></div>
-        </form>
-      </section>}
-    </main>
-  );
+  async function reload() { await perform(async () => { const body = await load(true); if (body) apply(body); setReloadConfirm(false); }); }
+  const readOnly = Boolean(metadata.readOnly);
+  const accounts = config ? countAccounts(config, catalog) : 0;
+  const enabledCount = config ? Array.from({ length: accounts }, (_, index) => config[`isopen${index + 1}`]).filter((value) => value === '1').length : 0;
+  return <section className="workspace" id={`device-panel-${device.id}`} role="tabpanel" aria-labelledby={`device-tab-${device.id}`} hidden={!active}>
+    <div className="workspace-heading"><div><span className="eyebrow">{LOCAL ? 'DEVICE WORKSPACE' : 'CONNECTED WORKSPACE'}</span><h1>{metadata.connection?.deviceName || device.name}<span className="device-dot"/></h1><p>{readOnly ? '远端管理中 · 本地自动接收更新' : LOCAL ? '按你的节奏，设置这台设备。' : '独立配置，轻松同步。'}</p></div><div className="workspace-tools"><span className={`status-pill ${readOnly ? 'violet' : 'teal'}`}><span/>{readOnly ? '远端只读' : LOCAL ? '本地编辑' : '云端编辑'}</span><button type="button" className="icon-button" disabled={busy} aria-label="刷新当前设备配置" title="刷新配置" onClick={() => dirty ? setReloadConfirm(true) : reload()}><Icon name="refresh"/></button></div></div>
+    {!config ? <div className="loading-state" role="status"><span className="spinner"/>{message || '正在读取设备设置…'}{message && <button type="button" onClick={reload}>重试</button>}</div> : <>
+      <div className="overview-grid"><div className="overview-card"><span className="stat-icon blue"><Icon name="users"/></span><div><span>独立账号</span><strong>{accounts}<small>个</small></strong></div><span className="stat-extra">按账号管理</span></div><div className="overview-card"><span className="stat-icon teal"><Icon name="bolt"/></span><div><span>已开启</span><strong>{enabledCount}<small>个</small></strong></div><span className="stat-extra">随时调整</span></div><div className="overview-card"><span className="stat-icon violet"><Icon name="cloud"/></span><div><span>{LOCAL ? '同步状态' : '配置版本'}</span><strong className="status-value">{LOCAL ? metadata.connection?.enabled ? '远端同步' : '本地模式' : `v${version ?? 0}`}</strong></div><span className="stat-extra">{lastChecked ? `${new Date(lastChecked).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })} 检查` : '等待检查'}</span></div></div>
+      {readOnly && <div className="readonly-banner"><Icon name="cloud" size={19}/><span>配置由服务端管理</span><Help>请在服务端选择这台设备进行修改。本地页面不再保存设置，服务端有新版本时会自动更新。关闭远端同步后可恢复本地编辑。</Help>{metadata.sync?.message && <small>{metadata.sync.message}</small>}</div>}
+      {message && <div className="notice" role="status"><Icon name="check" size={17}/><span>{message}</span><button type="button" className="icon-button" aria-label="关闭提示" onClick={() => setMessage('')}><Icon name="close" size={15}/></button></div>}
+      {conflict && <div className="conflict-banner" role="alert"><div><strong>已有更新，草稿已保留</strong><p>先查看服务端的新版本，再决定如何继续。</p></div><button type="button" className="secondary" onClick={() => setReloadConfirm(true)}>查看并处理</button></div>}
+      <SettingsEditor catalog={catalog} config={config} onChange={edit} readOnly={readOnly} busy={busy} onMessage={setMessage} homeContent={LOCAL ? <ConnectionCard connection={metadata.connection} sync={metadata.sync} busy={busy} dirty={dirty} onSave={async (params) => perform(async () => { const result = await nativeRequest('setConnection', params); apply(result); setMessage('连接设置已保存'); })}/> : null}/>
+      <footer className="save-bar"><div><span className={`save-indicator ${dirty ? 'dirty' : ''}`}/><strong>{readOnly ? '服务端配置自动同步' : dirty ? '有未保存的修改' : !LOCAL && Number(version) === 0 ? '尚未发布初始配置' : '设置已同步'}</strong><span className="save-caption">{readOnly ? '此设备本地设置为只读' : LOCAL ? '仅保存当前设备' : '仅发布到当前设备'}</span></div><button type="button" disabled={readOnly || busy || (!dirty && (LOCAL || Number(version) !== 0)) || Boolean(conflict)} onClick={save}><Icon name="save" size={18}/>{busy ? '正在保存…' : LOCAL ? '保存设置' : Number(version) === 0 ? '发布初始配置' : '保存并发布'}</button></footer>
+    </>}
+    {reloadConfirm && <Modal title={conflict ? '配置版本已更新' : '重新加载配置'} onClose={() => setReloadConfirm(false)}>{conflict ? <><p>当前草稿不会自动被覆盖。可以载入最新配置，或对照最新内容手动修改草稿。</p><details className="json-details"><summary>查看最新配置</summary><pre>{JSON.stringify(conflict.config, null, 2)}</pre></details></> : <p>重新加载会放弃当前未保存的修改。</p>}<div className="actions"><button type="button" className="secondary" onClick={() => setReloadConfirm(false)}>继续编辑</button>{conflict && !readOnly && <button type="button" className="secondary" onClick={() => { setVersion(conflict.version); setConflict(null); revision.current++; setReloadConfirm(false); setMessage('已采用新版本号，请核对草稿后重新保存'); }}>已手动合并</button>}<button type="button" disabled={busy} onClick={() => conflict ? (apply(conflict), setReloadConfirm(false)) : reload()}>载入最新配置</button></div></Modal>}
+  </section>;
 }
 
-createRoot(document.getElementById('root')).render(<App />);
+function App() {
+  const [token, setToken] = useState(LOCAL ? '' : readToken);
+  const [devices, setDevices] = useState(LOCAL ? [{ id: 'local', name: '我的设备' }] : []);
+  const [activeDevice, setActiveDevice] = useState(LOCAL ? 'local' : null);
+  const [visited, setVisited] = useState(LOCAL ? ['local'] : []);
+  const [loaded, setLoaded] = useState(LOCAL);
+  const [message, setMessage] = useState('');
+  const [connect, setConnect] = useState(false);
+  const [showToken, setShowToken] = useState(false);
+  const [deviceToken, setDeviceToken] = useState('');
+  const [tokenBusy, setTokenBusy] = useState(false);
+  const [connectMessage, setConnectMessage] = useState('');
+  const [rename, setRename] = useState(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [logoutConfirm, setLogoutConfirm] = useState(false);
+  const currentToken = useRef(token);
+  currentToken.current = token;
+  const request = apiRequest(token);
+  const loadDevices = useCallback(async () => {
+    try { const body = await apiRequest(token)('/devices'); if (currentToken.current !== token) return; setDevices(body.devices); setLoaded(true); setMessage(''); setActiveDevice((value) => value || body.devices[0]?.id || null); }
+    catch (error) { if (currentToken.current !== token) return; setLoaded(true); setMessage(error.message); }
+  }, [token]);
+  useEffect(() => { if (LOCAL || !token) return undefined; loadDevices(); const timer = setInterval(loadDevices, 30000); return () => clearInterval(timer); }, [token, loadDevices]);
+  useEffect(() => { if (activeDevice) setVisited((list) => list.includes(activeDevice) ? list : [...list, activeDevice]); }, [activeDevice]);
+  function login(value) { try { localStorage.setItem('token', value); } catch { /* Private browser sessions may disallow persistence. */ } setToken(value); setLoaded(false); setDevices([]); setVisited([]); setActiveDevice(null); setDeviceToken(''); setShowToken(false); setConnect(false); }
+  async function logout() { setBusy(true); try { await request('/auth/logout', { method: 'POST' }); } catch (error) { if (error.status !== 401) { setMessage(error.message); setBusy(false); return; } } try { localStorage.removeItem('token'); } catch { /* The in-memory session is still cleared. */ } setToken(''); setDevices([]); setVisited([]); setActiveDevice(null); setDeviceToken(''); setShowToken(false); setConnect(false); setLogoutConfirm(false); setBusy(false); }
+  async function generateDeviceToken() { setTokenBusy(true); setConnectMessage(''); try { const result = await request('/auth/device-token', { method: 'POST' }); setDeviceToken(result.token); setConnectMessage('设备访问 Token 已生成'); } catch (error) { setConnectMessage(error.message); } finally { setTokenBusy(false); } }
+  async function copyToken() { try { await navigator.clipboard.writeText(deviceToken); setConnectMessage('访问 Token 已复制'); } catch { setShowToken(true); setConnectMessage('请选中文本并手动复制'); } }
+  function openConnect() { setConnect(true); setShowToken(false); setConnectMessage(''); }
+  if (!LOCAL && !token) return <Auth onLogin={login}/>;
+  return <div className="app-shell"><header className="app-header"><Brand compact/><div className="header-actions"><span className="header-mode"><span/>{LOCAL ? '设备设置' : '设备管理'}</span>{!LOCAL && <button type="button" className="text-button" onClick={() => setLogoutConfirm(true)}>退出登录</button>}</div></header><main className="dashboard"><div className="device-section-heading"><span className="eyebrow">{LOCAL ? '当前设备' : '你的设备'}</span>{!LOCAL && <button type="button" className="text-button" onClick={openConnect}><span className="plus">+</span>接入设备</button>}</div><nav className="device-tabs" role="tablist" aria-label="选择设备">{devices.map((device, index) => <div key={device.id} role="presentation" className={`device-tab ${activeDevice === device.id ? 'selected' : ''}`}><button type="button" id={`device-tab-${device.id}`} role="tab" aria-selected={activeDevice === device.id} aria-controls={`device-panel-${device.id}`} tabIndex={activeDevice === device.id ? 0 : -1} onClick={() => setActiveDevice(device.id)} onKeyDown={(event) => { if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) { event.preventDefault(); const next = event.key === 'Home' ? 0 : event.key === 'End' ? devices.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + devices.length) % devices.length; setActiveDevice(devices[next].id); document.getElementById(`device-tab-${devices[next].id}`)?.focus(); } }}><span className="device-avatar"><Icon name="settings" size={17}/></span><span>{device.name}</span>{activeDevice === device.id && <span className="selected-dot"/>}</button>{!LOCAL && activeDevice === device.id && <button type="button" className="rename-button" aria-label={`重命名${device.name}`} title="重命名设备" onClick={() => { setRename(device); setRenameValue(device.name); }}>···</button>}</div>)}</nav>
+    {message && <div className="notice" role="status">{message}<button type="button" className="text-button" onClick={loadDevices}>刷新设备</button></div>}
+    {!loaded && <div className="loading-state"><span className="spinner"/>正在连接设备工作台…</div>}
+    {loaded && devices.length === 0 && <div className="empty-devices"><span className="empty-orbit"><Icon name="cloud" size={48}/></span><span className="eyebrow">准备好，让设备加入</span><h1>这里是设备的工作台</h1><p>在客户端启用远端同步，设备就会出现在这里。</p><button type="button" onClick={openConnect}>接入第一台设备<Icon name="arrow" size={18}/></button><button type="button" className="text-button" onClick={loadDevices}><Icon name="refresh" size={16}/>刷新设备列表</button></div>}
+    {visited.map((id) => { const device = devices.find((item) => item.id === id); return device ? <DeviceWorkspace key={`${token}-${id}`} device={device} token={token} active={id === activeDevice} onDeviceState={(deviceId, update) => setDevices((list) => list.map((item) => item.id === deviceId ? { ...item, ...update } : item))}/> : null; })}
+    <div className="page-footnote"><Icon name="sun" size={14}/><span>太阳 · 每台设备的设置独立保存</span></div>
+  </main>
+    {connect && <Modal title="接入你的设备" onClose={() => setConnect(false)}><p>在客户端“主页设置 → 远端同步”中填写以下信息。保存并启用后，设备会自动加入工作台。</p><div className="connect-step"><span>1</span><label>服务端地址<input readOnly value={`${location.origin}/api/v1`} onFocus={(event) => event.target.select()}/></label></div><div className="connect-step"><span>2</span><div><div className="inline-label"><label>访问 Token</label><Help>设备 Token 有效期 30 天。它独立于网页登录，退出浏览器账号不会断开设备。到期后生成新 Token 并在客户端更新。</Help></div><div className="actions">{!deviceToken ? <button type="button" disabled={tokenBusy} onClick={generateDeviceToken}>{tokenBusy ? '正在生成…' : '生成设备 Token'}</button> : <><button type="button" onClick={copyToken}><Icon name="copy" size={16}/>复制访问 Token</button><button type="button" className="text-button" onClick={() => setShowToken(!showToken)}>{showToken ? '隐藏' : '手动查看'}</button><button type="button" className="text-button" disabled={tokenBusy} onClick={generateDeviceToken}>生成新的</button></>}</div>{showToken && <textarea className="token-value" aria-label="访问 Token" readOnly value={deviceToken} onFocus={(event) => event.target.select()}/>}</div></div><div className="connect-step"><span>3</span><div><strong>设置设备名称，启用远端配置</strong><p>客户端将自动接收此设备的新配置。</p></div></div>{connectMessage && <p className="notice" role="status">{connectMessage}</p>}<div className="actions"><button type="button" className="secondary" onClick={() => setConnect(false)}>完成</button><button type="button" onClick={loadDevices}><Icon name="refresh" size={16}/>刷新设备</button></div></Modal>}
+    {rename && <Modal title="重命名设备" onClose={() => setRename(null)}><form onSubmit={async (event) => { event.preventDefault(); setBusy(true); try { await request(`/devices/${encodeURIComponent(rename.id)}`, { method: 'PATCH', body: JSON.stringify({ name: renameValue.trim() }) }); setDevices((list) => list.map((item) => item.id === rename.id ? { ...item, name: renameValue.trim() } : item)); setRename(null); } catch (error) { setMessage(error.message); } finally { setBusy(false); } }}><label>设备名称<input maxLength={80} required value={renameValue} onChange={(event) => setRenameValue(event.target.value)}/></label><div className="actions"><button type="button" className="secondary" onClick={() => setRename(null)}>取消</button><button disabled={busy || !renameValue.trim()}>保存名称</button></div></form></Modal>}
+    {logoutConfirm && <Modal title="退出管理账号" onClose={() => setLogoutConfirm(false)}><p>未保存的草稿将丢失。已使用独立设备 Token 接入的设备会继续同步。</p><div className="actions"><button type="button" className="secondary" onClick={() => setLogoutConfirm(false)}>取消</button><button disabled={busy} onClick={logout}>退出登录</button></div></Modal>}
+  </div>;
+}
+
+createRoot(document.getElementById('root')).render(<App/>);

@@ -88,6 +88,26 @@ kotlin {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11
     }
 }
+
+// Package the same compiled frontend used by the server without opening a device port.
+val buildSettingsWeb by tasks.registering(Exec::class) {
+    workingDir(rootProject.file("web"))
+    commandLine(providers.gradleProperty("webNode").getOrElse("node"), "scripts/build.mjs")
+    inputs.files(fileTree(rootProject.file("web")) {
+        exclude("node_modules/**", "dist/**", "src/schema.json")
+    })
+    inputs.dir("src/main/java/com/coc/suncode/jar/ui/schema")
+    outputs.dir(rootProject.file("web/dist"))
+}
+val syncSettingsWebAssets by tasks.registering(Sync::class) {
+    dependsOn(buildSettingsWeb)
+    from(rootProject.file("web/dist"))
+    into(layout.buildDirectory.dir("generated/settingsWebAssets/settings"))
+}
+android.sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/settingsWebAssets").get().asFile)
+tasks.configureEach {
+    if (name.startsWith("merge") && name.endsWith("Assets")) dependsOn(syncSettingsWebAssets)
+}
 // A single catalog determines ownership for the compiler outputs and the runtime loader.
 @Suppress("UNCHECKED_CAST")
 val featureSpecs = JsonSlurper().parse(file("src/main/assets/feature-plugins.json")) as List<Map<String, Any>>

@@ -112,6 +112,9 @@ func initDB(db *sql.DB) {
 	if _, err = db.Exec(`ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0`); err != nil && !strings.Contains(err.Error(), "duplicate column") {
 		log.Fatal(err)
 	}
+	if err := initDevices(db); err != nil {
+		log.Fatal(err)
+	}
 }
 
 func (s *server) health(w http.ResponseWriter, _ *http.Request) {
@@ -243,10 +246,20 @@ func (s *server) config(w http.ResponseWriter, r *http.Request) {
 		jsonOut(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
+	s.serveConfig(w, r, id, legacyDeviceID)
+}
+
+// Both API generations share default-device rows and the same optimistic concurrency rules.
+func (s *server) serveConfig(w http.ResponseWriter, r *http.Request, id int, deviceID string) {
 	if r.Method == http.MethodGet {
 		var version int
 		var payload string
-		err := s.db.QueryRow(`SELECT version,payload FROM configs WHERE user_id=?`, id).Scan(&version, &payload)
+		var err error
+		if deviceID == legacyDeviceID {
+			err = s.db.QueryRow(`SELECT version,payload FROM configs WHERE user_id=?`, id).Scan(&version, &payload)
+		} else {
+			err = s.db.QueryRow(`SELECT version,payload FROM device_configs WHERE user_id=? AND device_id=?`, id, deviceID).Scan(&version, &payload)
+		}
 		if err == sql.ErrNoRows {
 			version, payload = 0, "{}"
 		}
@@ -283,6 +296,11 @@ func (s *server) config(w http.ResponseWriter, r *http.Request) {
 			x.Config[key] = value
 		}
 		payload, _ := json.Marshal(x.Config)
+		// Reserve space for the response envelope so every accepted snapshot also fits the client's download limit.
+		if len(payload) > (8<<20)-256 {
+			jsonOut(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "配置超过 8 MiB 限制"})
+			return
+		}
 		// Require the version the editor actually read; stale clients cannot overwrite newer data.
 		expected, err := strconv.Atoi(strings.Trim(r.Header.Get("If-Match"), "\""))
 		if err != nil || expected < 0 {
@@ -290,7 +308,12 @@ func (s *server) config(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		var version int
-		if expected == 0 {
+		if deviceID != legacyDeviceID && expected == 0 {
+			err = s.db.QueryRow(`INSERT INTO device_configs(user_id,device_id,version,payload,updated_at) VALUES(?,?,1,?,?)
+				ON CONFLICT(user_id,device_id) DO UPDATE SET version=version+1,payload=excluded.payload,updated_at=excluded.updated_at WHERE device_configs.version=0 RETURNING version`, id, deviceID, payload, time.Now().Unix()).Scan(&version)
+		} else if deviceID != legacyDeviceID {
+			err = s.db.QueryRow(`UPDATE device_configs SET version=version+1,payload=?,updated_at=? WHERE user_id=? AND device_id=? AND version=? RETURNING version`, payload, time.Now().Unix(), id, deviceID, expected).Scan(&version)
+		} else if expected == 0 {
 			err = s.db.QueryRow(`INSERT INTO configs(user_id,version,payload,updated_at) VALUES(?,1,?,?)
                 ON CONFLICT(user_id) DO UPDATE SET version=version+1,payload=excluded.payload,updated_at=excluded.updated_at WHERE configs.version=0 RETURNING version`, id, payload, time.Now().Unix()).Scan(&version)
 		} else {
@@ -307,6 +330,7 @@ func (s *server) config(w http.ResponseWriter, r *http.Request) {
 		jsonOut(w, http.StatusOK, map[string]any{"version": version, "config": x.Config})
 		return
 	}
+	w.Header().Set("Allow", "GET, PUT")
 	w.WriteHeader(http.StatusMethodNotAllowed)
 }
 
@@ -339,7 +363,7 @@ func cors(next http.Handler) http.Handler {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 		}
 		w.Header().Set("Access-Control-Allow-Headers", "Authorization,Content-Type,If-None-Match,If-Match")
-		w.Header().Set("Access-Control-Allow-Methods", "GET,PUT,POST,OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET,PUT,POST,PATCH,OPTIONS")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return

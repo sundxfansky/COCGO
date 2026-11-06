@@ -4,8 +4,44 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"testing"
+	"time"
 )
+
+func TestDeviceConnectionSessionSurvivesBrowserLogout(t *testing.T) {
+	s := testServer(t)
+	browserToken := initializeTestServer(t, s)
+	if response := callAPI(t, s, "POST", "/api/v1/auth/device-token", "", nil); response.Code != 401 {
+		t.Fatal("unauthenticated session creation accepted")
+	}
+	if response := callAPI(t, s, "GET", "/api/v1/auth/device-token", browserToken, nil); response.Code != 405 {
+		t.Fatal("session creation must be explicit POST")
+	}
+	response := callAPI(t, s, "POST", "/api/v1/auth/device-token", browserToken, nil)
+	var session struct {
+		Token     string `json:"token"`
+		ExpiresAt int64  `json:"expiresAt"`
+	}
+	if response.Code != 201 || json.Unmarshal(response.Body.Bytes(), &session) != nil || session.Token == "" || session.Token == browserToken {
+		t.Fatal("device session was not independently created")
+	}
+	if session.ExpiresAt <= time.Now().Unix() || session.ExpiresAt > time.Now().Add(30*24*time.Hour).Unix() {
+		t.Fatal("invalid bounded device session expiry")
+	}
+	if response := callAPI(t, s, "POST", "/api/v1/auth/logout", browserToken, nil); response.Code != 200 {
+		t.Fatal("browser logout failed")
+	}
+	if response := callAPI(t, s, "GET", "/api/v1/devices", session.Token, nil); response.Code != 200 {
+		t.Fatal("browser logout disconnected device session")
+	}
+	if response := callAPI(t, s, "POST", "/api/v1/auth/logout", session.Token, nil); response.Code != 200 {
+		t.Fatal("device session revocation failed")
+	}
+	if response := callAPI(t, s, "GET", "/api/v1/devices", session.Token, nil); response.Code != 401 {
+		t.Fatal("revoked device session remains valid")
+	}
+}
 
 func TestSessionExpiryAndRevocation(t *testing.T) {
 	s := testServer(t)

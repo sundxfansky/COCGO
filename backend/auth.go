@@ -71,18 +71,41 @@ func tokenHash(token string) string {
 	return hex.EncodeToString(sum[:])
 }
 func (s *server) token(id int) string {
+	return s.tokenUntil(id, time.Now().Add(30*24*time.Hour).Unix())
+}
+
+func (s *server) tokenUntil(id int, expires int64) string {
 	bytes := make([]byte, 32)
 	if _, err := rand.Read(bytes); err != nil {
 		return ""
 	}
 	token := "v2." + base64.RawURLEncoding.EncodeToString(bytes)
 	// Store only the token digest; a database read alone cannot impersonate a session.
-	_, err := s.db.Exec(`INSERT INTO sessions(token_hash,user_id,expires) VALUES(?,?,?)`, tokenHash(token), id, time.Now().Add(30*24*time.Hour).Unix())
+	_, err := s.db.Exec(`INSERT INTO sessions(token_hash,user_id,expires) VALUES(?,?,?)`, tokenHash(token), id, expires)
 	if err != nil {
 		return ""
 	}
 	_, _ = s.db.Exec(`DELETE FROM sessions WHERE expires<?`, time.Now().Unix())
 	return token
+}
+
+// A separate session keeps connected devices working when the browser session is logged out.
+func (s *server) deviceToken(w http.ResponseWriter, r *http.Request) {
+	id, ok := s.auth(r)
+	if !ok {
+		jsonOut(w, http.StatusUnauthorized, map[string]string{"error": "请重新登录"})
+		return
+	}
+	if !s.checkLimit(w, "device-token:"+strconv.Itoa(id), 20) {
+		return
+	}
+	expires := time.Now().Add(30 * 24 * time.Hour).Unix()
+	token := s.tokenUntil(id, expires)
+	if token == "" {
+		jsonOut(w, http.StatusInternalServerError, map[string]string{"error": "创建设备连接会话失败"})
+		return
+	}
+	jsonOut(w, http.StatusCreated, map[string]any{"token": token, "expiresAt": expires})
 }
 func bearer(r *http.Request) string {
 	value := r.Header.Get("Authorization")

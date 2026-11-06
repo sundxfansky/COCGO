@@ -1,6 +1,7 @@
 package com.coc.suncode.jar.ui.schema
 
 import com.coc.suncode.core.data.cloud.CloudConfigInbox
+import com.coc.suncode.core.data.cloud.CloudSyncManager
 import androidx.compose.runtime.mutableStateOf
 import com.coc.suncode.core.data.database.GlobalVars
 import com.coc.suncode.core.data.websocket.ServerActions
@@ -152,6 +153,11 @@ object ConfigManager {
      * Saves all configs to the JSON file via the server.
      */
     suspend fun persistConfigs(): Boolean {
+        // Remote mode owns the saved configuration, including writes from older native screens.
+        if (CloudSyncManager.remoteEnabled) {
+            ShowMessage("远端同步已启用，请在服务端网页修改设置", isChecking = false)
+            return false
+        }
         // Require an explicit choice instead of silently overwriting either configuration.
         if (CloudConfigInbox.pending != null) {
             ShowMessage("有新的云端配置，请先选择应用云端或保留本地修改", isChecking = false)

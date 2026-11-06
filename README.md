@@ -37,7 +37,11 @@ Root 环境下运行的部落冲突（Clash of Clans）自动化客户端：Kotl
 
 ## 快速开始
 
-依赖：JDK 17+、Android SDK/NDK、Rust（配合 `cargo-ndk`）、已获取 Root 权限的设备或模拟器。
+依赖：JDK 17+、Android SDK/NDK、Rust（配合 `cargo-ndk`）、Node.js 22+、已获取 Root 权限的设备或模拟器。
+
+首次构建 APK 前在 `web/` 执行 `npm ci` 安装 Web 页面构建依赖。APK 打包会自动编译同一份设置页面并作为本地资源打包；客户端不启动 Web 服务、不开放端口。可通过 `-PwebNode=<node路径>` 指定 Node.js 可执行文件。
+
+首次升级到 Web 设置界面需要更新 APK（新增宿主 Web 桥接及内置页面），不能只替换 JAR。后续 JAR 的字段名称和默认值通过运行时 Schema 提供，页面样式及前端代码随 APK 更新。远端模式只同步设备设置，不下载远端页面。
 
 ```sh
 # 一键检测/安装工具链并构建主应用
@@ -78,7 +82,7 @@ Root 后端随主应用构建，不需要构建、复制或安装 `server.apk`�
 
 ## 云端配置同步（可选）
 
-`backend/` 与 `web/` 提供一套可独立部署的账号配置同步服务，用于在多台设备间共享同一份配置。不部署不影响客户端本地运行。部署方式与接口说明见 [`docs/CLOUD_DEPLOYMENT.md`](docs/CLOUD_DEPLOYMENT.md)。
+`backend/` 与 `web/` 提供一套可独立部署的设备配置管理服务。一个管理账号接入多台设备，顶部设备标签切换各自的设置；每台设备的配置、版本和草稿独立。客户端启用远端同步后本地只读，每 30 秒检查版本，变化时才下载完整设置。不部署不影响客户端本地运行。部署方式与接口说明见 [`docs/CLOUD_DEPLOYMENT.md`](docs/CLOUD_DEPLOYMENT.md)。
 
 ## 依赖库
 

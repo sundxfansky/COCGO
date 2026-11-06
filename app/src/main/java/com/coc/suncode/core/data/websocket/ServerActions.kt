@@ -127,6 +127,12 @@ class ServerActions(
     /** Publish new configuration only after the internal root worker atomically persists it. */
     suspend fun persistConfig(newJson: JsonObject): Boolean = configMutex.withLock { persistConfigLocked(newJson) }
 
+    /** Compare and persist under the same gate used by native writes; null means the draft is stale. */
+    suspend fun persistConfigIfUnchanged(expected: JsonObject, newJson: JsonObject): Boolean? = configMutex.withLock {
+        // A reconnect can load a newer disk snapshot; wait for it before comparing the editor revision.
+        if (!awaitReady()) false else if (configJson != expected) null else persistConfigLocked(newJson)
+    }
+
     private suspend fun persistConfigLocked(newJson: JsonObject): Boolean {
         val snapshot = newJson.deepCopy()
         val response = sendActionSync(mapOf(

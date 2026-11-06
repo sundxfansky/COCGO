@@ -111,6 +111,55 @@ class ServerActionsTest {
     }
 
     @Test
+    fun conditionalSaveWaitsForLoadedSnapshotBeforeComparingRevision() = runBlocking {
+        val transport = FakeTransport()
+        val actions = ServerActions(transport, baseDir = "/test/")
+        val expected = actions.configJson.deepCopy()
+        val draft = expected.deepCopy().apply { addProperty("saved", "web draft") }
+        val pending = async(start = CoroutineStart.UNDISPATCHED) { actions.persistConfigIfUnchanged(expected, draft) }
+        assertFalse(pending.isCompleted)
+        transport.initialize()
+        assertNull(pending.await())
+        assertEquals(2, transport.messages.size)
+        assertEquals("original", actions.getValue("saved"))
+    }
+
+    @Test
+    fun staleWebDraftCannotOverwriteAnInFlightNativeWrite() = runBlocking {
+        val transport = FakeTransport()
+        val actions = ServerActions(transport, baseDir = "/test/")
+        transport.initialize()
+        val expected = actions.configJson.deepCopy()
+        val draft = expected.deepCopy().apply { addProperty("saved", "web draft") }
+        val native = async(start = CoroutineStart.UNDISPATCHED) { actions.writeToConfigFile("native", "new value") }
+        val conditional = async(start = CoroutineStart.UNDISPATCHED) { actions.persistConfigIfUnchanged(expected, draft) }
+        val sent = transport.messages.size
+        transport.reply("20")
+        native.await()
+        assertNull(conditional.await())
+        assertEquals(sent, transport.messages.size)
+        assertEquals("new value", actions.getValue("native"))
+        assertEquals("original", actions.getValue("saved"))
+    }
+
+    @Test
+    fun conditionalSaveKeepsRevisionUntilDiskWriteSucceeds() = runBlocking {
+        val transport = FakeTransport()
+        val actions = ServerActions(transport, baseDir = "/test/")
+        transport.initialize()
+        val expected = actions.configJson.deepCopy()
+        val draft = expected.deepCopy().apply { addProperty("saved", "web draft") }
+        val failed = async(start = CoroutineStart.UNDISPATCHED) { actions.persistConfigIfUnchanged(expected, draft) }
+        transport.listeners.last()("{\"status\":\"error\",\"message\":\"disk full\"}")
+        assertEquals(false, failed.await())
+        assertEquals(expected, actions.configJson)
+        val success = async(start = CoroutineStart.UNDISPATCHED) { actions.persistConfigIfUnchanged(expected, draft) }
+        transport.reply("20")
+        assertEquals(true, success.await())
+        assertEquals(draft, actions.configJson)
+    }
+
+    @Test
     fun fileExistenceUsesDataAndSchemaSaveReportsFailure() = runBlocking {
         val transport = FakeTransport()
         val actions = ServerActions(transport, baseDir = "/test/")
