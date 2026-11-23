@@ -13,6 +13,8 @@ interface IMainBaseUpgradeColors {
     val GoblinWorker: ColorSchema
     val smallElixirUpgradeIcon: ColorSchema
     val builderBaseSmallElixirUpgradeIcon: ColorSchema
+    val MainBaseWorker6: ColorSchema
+    val MainBaseBuildingUpgradeEntryGlobal: ColorSchema
 }
 
 object MainBaseUpgradeColors : IMainBaseUpgradeColors {
@@ -39,5 +41,20 @@ object MainBaseUpgradeColors : IMainBaseUpgradeColors {
     )
     override val builderBaseSmallElixirUpgradeIcon = ColorSchema.parse(
         1, 1, 1270, 710, "FF299A", "0|-2|FF4CC2,-2|-3|FF47BF,-3|0|FF338B,3|0|FF45BC,3|-3|FF81ED,3|-5|FF5FD9,1|3|FF2C83,-2|3|FA307B,-3|2|FB307B", 0, 0.9
+    )
+
+    override val MainBaseWorker6 = ColorSchema.parse(
+        1141,
+        504,
+        1188,
+        554,
+        "7087E6",
+        "-6|0|8DAEEE,-6|-5|5B66A0,-1|-7|9BCAFA,9|-7|3767CC,9|1|7A94E2,9|4|4F5688,6|5|A5ACBF,1|5|D6E0EC,-4|6|AFB8C6",
+        0,
+        0.9,
+    )
+
+    override val MainBaseBuildingUpgradeEntryGlobal = ColorSchema.parse(
+        1133, 579, 1259, 701, "10C7FD", "25|0|E2D2BD,50|0|EFE2D3,75|0|1FD4FF,100|0|0FC7FC,0|61|11BAFE,25|61|21C8FF,50|61|29CEFF,75|61|21C8FF,100|61|10BAFD", 0, 0.9,
     )
 }

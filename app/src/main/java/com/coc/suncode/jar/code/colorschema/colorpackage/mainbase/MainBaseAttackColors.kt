@@ -50,6 +50,13 @@ interface IMainBaseAttackColors {
     val WaitForBattle: ColorSchema
     val BattlePage: ColorSchema
     val SpeedUpButton: ColorSchema
+    val EndBattle2: ColorSchema
+    val KingBarbarian2: ColorSchema
+    val QueenArcher5: ColorSchema
+    val DragonDuke3: ColorSchema
+    val DragonDuke4: ColorSchema
+    val BattleRewardSelection: ColorSchema
+    val BattleRewardSelection2: ColorSchema
 }
 
 object MainBaseAttackColors : IMainBaseAttackColors {
@@ -213,5 +220,41 @@ object MainBaseAttackColors : IMainBaseAttackColors {
     // gradient like other confirm buttons, so offsets avoid the darker lower half.
     override val SpeedUpButton = ColorSchema.parse(
         1160, 370, 1280, 430, "85F6DD", "10|0|85F6DD,20|0|85F6DD,25|5|84F6DC,5|12|7FF4D8,15|10|80F4D9", 0, 0.9, "对战加速"
+    )
+
+    override val EndBattle2 = ColorSchema.parse(
+        8, 510, 170, 562, "322F7D", "17|0|322F7D,43|0|322F7D,66|0|322F7D,95|1|312F7D,94|23|070767,85|23|070767,76|23|070767,18|21|070767,10|21|070767", 0, 0.9,
+    )
+
+    override val KingBarbarian2 = ColorSchema.parse(
+        81, 594, 1239, 713, "E3DBD4", "12|0|91A3C7,25|0|A8B6C0,37|0|F5F2EE,49|0|F9F9DB,0|17|F2F0E8,12|17|A09166,25|17|D7CC9E,37|17|A0A486,49|17|E9FCFF", 0, 0.9, "野蛮人之王2"
+    )
+
+    override val QueenArcher5 = ColorSchema.parse(
+        22, 584, 1261, 711, "7A682F", "12|0|6B5A71,24|0|D8DAF0,36|0|D8D6F1,48|0|2D2D73,0|16|655F7F,12|16|8A9CB7,24|16|73829C,36|16|8E97B0,48|16|C4BDD7", 0, 0.9, "弓箭女皇5"
+    )
+
+    override val DragonDuke3 = ColorSchema.parse(
+        11, 589, 1274, 715, "996877", "12|0|586294,24|0|1C1764,35|0|06020E,47|0|D9DCFF,0|15|4E3F51,12|15|504961,24|15|DDE5FF,35|15|989DC9,47|15|312677", 0, 0.9, "飞龙公爵3"
+    )
+
+    override val DragonDuke4 = ColorSchema.parse(
+        11, 589, 1274, 715, "946B7F", "13|0|060318,26|0|1B1561,39|0|02024A,52|0|9689C7,0|13|7B5973,13|13|E1E4FF,26|13|9DBEE9,39|13|EAECFF,52|13|B0A491", 0, 0.9, "飞龙公爵4"
+    )
+
+    override val BattleRewardSelection = ColorSchema.parse(
+        328, 72, 977, 167, "292997", "25|0|292997,61|0|292997,98|0|292997,114|2|292995,296|3|292994,316|3|292994,356|3|292994,383|7|282891,404|6|282891", 0, 0.97, "战斗奖励选择"
+    )
+
+    override val BattleRewardSelection2 = ColorSchema.parse(
+        391,
+        163,
+        900,
+        237,
+        "2B2B9D",
+        "28|6|2B2C9B,50|6|2B2EA5,59|6|2B2EA5,52|11|292DA1,225|13|26268A,237|11|27278D,258|9|292992,304|11|28288E,311|9|282891",
+        0,
+        0.9,
+        "战斗奖励选择2"
     )
 }

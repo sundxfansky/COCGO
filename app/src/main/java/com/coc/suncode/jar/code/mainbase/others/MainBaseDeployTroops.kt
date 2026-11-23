@@ -1,7 +1,6 @@
-package com.coc.suncode.jar.code.mainbase.attack
+package com.coc.suncode.jar.code.mainbase.others
 
 
-import android.text.method.Touch
 import com.coc.suncode.core.system.screencapture.ScreenCaptureManager
 import com.coc.suncode.core.util.basic.delayWithMultiplier
 import com.coc.suncode.core.util.fileactions.LogHelper.logAndRestart
@@ -44,11 +43,11 @@ suspend fun mainBaseDeployTroops() {
     }
 }
 
-private suspend fun deployOthers() {
+internal suspend fun deployOthers(repetitionTime: Int = 10) {
     //Deploy other troops and spells
-    repeat(10) {
+    repeat(repetitionTime) {
         val troops = findMultiColorsUntil(
-            schemas = listOf(MyColors.TroopColorAtDeploymentBar, MyColors.SuperTroopColorAtDeploymentBar, MyColors.SpecialTroopColorAtDeploymentBar), duration = 100
+            schemas = listOf(MyColors.TroopColorAtDeploymentBar, MyColors.TroopColorAtDeploymentBar2, MyColors.SuperTroopColorAtDeploymentBar, MyColors.SpecialTroopColorAtDeploymentBar), duration = 100
         )
         if (troops != null) {
             TouchActions.tap(troops.x, troops.y, delayTime = 300)
@@ -71,9 +70,12 @@ private suspend fun deployHeroes() {
     // All 6 hero color schemas to check in the deployment bar
     val heroes = listOf(
         MyColors.KingBarbarian,
+        MyColors.KingBarbarian2,
         MyColors.QueenArcher,
         MyColors.QueenArcher2,
         MyColors.QueenArcher3,
+        MyColors.QueenArcher4,
+        MyColors.QueenArcher5,
         MyColors.MinionPrince,
         MyColors.MinionPrince2,
         MyColors.GrandWarden,
@@ -82,7 +84,10 @@ private suspend fun deployHeroes() {
         MyColors.GrandWarden4,
         MyColors.RoyalChampion,
         MyColors.RoyalChampion2,
-        MyColors.DragonDuke
+        MyColors.DragonDuke,
+        MyColors.DragonDuke2,
+        MyColors.DragonDuke3,
+        MyColors.DragonDuke4
     )
     for (hero in heroes) {
         // Take a fresh screenshot for each hero to get the latest state of the bar

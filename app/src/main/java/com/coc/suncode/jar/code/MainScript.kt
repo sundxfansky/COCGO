@@ -21,6 +21,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlin.time.Duration.Companion.milliseconds
 
 
 suspend fun runMainScript() {
@@ -29,7 +30,7 @@ suspend fun runMainScript() {
     // Login is a prerequisite; never rotate accounts or touch the game with it disabled.
     FeatureRuntime.requireLogin()
     ShowMessage("检测到设置已更新\n即将重新运行")
-    delay(200)
+    delay(200.milliseconds)
     // Read hot update preference and emit signal if "OnStart" mode is selected
     val updateOption = getConfigOrStop(Schema.GLOBAL_SETTINGS.AUTO_UPDATE.key).toIntOrNull() ?: 0
     if (updateOption == 1 || updateOption == 2) {

@@ -13,6 +13,7 @@ interface IMainBaseHeroHallColors {
     val SmithOreIcon: ColorSchema
     val PetsIconInHeroHall: ColorSchema
     val PetsShopInnerBanner: ColorSchema
+    val ClaimHeroHallReward: ColorSchema
 }
 
 object MainBaseHeroHallColors : IMainBaseHeroHallColors {
@@ -47,5 +48,9 @@ object MainBaseHeroHallColors : IMainBaseHeroHallColors {
     // Top banner inside the pet shop page
     override val PetsShopInnerBanner = ColorSchema.parse(
         356, 34, 929, 77, "5F6F00", "115|0|5F6F00,230|0|5F6F00,344|0|5F6F00,459|0|5F6F00,0|21|5F6F00,115|21|5F6F00,230|21|5F6F00,344|21|5F6F00,459|21|5F6F00", 0, 0.9, "战宠小屋顶部横幅"
+    )
+
+    override val ClaimHeroHallReward = ColorSchema.parse(
+        46, 212, 1172, 272, "8EEABF", "0|5|8DEABE,3|5|8DEABE,8|3|8EEABF,12|5|8DEABE,14|16|77E4B0,14|21|3AD48B,12|26|3AD48B,-4|26|3AD48B,-14|24|3AD48B", 0, 0.9, "领取奖励"
     )
 }

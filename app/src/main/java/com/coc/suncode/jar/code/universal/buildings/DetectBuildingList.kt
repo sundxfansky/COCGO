@@ -1,5 +1,9 @@
 package com.coc.suncode.jar.code.universal.buildings
 
+import com.coc.suncode.jar.code.universal.GameVersion
+import com.coc.suncode.jar.code.universal.InGamesVars
+import com.coc.suncode.jar.code.colorschema.MyColors
+import com.coc.suncode.jar.code.universal.colors.findMultiColors
 import com.coc.suncode.core.system.screencapture.ScreenCaptureManager
 import com.coc.suncode.core.util.basic.ShowMessage
 import com.coc.suncode.core.util.basic.delayWithMultiplier
@@ -10,33 +14,24 @@ import com.coc.suncode.jar.code.universal.recognizer.TextRecognizer
 /**
  * Detects building names from the screen.
  *
- * Scans the area (480, 100) to (900, 530) for Chinese text (building names).
+ * Scans the building-list area for Chinese building names.
  *
  * @param excludeNewBuildings If true, new buildings (新-prefixed) are excluded from the result.
  * @return A list of [DetectedBuilding] objects.
  */
-suspend fun detectBuildingList(excludeNewBuildings: Boolean = false): BuildingDetectionResult {
-    val startX = 400
-    val startY = 100
-    val endX = 900
-    val endY = 560
+private suspend fun hasGlobalBuildingList(): Boolean =
+    InGamesVars.currentGameVersion == GameVersion.GLOBAL && findMultiColors(MyColors.NewUpgradeList) != null
+
+suspend fun detectBuildingList(excludeNewBuildings: Boolean = false): BuildingDetectionResult =
+    detectBuildingList(excludeNewBuildings, hasGlobalBuildingList())
+
+private suspend fun detectBuildingList(excludeNewBuildings: Boolean, hasSidePanel: Boolean): BuildingDetectionResult {
+    val (startX, startY, endX, endY) = if (hasSidePanel) listOf(992, 46, 1140, 640) else listOf(400, 100, 900, 560)
 
     // Recognize text in the specified area
     val results = TextRecognizer.recognize(startX, startY, endX, endY, useChinese = true, threshold = 160)
 
     if (results.isEmpty()) return BuildingDetectionResult(emptyList())
-
-    // Show raw detected results for debugging
-    val rawSummary = results.joinToString(separator = " | ") { item ->
-        val pos = item.position
-        if (pos == null) {
-            item.text
-        } else {
-            val x = pos.left + startX
-            val y = pos.top + startY
-            "${item.text}($x,$y)"
-        }
-    }
 
     // Take a screenshot for color checking (needed for post-process and later filtering)
     val screenBuffer = ScreenCaptureManager.capture(asBitmap = false) as? ScreenCaptureManager.CaptureResult
@@ -78,7 +73,9 @@ suspend fun detectBuildingList(excludeNewBuildings: Boolean = false): BuildingDe
         val y = pos.top + startY
         if (upgradeY != null && y <= upgradeY) return@mapNotNull null
 
-        val count = countPixelsInArea(screenBuffer, x + 200, y - 20, x + 430, y + 10, 0xFF887F)
+        val costStartX = if (hasSidePanel) 1138 else x + 200
+        val costEndX = if (hasSidePanel) 1279 else x + 430
+        val count = countPixelsInArea(screenBuffer, costStartX, y - 20, costEndX, y + 10, 0xFF887F)
         if (count > 10) return@mapNotNull null
 
         val cleanedName = cleanBuildingName(item.text)
@@ -117,23 +114,25 @@ suspend fun iterateBuilderBaseBuildingUpgradeList(
     excludeNewBuildings: Boolean = false,
     onDetect: suspend (BuildingDetectionResult) -> Boolean
 ) {
+    val hasSidePanel = hasGlobalBuildingList()
+    val swipeX = if (hasSidePanel) 1070 else 666
     var previousBuildingNames: List<String>? = null
     loop@ for (i in 1..12) {
-        val result = detectBuildingList(excludeNewBuildings)
+        val result = detectBuildingList(excludeNewBuildings, hasSidePanel)
         if (onDetect(result)) return
 
         val currentBuildingNames = result.buildings.map { it.name }.sorted()
         if (previousBuildingNames != null && currentBuildingNames == previousBuildingNames) {
             repeat(2) {
-                TouchActions.swipe(666, 170, 666, 300, delayTime = 600)
+                TouchActions.swipe(swipeX, 170, swipeX, 300, delayTime = 600)
                 delayWithMultiplier(200)
-                val extraResult = detectBuildingList(excludeNewBuildings)
+                val extraResult = detectBuildingList(excludeNewBuildings, hasSidePanel)
                 if (onDetect(extraResult)) return
             }
             break@loop
         }
         previousBuildingNames = currentBuildingNames
-        TouchActions.swipe(666, 500, 666, 120, delayTime = 600)
+        TouchActions.swipe(swipeX, 500, swipeX, 120, delayTime = 600)
         delayWithMultiplier(200)
     }
 }

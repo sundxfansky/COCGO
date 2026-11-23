@@ -2,6 +2,7 @@ package com.building.plugin
 
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
@@ -33,15 +34,18 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.building.plugin.detector.BuildingDetector
+import com.building.plugin.ocr.PpOcrEngine
 import com.building.plugin.service.DetectorService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.random.Random
+import kotlin.coroutines.cancellation.CancellationException
 
 
 class MainActivity : ComponentActivity() {
@@ -73,6 +77,7 @@ fun ServiceInfo(modifier: Modifier = Modifier) {
     var resultText by remember { mutableStateOf("") }
     var isRunning by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     Box(modifier = modifier.fillMaxSize()) {
         Column(
@@ -154,6 +159,41 @@ fun ServiceInfo(modifier: Modifier = Modifier) {
                     enabled = !isRunning
                 ) {
                     Text(text = "模拟检测")
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+                Button(
+                    enabled = !isRunning,
+                    onClick = {
+                        scope.launch {
+                            isRunning = true
+                            try {
+                                resultText = withContext(Dispatchers.Default) {
+                                    PpOcrEngine.load()
+                                    val bitmap = context.assets.open("example.png").use { BitmapFactory.decodeStream(it) }
+                                        ?: error("无法读取 OCR 示例图片")
+                                    try {
+                                        // Measure inference separately from model warm-up and image decoding.
+                                        val start = System.nanoTime()
+                                        val results = PpOcrEngine.recognize(bitmap)
+                                        val elapsedMs = (System.nanoTime() - start) / 1_000_000
+                                        "识别 ${results.size} 行，耗时 ${elapsedMs} 毫秒\n" +
+                                            results.joinToString("\n") { line -> line.text }
+                                    } finally {
+                                        bitmap.recycle()
+                                    }
+                                }
+                            } catch (error: CancellationException) {
+                                throw error
+                            } catch (error: Exception) {
+                                resultText = "识别失败：${error.message}"
+                            } finally {
+                                isRunning = false
+                            }
+                        }
+                    }
+                ) {
+                    Text("测试 OCR")
                 }
 
                 if (isRunning) {

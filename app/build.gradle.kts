@@ -6,6 +6,7 @@ import java.nio.file.StandardCopyOption
 import java.util.zip.ZipFile
 import java.util.jar.JarOutputStream
 import java.util.jar.JarEntry
+import javax.inject.Inject
 
 plugins {
     alias(libs.plugins.android.application)
@@ -100,14 +101,34 @@ val buildSettingsWeb by tasks.registering(Exec::class) {
     inputs.file("src/main/assets/feature-plugins.json")
     outputs.dir(rootProject.file("web/dist"))
 }
-val syncSettingsWebAssets by tasks.registering(Sync::class) {
-    dependsOn(buildSettingsWeb)
-    from(rootProject.file("web/dist"))
-    into(layout.buildDirectory.dir("generated/settingsWebAssets/settings"))
+abstract class SyncSettingsWebAssets : DefaultTask() {
+    @get:InputDirectory
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val webDist: DirectoryProperty
+
+    @get:OutputDirectory
+    abstract val assetsDirectory: DirectoryProperty
+
+    @get:Inject
+    abstract val fileSystem: FileSystemOperations
+
+    @TaskAction
+    fun syncAssets() {
+        fileSystem.sync {
+            from(webDist) { into("settings") }
+            into(assetsDirectory)
+        }
+    }
 }
-android.sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/settingsWebAssets").get().asFile)
-tasks.configureEach {
-    if (name.startsWith("merge") && name.endsWith("Assets")) dependsOn(syncSettingsWebAssets)
+
+val syncSettingsWebAssets by tasks.registering(SyncSettingsWebAssets::class) {
+    dependsOn(buildSettingsWeb)
+    webDist.set(rootProject.layout.projectDirectory.dir("web/dist"))
+    assetsDirectory.set(layout.buildDirectory.dir("generated/settingsWebAssets"))
+}
+androidComponents.onVariants { variant ->
+    // Register the producer with AGP so packaging and lint both wait for these assets.
+    variant.sources.assets?.addGeneratedSourceDirectory(syncSettingsWebAssets, SyncSettingsWebAssets::assetsDirectory)
 }
 // A single catalog determines ownership for the compiler outputs and the runtime loader.
 @Suppress("UNCHECKED_CAST")
@@ -147,7 +168,11 @@ fun registerPluginBuild(artifactId: String, feature: Map<String, Any>?) = tasks.
     inputs.property("featureVersion", featureVersion)
     // Block-match template images travel with the core plugin so hot updates ship new images.
     val templateDir = file("src/main/resources/com/coc/suncode/jar/templates")
-    if (feature == null) inputs.files(fileTree(templateDir) { include("*.png") })
+    val ocrAssets = fileTree("src/main/assets") { include("ppocr_v6_tiny_*") }
+    if (feature == null) {
+        inputs.files(fileTree(templateDir) { include("*.png") })
+        inputs.files(ocrAssets)
+    }
     doLast {
         val sdk = androidComponents.sdkComponents.sdkDirectory.get().asFile
         val buildTools = File(sdk, "build-tools/${android.buildToolsVersion}")
@@ -205,6 +230,12 @@ fun registerPluginBuild(artifactId: String, feature: Map<String, Any>?) = tasks.
             } else {
                 templateDir.listFiles { f -> f.isFile && f.name.endsWith(".png") }.orEmpty().sortedBy { it.name }.forEach { png ->
                     jar.putNextEntry(JarEntry("com/coc/suncode/jar/templates/${png.name}")); png.inputStream().use { it.copyTo(jar) }; jar.closeEntry()
+                }
+                // Keep OCR usable when the core JAR is installed on an older host APK.
+                ocrAssets.files.sortedBy { it.name }.forEach { asset ->
+                    jar.putNextEntry(JarEntry("com/coc/suncode/jar/ocr-models/${asset.name}"))
+                    asset.inputStream().use { it.copyTo(jar) }
+                    jar.closeEntry()
                 }
                 // A core release carries compatible fallbacks without defining their classes itself.
                 featureSpecs.forEach { spec ->

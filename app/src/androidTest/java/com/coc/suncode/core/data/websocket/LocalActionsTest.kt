@@ -8,6 +8,7 @@ import android.os.Process
 import android.os.PowerManager
 import android.provider.Settings
 import android.os.Environment
+import android.view.inputmethod.InputMethodManager
 import androidx.core.app.NotificationManagerCompat
 import com.coc.suncode.core.system.accessibility.MyAccessibilityService
 import com.coc.suncode.core.system.inputmethod.SunInputMethodService
@@ -127,11 +128,10 @@ class LocalActionsTest {
                 assertEquals(previousKeyboard, Settings.Secure.getString(
                     context.contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD
                 ))
-                val enabledImes = Settings.Secure.getString(
-                    context.contentResolver, Settings.Secure.ENABLED_INPUT_METHODS
-                ).split(':')
+                // Android 14 restricts reads of the raw setting to apps targeting API 33 or lower.
+                val enabledImes = context.getSystemService(InputMethodManager::class.java).enabledInputMethodList
                 assertTrue(enabledImes.any {
-                    ComponentName.unflattenFromString(it.substringBefore(';')) == ComponentName(context, SunInputMethodService::class.java)
+                    ComponentName(it.packageName, it.serviceName) == ComponentName(context, SunInputMethodService::class.java)
                 })
                 val user = Process.myUid() / 100_000
                 val projection = ServerShell.exec("cmd appops get --user $user ${context.packageName} PROJECT_MEDIA")

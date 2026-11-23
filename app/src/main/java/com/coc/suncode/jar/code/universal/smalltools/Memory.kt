@@ -1,5 +1,6 @@
 package com.coc.suncode.jar.code.universal.smalltools
 
+import com.coc.suncode.jar.ui.schema.Schema
 import android.os.Environment
 import com.coc.suncode.core.util.fileactions.FileHelper
 import com.google.gson.JsonObject
@@ -23,6 +24,7 @@ suspend fun writeMemory(key: String, value: String): Boolean {
  * Returns true if the interval has elapsed (or no previous record exists), meaning the caller should proceed.
  */
 suspend fun checkMemoryFile(key: String, intervalMinutes: Int): Boolean {
+    if (getStaticConfig(Schema.GLOBAL_SETTINGS.DEBUG_MODE.key) == "1") return true
     val lastMinutes = readMemory(key).toLongOrNull() ?: return true
     val currentMinutes = System.currentTimeMillis() / 60_000
     return (currentMinutes - lastMinutes) >= intervalMinutes

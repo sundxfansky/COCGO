@@ -1,5 +1,7 @@
 package com.coc.suncode.jar.code.universal.buildings.upgrade
 
+import com.coc.suncode.jar.code.universal.smalltools.killGame
+import com.coc.suncode.jar.code.universal.smalltools.runGame
 import android.graphics.Bitmap
 import com.coc.suncode.core.system.screencapture.ScreenCaptureManager
 import com.coc.suncode.core.util.basic.ShowMessage
@@ -40,10 +42,7 @@ suspend fun upgradeBuildings(currentBase: BaseType): Boolean {
     var isNewBuildingDetected = false
     clickRightBottom(1)
     if (checkContinueBuild(currentBase)) {
-        val worker = when (currentBase) {
-            BaseType.Builder -> findMultiColorsUntil(schemas = listOf(MyColors.BuilderBaseWorker, MyColors.BuilderBaseWorker2), duration = 1000)
-            BaseType.Main -> findMultiColorsUntil(schemas = listOf(MyColors.MainBaseWorker, MyColors.MainBaseWorker2, MyColors.MainBaseWorker3), duration = 1000)
-        }
+        val worker = WorkerAndResearch.findUpgradeEntry(currentBase)
         if (worker != null) {
             TouchActions.tap(worker.x, worker.y, delayTime = 500)
             iterateBuilderBaseBuildingUpgradeList(onDetect = { result ->
@@ -70,8 +69,8 @@ suspend fun upgradeBuildings(currentBase: BaseType): Boolean {
             val summary = upgradableList.joinToString("\n")
             ShowMessage("所有可升级建筑: $summary")
             if (isNewBuildingDetected) {
-                if (!buildAllNewBuildings(currentBase)) return false
-                upgradeBuildings(currentBase)
+                // Re-scan on the next scheduled pass if a placement is still blocked.
+                return buildAllNewBuildings(currentBase)
             } else {
                 if (upgradeAllExistingBuildings(upgradableList, currentBase) == UpgradeResult.Failure) return false
             }
@@ -197,6 +196,11 @@ private suspend fun buildOneNewBuildings(currentBase: BaseType): Boolean {
         return true
     }
 
+    // Recover from a stuck placement before the next upgrade attempt.
+    ShowMessage("尝试放置建筑失败，重启游戏")
+    killGame()
+    delayWithMultiplier(1000)
+    runGame()
     return false
 }
 

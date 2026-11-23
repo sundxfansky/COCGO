@@ -13,6 +13,8 @@ interface IFeatureColors {
     val ResearchIcon2: ColorSchema
     val WhiteNumberColor: ColorSchema
     val MiddleGreenConfirm: ColorSchema
+    val TrainTroopsGlobal: ColorSchema
+    val TrainTroops2: ColorSchema
 }
 
 object FeatureColors : IFeatureColors {
@@ -39,5 +41,12 @@ object FeatureColors : IFeatureColors {
     )
     override val MiddleGreenConfirm = ColorSchema.parse(
         546, 427, 743, 501, "75F4D6", "39|0|75F4D6,79|0|75F4D6,118|0|74F4D6,157|0|74F4D6,0|37|20BE6F,39|37|20BE6F,79|37|20BE6F,118|37|20BE6F,157|37|1FBE6F", 0, 0.9, "中绿确认按钮"
+    )
+
+    override val TrainTroopsGlobal = ColorSchema.parse(
+        22, 578, 147, 702, "0FC8FC", "25|0|1ED4FF,50|0|25D8FE,99|-14|0EC9FB,100|0|0FC8FC,0|62|11BBFE,25|62|22C8FF,50|62|29CEFF,75|62|21C7FF,100|62|10BAFD", 0, 0.9
+    )
+    override val TrainTroops2 = ColorSchema.parse(
+        17, 483, 88, 559, "57F8FF", "33|13|E4DF1E,31|9|DBD815,11|0|57E8FF,14|0|50DEFF,0|17|E2CDEC,3|17|AF9EAF,7|17|ECDDF4,11|17|E3C7E3,14|17|35576E", 0, 0.9
     )
 }

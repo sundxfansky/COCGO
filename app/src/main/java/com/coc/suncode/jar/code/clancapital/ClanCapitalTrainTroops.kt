@@ -1,0 +1,92 @@
+package com.coc.suncode.jar.code.clancapital
+
+import com.coc.suncode.core.util.basic.delayWithMultiplier
+import com.coc.suncode.core.util.touchactions.TouchActions
+import com.coc.suncode.jar.code.colorschema.MyColors
+import com.coc.suncode.core.util.basic.ShowMessage
+import com.coc.suncode.jar.code.universal.InGamesVars
+import com.coc.suncode.jar.code.universal.colors.findMultiColors
+import com.coc.suncode.jar.code.universal.colors.findMultiColorsUntil
+import com.coc.suncode.jar.code.universal.enterMainScreen
+import com.coc.suncode.jar.code.universal.smalltools.StorageKeys
+import com.coc.suncode.jar.code.universal.smalltools.checkMemoryFile
+import com.coc.suncode.jar.code.universal.smalltools.writeMemory
+
+
+suspend fun clanCapitalTrainTroops(): Boolean {
+    val storageKey = StorageKeys.withAccountNumber(
+        StorageKeys.CLAN_CAPITAL_TRAIN_TROOPS, InGamesVars.currentAccountNumber
+    )
+
+    // Guard: skip training if the last training was less than 3 days (4320 minutes) ago
+    if (!checkMemoryFile(storageKey, 4320)) {
+        ShowMessage("3天内已训练过都城部队")
+        return true
+    }
+
+    if (!enterClanCapital()) return false
+    if (findMultiColors(MyColors.ZeroAttackTimes) != null) {
+        // The raid loop records the exhausted attack count.
+        return true
+    }
+    if (findMultiColors(MyColors.StartRaid) != null) return false
+    val trainTroopButton = findMultiColorsUntil(schemas = listOf(MyColors.TrainTroops, MyColors.TrainTroops2, MyColors.TrainTroopsGlobal), duration = 1000)
+    if (trainTroopButton != null) {
+        TouchActions.tap(trainTroopButton.x, trainTroopButton.y)
+    }
+    var isTrainingSuccess = false
+    val trashBinButton = findMultiColorsUntil(schemas = listOf(MyColors.CapitalTrainTroopPage, MyColors.CapitalTrainTroopPage2), duration = 300)
+    if (trashBinButton != null) {
+        TouchActions.tap(505, 300)
+        TouchActions.swipe(925, 580, 0, 680)
+        delayWithMultiplier(300)
+        TouchActions.tap(780, 615, delayTime = 50)
+        repeat(2) {
+            TouchActions.tap(940, 610, delayTime = 50)
+        }
+        repeat(7) {
+            TouchActions.tap(780, 480, delayTime = 50)
+        }
+        repeat(3) {
+            TouchActions.tap(635, 470, delayTime = 50)
+        }
+        repeat(7) {
+            TouchActions.tap(640, 615, delayTime = 50)
+        }
+        val capitalMiner = findMultiColors(MyColors.CapitalMiner)
+        if (capitalMiner != null) {
+            isTrainingSuccess = true
+            repeat(12) {
+                TouchActions.tap(capitalMiner.x, capitalMiner.y, delayTime = 50)
+            }
+        }
+
+        TouchActions.swipe(140, 680, 1200, 580)
+        delayWithMultiplier(300)
+        var capitalBarbarianButton = findMultiColorsUntil(schemas = listOf(MyColors.CapitalBarbarian, MyColors.CapitalBarbarian2), duration = 200)
+        if (capitalBarbarianButton != null) {
+            isTrainingSuccess = true
+            repeat(5) {
+                capitalBarbarianButton = findMultiColorsUntil(schemas = listOf(MyColors.CapitalBarbarian, MyColors.CapitalBarbarian2), duration = 200)
+                // Snapshot into a val so the smart cast holds inside the lambda
+                val capitalBarbarianSnapshot = capitalBarbarianButton
+                if (capitalBarbarianSnapshot != null) {
+                    repeat(10) {
+                        TouchActions.tap(capitalBarbarianSnapshot.x, capitalBarbarianSnapshot.y, delayTime = 30)
+                    }
+                    delayWithMultiplier(300)
+                }
+            }
+            repeat(2) {
+                TouchActions.tap(781, 476, delayTime = 30)
+            }
+        }
+        if (!isTrainingSuccess) return false
+        TouchActions.tap(870, 300, delayTime = 800)
+        // Record the training timestamp (in minutes) after confirming the troop selection
+        writeMemory(storageKey, (System.currentTimeMillis() / 60_000).toString())
+        ShowMessage("都城部队训练成功，已记录时间")
+        TouchActions.tap(1120, 35)
+    }
+    return isTrainingSuccess
+}

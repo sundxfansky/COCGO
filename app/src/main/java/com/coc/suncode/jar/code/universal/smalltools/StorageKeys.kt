@@ -19,6 +19,20 @@ object StorageKeys {
     const val JOIN_CLAN = "JoinClan"
     const val PLACE_HERO_BANNERS = "PlaceHeroBanners"
     const val UPGRADE_GEARS_AND_PETS = "UpgradeGearsAndPets"
+    const val CLAIM_VILLAGER_COMMISSIONS = "ClaimVillagerCommissions"
+
+    const val CLAN_CAPITAL_TRAIN_TROOPS = "ClanCapitalTrainTroops"
+    const val CLAN_CAPITAL_ATTACK = "ClanCapitalAttack"
+    const val COLLECT_CAPITAL_COINS = "CollectCapitalCoins"
+    const val CONTRIBUTE_CAPITAL_COINS = "ContributeCapitalCoins"
+    const val START_RAID = "StartRaid"
+    const val PLAY_TOURNAMENT = "PlayTournament"
+    const val START_CLAN_LEAGUE = "StartClanLeague"
+    const val DISTRIBUTE_CLAN_LEAGUE_REWARDS = "DistributeClanLeagueRewards"
+    const val LEAGUE_DONATION = "LeagueDonation"
+    const val CLAN_LEAGUE_ATTACK = "ClanLeagueAttack"
+    const val CHECK_LEAGUE_SHOP = "CheckLeagueShop"
+    const val GAME_JSON_EXPORT = "GameJsonExport"
 
     // Per-account keys for dynamic adjustment resource thresholds
     const val DYNAMIC_GOLD = "DynamicGold"

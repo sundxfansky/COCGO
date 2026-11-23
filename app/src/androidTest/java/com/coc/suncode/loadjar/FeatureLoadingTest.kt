@@ -27,6 +27,11 @@ class FeatureLoadingTest {
         ServerApkInstaller.install(core) { instrumentation.context.assets.open("code.jar") }
         val coreLoader = PluginClassLoader(core.path, context.codeCacheDir.path, context.classLoader)
         val shared = coreLoader.loadClass("com.coc.suncode.jar.code.universal.InGamesVars")
+        // The core code and its models must be deployable together on an earlier host APK.
+        listOf("det.onnx", "rec.onnx", "characters.json").forEach { suffix ->
+            val resource = "com/coc/suncode/jar/ocr-models/ppocr_v6_tiny_$suffix"
+            assertTrue("Missing core JAR asset: $resource", (coreLoader.getResourceAsStream(resource)?.use { it.read() } ?: -1) >= 0)
+        }
         val store = FeatureStore(context)
         ZipFile(core).use { archive ->
             FeatureSpec.read(context).forEach { spec ->

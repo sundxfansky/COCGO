@@ -16,6 +16,7 @@ interface IUniversalUpgradeColors {
     val BinaryOne: ColorSchema
     val BinaryZero: ColorSchema
     val CancelUpgradeWall: ColorSchema
+    val BinaryOne3: ColorSchema
 }
 
 object UniversalUpgradeColors : IUniversalUpgradeColors {
@@ -55,5 +56,16 @@ object UniversalUpgradeColors : IUniversalUpgradeColors {
     )
     override val CancelUpgradeWall = ColorSchema.parse(
         402, 430, 604, 501, "66C2FF", "41|0|66C2FF,81|0|66C2FF,121|0|66C2FF,162|0|66C2FF,0|35|285EE5,41|35|285EE5,81|35|285EE5,121|35|285EE5,162|35|285EE5", 0, 0.9, "取消升级"
+    )
+
+    override val BinaryOne3 = ColorSchema.parse(
+        1133,
+        533,
+        1152,
+        569,
+        "000000",
+        "3|0|000000,4|3|000000,4|5|000000,5|6|000000,2|14|000000,3|15|000000,4|12|000000,4|10|000000,3|6|000000",
+        0,
+        0.9,
     )
 }

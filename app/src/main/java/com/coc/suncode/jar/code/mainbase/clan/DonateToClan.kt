@@ -1,5 +1,7 @@
 package com.coc.suncode.jar.code.mainbase.clan
 
+import android.graphics.Point
+import com.coc.suncode.jar.code.colorschema.ColorSchema
 import com.coc.suncode.jar.features.FeatureRuntime
 import com.coc.suncode.core.system.screencapture.ScreenCaptureManager
 import com.coc.suncode.core.util.basic.ShowMessage
@@ -47,12 +49,12 @@ suspend fun donateToClan(): Boolean {
             // Tap the clan chat icon to open the chat panel
             TouchActions.tap(clanChat.x, clanChat.y, delayTime = 500)
             if (InGamesVars.currentGameVersion == GameVersion.CN) {
-                TouchActions.tap(523, 239, delayTime = 200)
-                TouchActions.tap(152, 88, delayTime = 200)
+                TouchActions.tap(520, 240, delayTime = 200)
+                TouchActions.tap(150, 90, delayTime = 200)
             } else {
                 TouchActions.tap(523, 98, delayTime = 300)//Global version chat area
             }
-            TouchActions.tap(40, 608, delayTime = 500)//Goto bottom
+            TouchActions.tap(40, 610, delayTime = 500)//Goto bottom
             continue
         }
         val iUnderstandButton = findMultiColors(schema = MyColors.IUnderstand, byteBuffer = screenBuffer, increment = 1)
@@ -60,7 +62,7 @@ suspend fun donateToClan(): Boolean {
             TouchActions.tap(iUnderstandButton.x, iUnderstandButton.y, delayTime = 500)
             continue
         }
-        val donationButton = findMultiColors(MyColors.DonationButton, byteBuffer = screenBuffer, increment = 1)
+        val donationButton = findDonationRequest(screenBuffer)
         if (donationButton != null) {
             TouchActions.tap(donationButton.x, donationButton.y, delayTime = 500)
             donateActions()
@@ -121,6 +123,29 @@ suspend fun donateToClan(): Boolean {
     }
 
     return enterMainScreen()
+}
+
+private suspend fun findDonationRequest(screen: ScreenCaptureManager.CaptureResult): Point? {
+    val button = MyColors.DonationButton
+    val requestIcons = listOf(MyColors.DonateSword, MyColors.DonateSword2, MyColors.DonateHumanFigure)
+    var scanY = button.y1
+    while (scanY < button.y2) {
+        val row = ColorSchema.rescope(button, button.x1, scanY, button.x2, button.y2)
+        val candidate = findMultiColors(row, byteBuffer = screen, increment = 1) ?: return null
+        val (x, y) = candidate.x to candidate.y
+        scanY = maxOf(scanY + 1, y + 1)
+
+        suspend fun matches(icon: ColorSchema, left: Int, top: Int, right: Int, bottom: Int): Boolean =
+            findMultiColors(ColorSchema.rescope(icon, left, top, right, bottom), byteBuffer = screen, increment = 1) != null
+
+        // Green approve and troop-config buttons can look like donation buttons.
+        if (matches(MyColors.TroopConfigCastleIcon, x - 200, y - 30, x - 90, y + 40) ||
+            matches(MyColors.ApproveJoinButton, x - 220, y - 30, x + 10, y + 10)
+        ) continue
+
+        if (requestIcons.any { matches(it, x - 400, y - 15, x, y + 40) }) return candidate
+    }
+    return null
 }
 
 private suspend fun donateActions() {

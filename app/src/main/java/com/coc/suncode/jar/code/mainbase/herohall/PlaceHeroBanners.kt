@@ -1,21 +1,18 @@
 package com.coc.suncode.jar.code.mainbase.herohall
 
+import com.coc.suncode.jar.code.universal.colors.findMultiColors
 import com.coc.suncode.core.util.basic.ShowMessage
-import com.coc.suncode.core.util.bugreporter.BugReporter
 import com.coc.suncode.core.util.touchactions.TouchActions
 import com.coc.suncode.jar.code.colorschema.MyColors
-import com.coc.suncode.jar.code.mainbase.others.zoomSmallMainBase
 import com.coc.suncode.jar.code.mainbase.upgrade.mainBaseFindBuildButton
 import com.coc.suncode.jar.code.universal.InGamesVars
 import com.coc.suncode.jar.code.universal.buildings.BaseType
 import com.coc.suncode.jar.code.universal.buildings.upgrade.BuildButtonType
-import com.coc.suncode.jar.code.universal.buildings.upgrade.moveWithDelay
 import com.coc.suncode.jar.code.universal.buildings.upgrade.tryToFindBuildPosition
 import com.coc.suncode.jar.code.universal.clickRightBottom
 import com.coc.suncode.jar.code.universal.colors.findMultiColorsUntil
 import com.coc.suncode.jar.code.universal.smalltools.StorageKeys
 import com.coc.suncode.jar.code.universal.smalltools.checkMemoryFile
-import com.coc.suncode.jar.code.universal.smalltools.killGame
 import com.coc.suncode.jar.code.universal.smalltools.writeMemory
 
 suspend fun placeHeroBanners(): Boolean {
@@ -44,6 +41,13 @@ private suspend fun placeHeroBannerAction() {
         return
     }
 
+    // Some hall notifications are reward chests instead of unplaced banners.
+    TouchActions.tap(705, 270, delayTime = 300)
+    repeat(4) {
+        val reward = findMultiColors(MyColors.ClaimHeroHallReward) ?: return@repeat
+        TouchActions.tap(reward.x, reward.y, delayTime = 300)
+        TouchActions.tap(640, 530, delayTime = 200)
+    }
     TouchActions.tap(598, 591, delayTime = 300) // Place hero banner page
     val placeHeroBanner = findMultiColorsUntil(schemas = listOf(MyColors.PlaceBannerButton), duration = 500)
 
@@ -53,21 +57,8 @@ private suspend fun placeHeroBannerAction() {
         var targetTick = mainBaseFindBuildButton(type = BuildButtonType.Tick)
         if (targetTick == null) {
             ShowMessage("建造失败，尝试寻找空位")
-            val redCross = mainBaseFindBuildButton(type = BuildButtonType.Cross)
-            if (redCross != null) {
-                val centerX = redCross.x + 20
-                val centerY = redCross.y + 45
-                TouchActions.touchDown(centerX.toFloat(), centerY.toFloat(), 1)
-                moveWithDelay(635F, 330F)
-                zoomSmallMainBase(isForBuild = true)
-                targetTick = tryToFindBuildPosition(BaseType.Main)
-            } else {
-                ShowMessage("未找到红色叉，错误截图已保存到/sdcard/sunFiles/bugReporter\n请将截图反馈给作者")
-                BugReporter.takeScreenshot("Red_Cross_Not_Found")
-                killGame()
-                clickRightBottom(1)
-                return
-            }
+            // The shared placement routine owns the touch pointer until it is released.
+            targetTick = tryToFindBuildPosition(BaseType.Main)
         }
 
         if (targetTick != null) {

@@ -1,8 +1,9 @@
 package com.coc.suncode.jar.code.mainbase.attack
 
+import com.coc.suncode.jar.code.mainbase.others.deployOthers
+import com.coc.suncode.jar.code.universal.colors.findMultiColorsUntil
 import com.coc.suncode.core.util.basic.ShowMessage
 import com.coc.suncode.core.util.basic.delayWithMultiplier
-import com.coc.suncode.core.util.fileactions.LogHelper
 import com.coc.suncode.jar.code.universal.InGamesVars
 import com.coc.suncode.core.util.touchactions.TouchActions
 import com.coc.suncode.jar.code.colorschema.MyColors
@@ -46,7 +47,12 @@ suspend fun mainBaseAttack(): Boolean {
             val remainingMinutes = (maxDurationMs - elapsed) / 60000.0
 
             ShowMessage("账号${InGamesVars.currentAccountNumber}，对战中，${"%.1f".format(remainingMinutes)}分钟后强制退出对战")
-            val endBattleButton = findMultiColors(schema = MyColors.EndBattle)
+            // Reward selection can cover the battle controls while the fight is still active.
+            if (findMultiColorsUntil(schemas = MyColors.BattleRewardSchemas, duration = 100) != null) {
+                TouchActions.tap(390, 340, delayTime = 2500)
+                continue
+            }
+            val endBattleButton = findMultiColorsUntil(schemas = listOf(MyColors.EndBattle, MyColors.EndBattle2), duration = 100)
             if (endBattleButton == null) {
                 ShowMessage("账号${InGamesVars.currentAccountNumber}，未找到放弃按钮，对战结束")
                 delayWithMultiplier(1000)
@@ -62,7 +68,8 @@ suspend fun mainBaseAttack(): Boolean {
                 }
             }
 
-            delay(500) // Poll every second to avoid busy-waiting
+            deployOthers(repetitionTime = 1)
+            delay(500)
         }
     }
     return enterMainScreen(isRestartGame)

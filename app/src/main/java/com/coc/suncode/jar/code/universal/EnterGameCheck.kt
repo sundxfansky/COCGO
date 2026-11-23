@@ -1,5 +1,10 @@
 package com.coc.suncode.jar.code.universal
 
+import com.coc.suncode.jar.code.colorschema.ColorSchema
+import android.graphics.Bitmap
+import java.io.File
+import java.io.FileOutputStream
+import kotlin.coroutines.cancellation.CancellationException
 import com.coc.suncode.core.data.database.GlobalVars
 import com.coc.suncode.core.system.screencapture.ScreenCaptureManager
 import com.coc.suncode.core.util.basic.ShowMessage
@@ -101,14 +106,19 @@ suspend fun enterMainScreen(isDoubleCheck: Boolean = false): Boolean {
 // a non-default top-level directory like /sdcard/sun_debug from a regular File/FileOutputStream.
 private suspend fun dumpUnrecognizedScreen(stuckPasses: Int) {
     try {
-        val bitmap = ScreenCaptureManager.capture(asBitmap = true) as? android.graphics.Bitmap ?: return
         val context = ScreenCaptureManager.getContext() ?: return
-        val dir = java.io.File(context.filesDir, "sun_debug")
-        if (!dir.exists()) dir.mkdirs()
-        val file = java.io.File(dir, "unrecognized_screen_${stuckPasses}_${System.currentTimeMillis()}.png")
-        java.io.FileOutputStream(file).use { out -> bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out) }
-        ShowMessage.record("调试：未识别画面截图已保存到 ${file.absolutePath}")
-        bitmap.recycle()
+        val bitmap = ScreenCaptureManager.capture(asBitmap = true) as? Bitmap ?: return
+        try {
+            val dir = File(context.filesDir, "sun_debug")
+            if (!dir.exists()) dir.mkdirs()
+            val file = File(dir, "unrecognized_screen_${stuckPasses}_${System.currentTimeMillis()}.png")
+            FileOutputStream(file).use { out -> bitmap.compress(Bitmap.CompressFormat.PNG, 100, out) }
+            ShowMessage.record("调试：未识别画面截图已保存到 ${file.absolutePath}")
+        } finally {
+            bitmap.recycle()
+        }
+    } catch (e: CancellationException) {
+        throw e
     } catch (e: Exception) {
         ShowMessage.record("调试：未识别画面截图保存失败", throwable = e)
     }
@@ -145,9 +155,12 @@ private suspend fun closeAdvertisements(): Boolean {
         MyColors.CollectChest,
         MyColors.EditModeWrench,
         MyColors.MiddleGreenButton,
-        MyColors.ExclusiveGift,
-        MyColors.MorePointCoupon,
         MyColors.ChestRewardContinue,
+        MyColors.ClanLeagueReturnCamp,
+        MyColors.CNCultivationAd,
+        MyColors.TencentQinglongAd,
+        MyColors.NewUpgradeList,
+        MyColors.TencentOrangeCross,
     )
 
     // 3. Iterate through schemas
@@ -212,26 +225,38 @@ private suspend fun closeAdvertisements(): Boolean {
         TouchActions.tap(788, 464)
         screenBuffer = ScreenCaptureManager.capture(asBitmap = false) as? ScreenCaptureManager.CaptureResult ?: logAndRestart("failed to take screenshot at close advertisement")
     }
+    if (findMultiColors(byteBuffer = screenBuffer, schema = MyColors.TrainingPageGlobal, increment = 1) != null) {
+        matchedAny = true
+        TouchActions.tap(1232, 65, delayTime = 300)
+        return matchedAny
+    }
     findMultiColors(byteBuffer = screenBuffer, schema = MyColors.TrainingPage, increment = 1)?.let {
         matchedAny = true
         TouchActions.tap(219, 139, delayTime = 1000)//close training tap
         TouchActions.tap(1232, 65, delayTime = 300)//close training page
     }
+    if (MyColors.BattleRewardSchemas.any { findMultiColors(schema = it) != null }) {
+        TouchActions.tap(920, 365, delayTime = 1000)
+        matchedAny = true
+    }
     return matchedAny
 }
 
-private suspend fun isInHomePage(): Boolean {
-    // 1. Capture the screen and cast safely
-    val screenBuffer = ScreenCaptureManager.capture(asBitmap = false) as? ScreenCaptureManager.CaptureResult ?: logAndRestart("in isInHomePage, screen capture failed.")
+suspend fun isInHomePage(): Boolean {
+    val screen = ScreenCaptureManager.capture(asBitmap = false) as? ScreenCaptureManager.CaptureResult
+        ?: return false
 
-    // 2. Check for the training button presence
-    val hasTrainButton = findMultiColors(byteBuffer = screenBuffer, schema = MyColors.TrainTroops, increment = 1) != null
-    if (!hasTrainButton) return false
+    suspend fun matches(schema: ColorSchema): Boolean =
+        findMultiColors(byteBuffer = screen, schema = schema, increment = 1) != null
 
-    // 3. Check for any of the worker icons (Main base, Goblin workers, or Builder base)
-    val workerSchemas = listOf(
-        MyColors.MainBaseWorker, MyColors.MainBaseWorker2, MyColors.MainBaseWorker3, MyColors.GoblinWorker, MyColors.GoblinResearcher, MyColors.BuilderBaseWorker, MyColors.BuilderBaseWorker2
+    // The global layout no longer puts the worker indicator next to the old train button.
+    if (matches(MyColors.Trophy) && matches(MyColors.BuildingHammer)) return true
+
+    val navigation = listOf(MyColors.TrainTroops, MyColors.ShopButton, MyColors.ShopButton2)
+    if (navigation.none { matches(it) }) return false
+    val workerSchemas = MyColors.MainBaseWorkerSchemas + MyColors.BuilderBaseWorkerSchemas + listOf(
+        MyColors.GoblinWorker, MyColors.GoblinWorker2, MyColors.GoblinResearcher,
+        MyColors.MainBaseBuildingUpgradeEntryGlobal, MyColors.MainBaseWorker6, MyColors.NewBuilderBaseWorker
     )
-
-    return workerSchemas.any { findMultiColors(byteBuffer = screenBuffer, schema = it, increment = 1) != null }
+    return workerSchemas.any { matches(it) }
 }

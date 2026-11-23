@@ -354,6 +354,7 @@ fun CustomButton(
     explain: String? = null,
     marginTop: Dp = 6.dp,
     marginBottom: Dp = 0.dp,
+    compact: Boolean = false,
 ) {
 
     var showExplanation by remember { mutableStateOf(false) }
@@ -363,12 +364,17 @@ fun CustomButton(
                 GlobalVars.isAutoRunEnabled = false
                 onClick()
             }, modifier = Modifier
-                .padding(top = marginTop, bottom = marginBottom, end = 8.dp)
-                .height(32.dp), shape = RoundedCornerShape(8.dp), enabled = enable && LocalSettingsEnabled.current, colors = ButtonDefaults.buttonColors(
+                .padding(top = marginTop, bottom = marginBottom, end = if (compact) 0.dp else 8.dp)
+                .height(if (compact) 40.dp else 32.dp)
+                .then(if (compact) Modifier.widthIn(min = 48.dp) else Modifier),
+            shape = RoundedCornerShape(8.dp),
+            enabled = enable && LocalSettingsEnabled.current,
+            contentPadding = if (compact) PaddingValues(horizontal = 8.dp) else ButtonDefaults.ContentPadding,
+            colors = ButtonDefaults.buttonColors(
                 containerColor = AppColors.Azure
             )
         ) {
-            Text(text, style = MaterialTheme.typography.labelMedium)
+            Text(text, style = MaterialTheme.typography.labelMedium, softWrap = !compact)
         }
         Column(Modifier.padding(top = 14.dp)) {
             explain?.let {

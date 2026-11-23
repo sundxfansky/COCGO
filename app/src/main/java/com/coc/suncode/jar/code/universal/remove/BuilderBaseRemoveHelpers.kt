@@ -1,5 +1,6 @@
 package com.coc.suncode.jar.code.universal.remove
 
+import com.coc.suncode.jar.code.universal.colors.findMultiColors
 import com.coc.suncode.core.util.basic.ShowMessage
 import com.coc.suncode.core.util.basic.delayWithMultiplier
 import com.coc.suncode.core.util.touchactions.TouchActions
@@ -11,17 +12,17 @@ import com.coc.suncode.jar.code.universal.InGamesVars
 import com.coc.suncode.jar.code.universal.colors.findMultiColorsUntil
 
 suspend fun enterEditMode() {
-    // Select the initial schema based on the game package version
-    val initialSchema = if (InGamesVars.currentGameVersion == GameVersion.CN) {
-        MyColors.CNEditBaseButton
-    } else {
-        MyColors.GlobalEditBaseButton
+    val isGlobal = InGamesVars.currentGameVersion == GameVersion.GLOBAL
+    val initialSchemas = if (InGamesVars.currentGameVersion != GameVersion.CN) listOf(MyColors.GlobalEditBaseButton2, MyColors.GlobalEditBaseButton)
+        else listOf(MyColors.CNEditBaseButton)
+    // The current global layout moves the edit shortcut into the build menu.
+    var edit = findMultiColorsUntil(schemas = initialSchemas, duration = 500)
+    if (edit == null && isGlobal) {
+        findMultiColors(MyColors.BuildingHammer)?.let { TouchActions.tap(it.x, it.y) }
+        edit = findMultiColorsUntil(schemas = initialSchemas, duration = 1500)
     }
-
-    // Attempt to locate the initial edit button
-    findMultiColorsUntil(schemas = listOf(initialSchema), duration = 1500)?.let {
-        TouchActions.tap(it.x, it.y)
-    } ?: return
+    if (edit == null) return
+    TouchActions.tap(edit.x, edit.y)
 
     // Sequence of interactions to navigate through the edit menus
     // 1. Locate and click the specific Green Edit Button

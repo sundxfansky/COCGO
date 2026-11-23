@@ -5,10 +5,13 @@ import android.graphics.Bitmap
 import android.graphics.RectF
 import android.os.Build
 import android.util.Log
+import com.coc.suncode.core.util.basic.ShowMessage
+import java.io.FileNotFoundException
+import java.io.InputStream
+import kotlin.coroutines.cancellation.CancellationException
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
-import com.coc.suncode.core.util.basic.ShowMessage
 import com.coc.suncode.jar.code.universal.yolo.local.ModelAssetManager
 import org.json.JSONArray
 import java.nio.FloatBuffer
@@ -19,7 +22,7 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
- * PP-OCRv6 Small (FP16) text recognition engine.
+ * PP-OCRv6 Tiny (FP16) text recognition engine.
  * Implemented in pure Kotlin + Android native graphics with zero OpenCV dependencies.
  *
  * Pipeline:
@@ -28,7 +31,7 @@ import kotlin.math.roundToInt
  *  2. DB postprocess — binarize probability map, extract 8-connected components,
  *     filter by mean confidence, expand boxes (unclip), scale back to original image space,
  *     and sort into natural top-to-bottom reading order.
- *  3. rec preprocess — crop each text box, resize to height 48, zero-pad width
+ *  3. rec preprocess (batch) — crop each text box, resize to height 48, zero-pad width
  *     to at least [recMinWidth], normalize to [-1, 1] in RGB channel order.
  *  4. CTC greedy decode — blank = index 0, dict characters = index 1..N, space = index N+1.
  */
@@ -36,9 +39,9 @@ object PpOcrEngine {
 
     private const val TAG = "PpOcrEngine"
 
-    private const val DET_ASSET = "det_fp16.onnx"
-    private const val REC_ASSET = "rec_fp16.onnx"
-    private const val CHARACTERS_ASSET = "rec_characters.json"
+    private const val DET_ASSET = "ppocr_v6_tiny_det.onnx"
+    private const val REC_ASSET = "ppocr_v6_tiny_rec.onnx"
+    private const val CHARACTERS_ASSET = "ppocr_v6_tiny_characters.json"
 
     /** Fixed input height for recognizer */
     private const val REC_HEIGHT = 48
@@ -64,44 +67,39 @@ object PpOcrEngine {
     /** Default rec minimum padded width */
     const val DEFAULT_REC_MIN_WIDTH = 320
 
+    /** Fixed batch size for recognition model batch inference */
+    private const val REC_BATCH_SIZE = 6
+
     private var appContext: Context? = null
     private var ortEnvironment: OrtEnvironment? = null
     private var detSession: OrtSession? = null
     private var recSession: OrtSession? = null
     private var dictChars: List<String>? = null
-    private var initializedContextIdentity: Int? = null
 
     /** Whether det and rec sessions are currently loaded. */
     val isLoaded: Boolean
         @Synchronized get() = detSession != null && recSession != null && dictChars != null
 
-    /**
-     * Stores the application context. The host initializes this during startup, but the
-     * dynamically loaded plugin has a separate Kotlin object instance, so [contextOrHost]
-     * also resolves the context from the parent-owned ShowMessage singleton on first use.
-     */
+    /** Whether rec session and dictionary are currently loaded. */
+    val isRecLoaded: Boolean
+        @Synchronized get() = recSession != null && dictChars != null
+
+    /** Stores the application context. Must be called before [recognize] or [load]. */
     @Synchronized
     fun initialize(context: Context) {
         appContext = context.applicationContext
-        val identity = System.identityHashCode(appContext)
-        if (initializedContextIdentity != identity) {
-            initializedContextIdentity = identity
-            ShowMessage.record("PP-OCR context initialized (loader=${javaClass.classLoader})", Log.INFO, TAG)
-        }
     }
 
-    /** Resolve host context for an isolated plugin class loader without relying on Activity state. */
-    @Synchronized
-    private fun contextOrHost(): Context? {
-        appContext?.let { return it }
-        val hostContext = ShowMessage.getContext()?.applicationContext ?: return null
-        appContext = hostContext
-        val identity = System.identityHashCode(hostContext)
-        if (initializedContextIdentity != identity) {
-            initializedContextIdentity = identity
-            ShowMessage.record("PP-OCR context resolved from host (loader=${javaClass.classLoader})", Log.INFO, TAG)
+    private fun contextOrHost(): Context? =
+        appContext ?: ShowMessage.getContext()?.applicationContext?.also { appContext = it }
+
+    private fun openOcrAsset(context: Context, name: String): InputStream {
+        return try {
+            context.assets.open(name)
+        } catch (missing: FileNotFoundException) {
+            // The core JAR carries its models for hot updates on older host APKs.
+            javaClass.getResourceAsStream("/com/coc/suncode/jar/ocr-models/$name") ?: throw missing
         }
-        return hostContext
     }
 
     /**
@@ -117,6 +115,18 @@ object PpOcrEngine {
     }
 
     /**
+     * Pre-loads only the recognition model and dictionary into memory.
+     * No-op if already loaded.
+     */
+    @Synchronized
+    fun loadRec() {
+        if (isRecLoaded) return
+        val context = contextOrHost()
+            ?: throw IllegalStateException("PpOcrEngine must be initialized before loading")
+        ensureRecLoaded(context)
+    }
+
+    /**
      * Closes the active det/rec sessions and releases model memory.
      */
     @Synchronized
@@ -127,7 +137,79 @@ object PpOcrEngine {
         recSession = null
         dictChars = null
         ortEnvironment = null
-        ShowMessage.record("PP-OCR sessions cleared", Log.DEBUG, TAG)
+    }
+
+    /**
+     * Runs text recognition only (no detection model) on the given cropped bitmap.
+     *
+     * @param cropBitmap cropped image patch containing text
+     * @param recMinWidth minimum width for recognition padding (default 320)
+     * @return recognized text and recognition confidence
+     */
+    @Synchronized
+    fun recognizeText(
+        cropBitmap: Bitmap,
+        recMinWidth: Int = DEFAULT_REC_MIN_WIDTH
+    ): RecResult {
+        return try {
+            recognizeTextInternal(cropBitmap, recMinWidth)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            ShowMessage.record("OCR recognition inference failed, reloading rec model and retrying once", Log.WARN, TAG, e)
+            recSession?.close()
+            recSession = null
+            val context = contextOrHost()
+                ?: throw IllegalStateException("PpOcrEngine must be initialized before use")
+            ensureRecLoaded(context)
+            recognizeTextInternal(cropBitmap, recMinWidth)
+        }
+    }
+
+    /**
+     * Runs text recognition only on the specified sub-rectangle [left, top, right, bottom]
+     * of the given bitmap without running the detection model.
+     */
+    @Synchronized
+    fun recognizeRegion(
+        bitmap: Bitmap,
+        left: Int,
+        top: Int,
+        right: Int,
+        bottom: Int,
+        recMinWidth: Int = DEFAULT_REC_MIN_WIDTH
+    ): RecResult {
+        require(left >= 0 && top >= 0 && right <= bitmap.width && bottom <= bitmap.height &&
+            left < right && top < bottom) { "OCR region is outside the image" }
+        val crop = Bitmap.createBitmap(bitmap, left, top, right - left, bottom - top)
+        try {
+            return recognizeText(crop, recMinWidth)
+        } finally {
+            // Android can return the input bitmap when the requested region is the full image.
+            if (crop !== bitmap) crop.recycle()
+        }
+    }
+
+    private fun recognizeTextInternal(
+        cropBitmap: Bitmap,
+        recMinWidth: Int
+    ): RecResult {
+        val context = contextOrHost()
+            ?: throw IllegalStateException("PpOcrEngine must be initialized before use")
+        ensureRecLoaded(context)
+
+        val src = toSoftwareBitmap(cropBitmap)
+        try {
+            val dict = dictChars ?: throw IllegalStateException("Dictionary not loaded")
+            val recInput = recPreprocess(src, recMinWidth)
+            val logits = runRec(recInput)
+            val (text, confidence) = ctcDecode(logits, dict)
+            return RecResult(text = text, confidence = confidence)
+        } finally {
+            if (src !== cropBitmap) {
+                src.recycle()
+            }
+        }
     }
 
     /**
@@ -150,17 +232,10 @@ object PpOcrEngine {
         unclipRatio: Float = DEFAULT_UNCLIP_RATIO,
         recMinWidth: Int = DEFAULT_REC_MIN_WIDTH
     ): List<OcrResult> {
-        if (contextOrHost() == null) {
-            // Keep a missing application context recoverable while preserving a diagnostic event.
-            ShowMessage.record(
-                "PP-OCR skipped: host context is unavailable (loader=${javaClass.classLoader})",
-                Log.ERROR,
-                TAG
-            )
-            return emptyList()
-        }
         return try {
             recognizeInternal(bitmap, limit, boxThreshold, detThreshold, unclipRatio, recMinWidth)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             ShowMessage.record("OCR inference failed, reloading models and retrying once", Log.WARN, TAG, e)
             clear()
@@ -202,37 +277,49 @@ object PpOcrEngine {
             // Sort boxes into natural reading order (row by row, left to right)
             val boxes = sortBoxesIntoReadingOrder(rawBoxes)
 
-            // 2. Recognition for each box
+            // 2. Recognition for boxes in batches of 6 (Batching Parallelism)
             val dict = dictChars ?: throw IllegalStateException("Dictionary not loaded")
             val results = mutableListOf<OcrResult>()
-            for (box in boxes) {
-                val cropW = box.x1 - box.x0 + 1
-                val cropH = box.y1 - box.y0 + 1
-                if (cropW <= 0 || cropH <= 0) continue
 
-                val crop = Bitmap.createBitmap(src, box.x0, box.y0, cropW, cropH)
+            for (chunk in boxes.chunked(REC_BATCH_SIZE)) {
+                val crops = mutableListOf<Pair<TextBox, Bitmap>>()
+                for (box in chunk) {
+                    val cropW = box.x1 - box.x0 + 1
+                    val cropH = box.y1 - box.y0 + 1
+                    if (cropW <= 0 || cropH <= 0) continue
+                    val crop = Bitmap.createBitmap(src, box.x0, box.y0, cropW, cropH)
+                    crops.add(Pair(box, crop))
+                }
+                if (crops.isEmpty()) continue
+
                 try {
-                    val recInput = recPreprocess(crop, recMinWidth)
-                    val logits = runRec(recInput)
-                    val (text, confidence) = ctcDecode(logits, dict)
+                    val batchBitmaps = crops.map { it.second }
+                    val batchInput = recPreprocessBatch(batchBitmaps, recMinWidth)
+                    val batchLogits = runRecBatch(batchInput)
 
-                    if (text.isNotEmpty()) {
-                        results.add(
-                            OcrResult(
-                                text = text,
-                                score = box.score,
-                                confidence = confidence,
-                                box = RectF(
-                                    box.x0.toFloat(),
-                                    box.y0.toFloat(),
-                                    box.x1.toFloat(),
-                                    box.y1.toFloat()
+                    for (i in crops.indices) {
+                        val (text, confidence) = ctcDecode(batchLogits[i], dict)
+                        if (text.isNotEmpty()) {
+                            val box = crops[i].first
+                            results.add(
+                                OcrResult(
+                                    text = text,
+                                    score = box.score,
+                                    confidence = confidence,
+                                    box = RectF(
+                                        box.x0.toFloat(),
+                                        box.y0.toFloat(),
+                                        box.x1.toFloat(),
+                                        box.y1.toFloat()
+                                    )
                                 )
                             )
-                        )
+                        }
                     }
                 } finally {
-                    crop.recycle()
+                    for (pair in crops) {
+                        if (pair.second !== src) pair.second.recycle()
+                    }
                 }
             }
             return results
@@ -245,40 +332,51 @@ object PpOcrEngine {
 
     // ── Model loading ───────────────────────────────────────────────────────
 
+    @Synchronized
+    private fun ensureDetLoaded(context: Context) {
+        if (detSession != null) return
+
+        val env = ortEnvironment ?: OrtEnvironment.getEnvironment()
+        val detFile = ModelAssetManager.resolveModelFile(context, DET_ASSET) { openOcrAsset(context, DET_ASSET) }
+        OrtSession.SessionOptions().use { sessionOptions ->
+            // Use BASIC_OPT to keep native NCHW layout and prevent the optimizer
+            // from rewriting MaxPool nodes to unsupported com.ms.internal.nhwc ops on Android.
+            sessionOptions.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.BASIC_OPT)
+            detSession = env.createSession(detFile.absolutePath, sessionOptions)
+        }
+        ortEnvironment = env
+        ShowMessage.record("PP-OCRv6 Tiny Det (FP16) loaded", Log.INFO, TAG)
+    }
+
+    @Synchronized
+    private fun ensureRecLoaded(context: Context) {
+        if (recSession != null && dictChars != null) return
+
+        val env = ortEnvironment ?: OrtEnvironment.getEnvironment()
+        val recFile = ModelAssetManager.resolveModelFile(context, REC_ASSET) { openOcrAsset(context, REC_ASSET) }
+        val dict = dictChars ?: loadDict(context)
+
+        OrtSession.SessionOptions().use { sessionOptions ->
+            // Use BASIC_OPT to keep native NCHW layout and prevent the optimizer
+            // from rewriting MaxPool nodes to unsupported com.ms.internal.nhwc ops on Android.
+            sessionOptions.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.BASIC_OPT)
+            recSession = env.createSession(recFile.absolutePath, sessionOptions)
+        }
+        ortEnvironment = env
+        dictChars = dict
+        ShowMessage.record("PP-OCRv6 Tiny Rec (FP16) loaded, dict size=${dict.size}", Log.INFO, TAG)
+    }
+
+    @Synchronized
     private fun ensureLoaded(context: Context) {
         if (isLoaded) return
-
-        synchronized(this) {
-            if (isLoaded) return
-
-            val env = ortEnvironment ?: OrtEnvironment.getEnvironment()
-            val detFile = ModelAssetManager.resolveModelFile(context, DET_ASSET)
-            val recFile = ModelAssetManager.resolveModelFile(context, REC_ASSET)
-            val dict = dictChars ?: loadDict(context)
-
-            OrtSession.SessionOptions().use { options ->
-                // ALL_OPT rewrites MaxPool(11) to an NHWC kernel unavailable on Android CPU.
-                options.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.EXTENDED_OPT)
-                val detector = env.createSession(detFile.absolutePath, options)
-                val recognizer = try {
-                    env.createSession(recFile.absolutePath, options)
-                } catch (error: Exception) {
-                    // Publish both sessions together so a failed load cannot leak the detector.
-                    detector.close()
-                    throw error
-                }
-                detSession = detector
-                recSession = recognizer
-            }
-            ortEnvironment = env
-            dictChars = dict
-            ShowMessage.record("PP-OCRv6 Small (FP16) loaded, dict size=${dict.size}", Log.INFO, TAG)
-        }
+        ensureDetLoaded(context)
+        ensureRecLoaded(context)
     }
 
     /** Loads the character dictionary JSON array from assets. */
     private fun loadDict(context: Context): List<String> {
-        val json = context.assets.open(CHARACTERS_ASSET).bufferedReader(Charsets.UTF_8).use { it.readText() }
+        val json = openOcrAsset(context, CHARACTERS_ASSET).bufferedReader(Charsets.UTF_8).use { it.readText() }
         val arr = JSONArray(json)
         val list = ArrayList<String>(arr.length())
         for (i in 0 until arr.length()) {
@@ -485,56 +583,87 @@ object PpOcrEngine {
 
     // ── Recognition: Preprocess + Inference + CTC Decode ─────────────────────
 
-    private fun recPreprocess(crop: Bitmap, minWidth: Int): RecInput {
-        val h = crop.height
-        val w = crop.width
-        val rw = ceil(REC_HEIGHT.toFloat() * w / h).toInt().coerceIn(2, REC_MAX_WIDTH)
-        val targetW = max(minWidth, rw)
+    private fun recPreprocessBatch(crops: List<Bitmap>, minWidth: Int): RecBatchInput {
+        val batchSize = crops.size
+        require(batchSize > 0) { "Crops list must not be empty" }
 
-        val scaled = Bitmap.createScaledBitmap(crop, rw, REC_HEIGHT, true)
-        try {
-            val pixels = IntArray(rw * REC_HEIGHT)
-            scaled.getPixels(pixels, 0, rw, 0, 0, rw, REC_HEIGHT)
-
-            val plane = REC_HEIGHT * targetW
-            val data = FloatArray(3 * plane) // Zero-padded by default
-            for (y in 0 until REC_HEIGHT) {
-                val rowOffset = y * targetW
-                val pixelRowOffset = y * rw
-                for (x in 0 until rw) {
-                    val pixel = pixels[pixelRowOffset + x]
-                    val r = ((pixel shr 16) and 0xFF) / 255.0f
-                    val g = ((pixel shr 8) and 0xFF) / 255.0f
-                    val b = (pixel and 0xFF) / 255.0f
-
-                    // RGB order normalized to [-1, 1]
-                    data[rowOffset + x] = (r - 0.5f) / 0.5f
-                    data[plane + rowOffset + x] = (g - 0.5f) / 0.5f
-                    data[2 * plane + rowOffset + x] = (b - 0.5f) / 0.5f
-                }
-            }
-            return RecInput(data, targetW)
-        } finally {
-            if (scaled !== crop) {
-                scaled.recycle()
+        val rws = IntArray(batchSize)
+        val minimum = minWidth.coerceIn(2, REC_MAX_WIDTH)
+        var maxRw = minimum
+        for (i in 0 until batchSize) {
+            val crop = crops[i]
+            val rw = ceil(REC_HEIGHT.toFloat() * crop.width / crop.height).toInt().coerceIn(2, REC_MAX_WIDTH)
+            rws[i] = rw
+            if (rw > maxRw) {
+                maxRw = rw
             }
         }
+        val targetW = maxRw
+        val plane = REC_HEIGHT * targetW
+        val sampleSize = 3 * plane
+        val data = FloatArray(batchSize * sampleSize) // Defaults to 0.0f (zero padding)
+
+        for (b in 0 until batchSize) {
+            val crop = crops[b]
+            val rw = rws[b]
+            val scaled = Bitmap.createScaledBitmap(crop, rw, REC_HEIGHT, true)
+            try {
+                val pixels = IntArray(rw * REC_HEIGHT)
+                scaled.getPixels(pixels, 0, rw, 0, 0, rw, REC_HEIGHT)
+
+                val sampleOffset = b * sampleSize
+                for (y in 0 until REC_HEIGHT) {
+                    val rowOffset = y * targetW
+                    val pixelRowOffset = y * rw
+                    for (x in 0 until rw) {
+                        val pixel = pixels[pixelRowOffset + x]
+                        val r = ((pixel shr 16) and 0xFF) / 255.0f
+                        val g = ((pixel shr 8) and 0xFF) / 255.0f
+                        val bChan = (pixel and 0xFF) / 255.0f
+
+                        // RGB order normalized to [-1, 1]
+                        data[sampleOffset + rowOffset + x] = (r - 0.5f) / 0.5f
+                        data[sampleOffset + plane + rowOffset + x] = (g - 0.5f) / 0.5f
+                        data[sampleOffset + 2 * plane + rowOffset + x] = (bChan - 0.5f) / 0.5f
+                    }
+                }
+            } finally {
+                if (scaled !== crop) {
+                    scaled.recycle()
+                }
+            }
+        }
+
+        return RecBatchInput(data, batchSize, targetW)
     }
 
-    private fun runRec(input: RecInput): Array<FloatArray> {
+    private fun runRecBatch(input: RecBatchInput): Array<Array<FloatArray>> {
         val env = ortEnvironment ?: throw IllegalStateException("rec session not loaded")
         val session = recSession ?: throw IllegalStateException("rec session not loaded")
 
-        val shape = longArrayOf(1, 3, REC_HEIGHT.toLong(), input.width.toLong())
+        val shape = longArrayOf(
+            input.batchSize.toLong(),
+            3,
+            REC_HEIGHT.toLong(),
+            input.width.toLong()
+        )
         val tensor = OnnxTensor.createTensor(env, FloatBuffer.wrap(input.data), shape)
         tensor.use {
             val results = session.run(mapOf(session.inputNames.first() to it))
             results.use { r ->
                 @Suppress("UNCHECKED_CAST")
-                val out = r[0].value as Array<Array<FloatArray>>
-                return out[0]
+                return r[0].value as Array<Array<FloatArray>>
             }
         }
+    }
+
+    private fun recPreprocess(crop: Bitmap, minWidth: Int): RecInput {
+        val batchInput = recPreprocessBatch(listOf(crop), minWidth)
+        return RecInput(batchInput.data, batchInput.width)
+    }
+
+    private fun runRec(input: RecInput): Array<FloatArray> {
+        return runRecBatch(RecBatchInput(input.data, 1, input.width))[0]
     }
 
     private fun ctcDecode(logits: Array<FloatArray>, dict: List<String>): Pair<String, Float> {
@@ -593,6 +722,12 @@ object PpOcrEngine {
 
     private data class RecInput(
         val data: FloatArray,
+        val width: Int
+    )
+
+    private data class RecBatchInput(
+        val data: FloatArray,
+        val batchSize: Int,
         val width: Int
     )
 

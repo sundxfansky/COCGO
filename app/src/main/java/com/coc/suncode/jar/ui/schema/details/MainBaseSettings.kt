@@ -66,8 +66,21 @@ object MainBaseSettings {
     val DO_CLAN_GAMES = SettingDef("do_clan_games", "做竞赛任务", 1, "MAIN_BASE_SETTINGS")
     val CLAIM_CLAN_GAME_REWARDS = SettingDef("claim_clan_game_rewards", "领竞赛奖励", 0, "MAIN_BASE_SETTINGS")
     val PLAY_CLAN_WAR = SettingDef("play_clan_war", "打部落战", 0, "MAIN_BASE_SETTINGS")
+    val PLAY_TOURNAMENT = SettingDef("play_tournament", "排位对战", 0, "MAIN_BASE_SETTINGS")
+    val PLAY_LEAGUE_DONATION = SettingDef("play_league_donation", "联赛捐兵", 0, "MAIN_BASE_SETTINGS")
+    val LEAGUE_DONATION_TROOP_1 = SettingDef("league_donation_troop_1", "联赛捐兵兵种1", "1", "MAIN_BASE_SETTINGS")
+    val LEAGUE_DONATION_COUNT_1 = SettingDef("league_donation_count_1", "联赛捐兵数量1", "5", "MAIN_BASE_SETTINGS")
+    val LEAGUE_DONATION_TROOP_2 = SettingDef("league_donation_troop_2", "联赛捐兵兵种2", "3", "MAIN_BASE_SETTINGS")
+    val LEAGUE_DONATION_COUNT_2 = SettingDef("league_donation_count_2", "联赛捐兵数量2", "5", "MAIN_BASE_SETTINGS")
+    val LEAGUE_DONATION_TROOP_3 = SettingDef("league_donation_troop_3", "联赛捐兵兵种3", "2", "MAIN_BASE_SETTINGS")
+    val LEAGUE_DONATION_COUNT_3 = SettingDef("league_donation_count_3", "联赛捐兵数量3", "10", "MAIN_BASE_SETTINGS")
+    val START_CLAN_LEAGUE_SIZE = SettingDef("start_clan_league_size", "对战人数", "1", "MAIN_BASE_SETTINGS")
+    val START_CLAN_LEAGUE_NEW_SIZE = SettingDef("start_clan_league_new_size", "已开放新对战人数", 0, "MAIN_BASE_SETTINGS")
+    val EVENT_LEAGUE_START_DAY = SettingDef("event_league_start_day", "额外联赛开放起始日", "0", "MAIN_BASE_SETTINGS")
+    val DISTRIBUTE_CLAN_LEAGUE_REWARDS = SettingDef("distribute_clan_league_rewards", "分配部落联赛奖励", 0, "MAIN_BASE_SETTINGS")
+    val EXPORT_GAME_JSON = SettingDef("export_game_json", "导出游戏内 JSON", 0, "MAIN_BASE_SETTINGS")
     val PLAY_LEAGUE = SettingDef("play_league", "打联赛", 0, "MAIN_BASE_SETTINGS")
-    val PLAY_RAID = SettingDef("play_raid", "打都城突袭", 1, "MAIN_BASE_SETTINGS")
+    val PLAY_RAID = SettingDef("play_raid", "打都城突袭", 0, "MAIN_BASE_SETTINGS")
     val START_LEAGUE_SETTINGS = SettingDef("start_league_settings", "发起联赛", 0, "MAIN_BASE_SETTINGS")
     val START_CLAN_WAR_SETTINGS = SettingDef("start_clan_war_settings", "发起部落战", 0, "MAIN_BASE_SETTINGS")
     val START_RAID = SettingDef("start_raid", "发起都城突袭", 0, "MAIN_BASE_SETTINGS")
@@ -112,6 +125,10 @@ object MainBaseSettings {
     val SELL_RING_OF_WALL = SettingDef("sell_ring_of_wall", "卖壁垒之戒", 0, "MAIN_BASE_SETTINGS")
 
     //////////////
+    val UPGRADE_EQUIPMENTS_QUICK = SettingDef("upgrade_equipments_quick", "快速升级装备", 1, "MAIN_BASE_SETTINGS")
+    val UPGRADE_EQUIPMENTS_BY_HERO = SettingDef("upgrade_equipments_by_hero", "按英雄升级装备", 0, "MAIN_BASE_SETTINGS")
+    val UPGRADE_EQUIPMENTS_STRICT_PRIORITY = SettingDef("upgrade_equipments_strict_priority", "严格遵循装备优先级", 0, "MAIN_BASE_SETTINGS")
+    val CLAIM_VILLAGER_COMMISSIONS = SettingDef("claim_villager_commissions", "领取村民委托", 0, "MAIN_BASE_SETTINGS")
     val UPGRADE_WERA_GEAR = SettingDef("upgrade_wear_gear", "升级穿戴装备", 0, "MAIN_BASE_SETTINGS")
     val UPGRADE_ALL_GEAR = SettingDef("upgrade_all_gear", "升所有装备", 0, "MAIN_BASE_SETTINGS")
     val REMOVE_OBSTACLES = SettingDef("remove_obstacles", "移除障碍物", 0, "MAIN_BASE_SETTINGS")
@@ -179,6 +196,19 @@ object MainBaseSettings {
         DO_CLAN_GAMES,
         CLAIM_CLAN_GAME_REWARDS,
         PLAY_CLAN_WAR,
+        PLAY_TOURNAMENT,
+        PLAY_LEAGUE_DONATION,
+        LEAGUE_DONATION_TROOP_1,
+        LEAGUE_DONATION_COUNT_1,
+        LEAGUE_DONATION_TROOP_2,
+        LEAGUE_DONATION_COUNT_2,
+        LEAGUE_DONATION_TROOP_3,
+        LEAGUE_DONATION_COUNT_3,
+        START_CLAN_LEAGUE_SIZE,
+        START_CLAN_LEAGUE_NEW_SIZE,
+        EVENT_LEAGUE_START_DAY,
+        DISTRIBUTE_CLAN_LEAGUE_REWARDS,
+        EXPORT_GAME_JSON,
         PLAY_LEAGUE,
         PLAY_RAID,
         START_LEAGUE_SETTINGS,
@@ -201,6 +231,10 @@ object MainBaseSettings {
         SELL_CLOCK_TOWER_POTION,
         USE_BUILDER_POTION,
         SELL_RING_OF_WALL,
+        UPGRADE_EQUIPMENTS_QUICK,
+        UPGRADE_EQUIPMENTS_BY_HERO,
+        UPGRADE_EQUIPMENTS_STRICT_PRIORITY,
+        CLAIM_VILLAGER_COMMISSIONS,
         UPGRADE_WERA_GEAR,
         UPGRADE_ALL_GEAR,
         REMOVE_OBSTACLES,

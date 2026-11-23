@@ -24,24 +24,25 @@ import com.coc.suncode.jar.code.universal.smalltools.writeMemory
 import com.coc.suncode.jar.ui.schema.Schema
 
 suspend fun upgradeGearsAndPets(): Boolean {
-    if (!getBooleanConfigRuntime(Schema.MAIN_BASE_SETTINGS.UPGRADE_ALL_GEAR.key) && !getBooleanConfigRuntime(Schema.MAIN_BASE_SETTINGS.UPGRADE_WERA_GEAR.key) && !getBooleanConfigRuntime(Schema.MAIN_BASE_SETTINGS.UPGRADE_PETS.key)) return true
+    val wantsGear = getBooleanConfigRuntime(Schema.MAIN_BASE_SETTINGS.UPGRADE_ALL_GEAR.key) ||
+        getBooleanConfigRuntime(Schema.MAIN_BASE_SETTINGS.UPGRADE_WERA_GEAR.key)
+    val wantsPets = getBooleanConfigRuntime(Schema.MAIN_BASE_SETTINGS.UPGRADE_PETS.key)
+    if (!wantsGear && !wantsPets) return true
 
     val storageKey = StorageKeys.withAccountNumber(
         StorageKeys.UPGRADE_GEARS_AND_PETS, InGamesVars.currentAccountNumber
     )
 
-    // Guard: only attempt gear upgrade once per 8 hours (480 minutes)
-    if (!checkMemoryFile(storageKey, 480)) {
-        ShowMessage("账号${InGamesVars.currentAccountNumber}，该账号8小时内已检测装备和战宠升级")
-        return true
+    // Only equipment checks are subject to the eight-hour interval.
+    val checkGear = wantsGear && checkMemoryFile(storageKey, 480)
+    if (!checkGear && !wantsPets) return true
+
+    return withHeroHall {
+        if (checkGear && upgradeEquipmentsAction()) {
+            writeMemory(storageKey, (System.currentTimeMillis() / 60_000).toString())
+        }
+        if (wantsPets) checkPetsInShop()
     }
-
-    ShowMessage("准备升级装备和战宠")
-    val result: Boolean = withHeroHall { upgradeGearsAction() }
-
-    // Always record completion and return to main screen
-    writeMemory(storageKey, (System.currentTimeMillis() / 60_000).toString())
-    return result
 }
 
 private suspend fun checkPets() {
@@ -142,59 +143,20 @@ private suspend fun tryUpgradePet(pet: SettingDef, x: Int, y: Int): Boolean {
     return true
 }
 
-private suspend fun upgradeGearsAction() {
-    if (getBooleanConfigRuntime(Schema.MAIN_BASE_SETTINGS.UPGRADE_WERA_GEAR.key) || getBooleanConfigRuntime(Schema.MAIN_BASE_SETTINGS.UPGRADE_ALL_GEAR.key)) {
-        TouchActions.tap(685, 590, delayTime = 600)//Open Smith
-        val upgradeGear = findMultiColorsUntil(schemas = listOf(MyColors.UpgradeGearArrow, MyColors.NewGear), duration = 800)
-        if (upgradeGear != null) {
-            TouchActions.tap(upgradeGear.x, upgradeGear.y, delayTime = 500)
-            repeat(2) { TouchActions.tap(1130, 640, delayTime = 300) }
-            TouchActions.tap(1220, 635, delayTime = 300)
-        }
-        run upgradeGears@{
-            if (getBooleanConfigRuntime(Schema.MAIN_BASE_SETTINGS.UPGRADE_ALL_GEAR.key)) {
-                suspend fun tryUpgradeInVisibleRows(): Boolean {
-                    val firstRowArrow = ColorSchema.rescope(MyColors.UpgradeGearArrow, 80, 425, 1210, 460)
-                    val firstRowNewGear = ColorSchema.rescope(MyColors.NewGear, 80, 425, 1210, 460)
-                    val secondRowArrow = ColorSchema.rescope(MyColors.UpgradeGearArrow, 90, 510, 1220, 540)
-                    val secondRowNewGear = ColorSchema.rescope(MyColors.NewGear, 90, 510, 1220, 540)
-                    val gear = findMultiColorsUntil(
-                        schemas = listOf(firstRowArrow, firstRowNewGear, secondRowArrow, secondRowNewGear), duration = 800
-                    )
-                    if (gear != null) {
-                        TouchActions.tap(gear.x, gear.y, delayTime = 500)
-                        repeat(2) { TouchActions.tap(1130, 640, delayTime = 300) }
-                        TouchActions.tap(1220, 635, delayTime = 300)
-                        return true
-                    }
-                    return false
-                }
-
-                // Scan both visible rows in one pass using four rescoped schemas.
-                if (tryUpgradeInVisibleRows()) return@upgradeGears
-
-                // Swipe once, then run the same one-pass scan again.
-                TouchActions.swipe(1220, 510, 0, 510, delayTime = 300)
-                if (tryUpgradeInVisibleRows()) return@upgradeGears
-            }
-        }
-        backToHeroHall()
-    }
-    if (getBooleanConfigRuntime(Schema.MAIN_BASE_SETTINGS.UPGRADE_PETS.key)) {
-        val petsIcon = findMultiColors(MyColors.PetsIconInHeroHall)
-        if (petsIcon != null) {
-            TouchActions.tap(petsIcon.x, petsIcon.y, delayTime = 500)
-            val petsShopBanner = findMultiColorsUntil(schemas = listOf(MyColors.PetsShopInnerBanner), duration = 1000)
-            if (petsShopBanner != null) {
-                ShowMessage("已进入宠物店")
-                delayWithMultiplier(200)
-                checkPets()
-            }
+private suspend fun checkPetsInShop() {
+    val petsIcon = findMultiColors(MyColors.PetsIconInHeroHall)
+    if (petsIcon != null) {
+        TouchActions.tap(petsIcon.x, petsIcon.y, delayTime = 500)
+        val petsShopBanner = findMultiColorsUntil(schemas = listOf(MyColors.PetsShopInnerBanner), duration = 1000)
+        if (petsShopBanner != null) {
+            ShowMessage("已进入宠物店")
+            delayWithMultiplier(200)
+            checkPets()
         }
     }
 }
 
-private suspend fun backToHeroHall() {
+internal suspend fun backToHeroHall() {
     // Stop retrying after 10 seconds to avoid getting stuck in an endless back loop.
     val deadline = System.currentTimeMillis() + 10_000
     while (System.currentTimeMillis() < deadline) {

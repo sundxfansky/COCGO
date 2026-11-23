@@ -35,6 +35,13 @@ interface IUIColors {
     val TencentChildProtection: ColorSchema
     val CollectElixirCartTutorial: ColorSchema
     val ChestRewardContinue: ColorSchema
+    val TencentQinglongAd: ColorSchema
+    val Trophy: ColorSchema
+    val BuildingHammer: ColorSchema
+    val NewUpgradeList: ColorSchema
+    val TencentOrangeCross: ColorSchema
+    val GameSettings: ColorSchema
+    val ClanLeagueReturnCamp: ColorSchema
 }
 
 object UIColors : IUIColors {
@@ -141,5 +148,64 @@ object UIColors : IUIColors {
     // (e.g. elixir/gold/dark elixir bottle with its amount, one reward per screen).
     override val ChestRewardContinue = ColorSchema.parse(
         560, 620, 750, 690, "3AD48B", "20|10|3AD48B,90|0|3AD48B,-15|10|3AD48B,100|10|3AD48B,-20|-5|75E4AF,120|-5|75E4AF", 0, 0.9, "宝箱奖励继续"
+    )
+
+    override val TencentQinglongAd = ColorSchema.parse(
+        1207, 18, 1261, 71, "FFFFFF", "0|3|FFFEFE,16|1|7C73FF,15|12|1412EB,-3|20|1D17CF,-17|9|1915ED,-16|-5|8E86FF,-6|-5|FFFFFF,-4|-1|FFFFFF,-4|6|F9F5F5", 0, 0.9, "腾讯青龙广告"
+    )
+
+    override val Trophy = ColorSchema.parse(
+        6,
+        151,
+        105,
+        234,
+        "94BACE",
+        "0|-2|94BBCE,0|0|94BACE,0|3|94BACD,0|6|94B9CD,0|7|94B8CD,1|8|94B8CC,1|9|94B8CC,1|11|94B7CC,1|13|94B7CC",
+        0,
+        0.9,
+        "奖杯"
+    )
+
+    override val BuildingHammer = ColorSchema.parse(
+        1143,
+        587,
+        1250,
+        642,
+        "0EC8FB",
+        "21|0|0D171A,43|0|A37161,64|0|12CBFF,85|0|0EC8FB,0|27|3AE6FF,21|27|E0CDB9,43|27|814448,64|27|4BF4FF,85|27|35E2FF",
+        0,
+        0.9,
+        "建造大锤子"
+    )
+
+    override val NewUpgradeList = ColorSchema.parse(
+        1239,
+        5,
+        1275,
+        46,
+        "FFFFFF",
+        "-1|-3|FFFFFF,3|-3|FFFFFF,11|-3|8780FF,11|9|1611E0,-10|7|1C17EC,-10|2|1B16ED,-10|-3|8880FF,-2|-4|FFFFFF,-2|3|FAF6F6",
+        0,
+        0.9,
+        "新升级列表"
+    )
+
+    override val TencentOrangeCross = ColorSchema.parse(
+        965,
+        135,
+        1010,
+        177,
+        "1397FF",
+        "-6|-2|1397FF,-3|0|1298FF,-3|4|1397FF,-5|8|1396FF,5|8|0493FF,5|-6|1397FF,5|-5|1199FF,3|8|0E97FF,1|6|1298FF",
+        0,
+        0.9,
+        "腾讯橙色叉叉"
+    )
+
+    override val GameSettings = ColorSchema.parse(
+        1167, 40, 1252, 390, "FFFFFF", "-12|4|E8F9F7,-19|-5|FFFFFF,-13|-15|FFFFFF,9|5|E4F7F5,21|11|E4F7F5,22|2|FFFFFF,2|15|E3F5F5,-4|18|E4F7F5,1|24|F0FEFC", 0, 0.9, "游戏设置"
+    )
+    override val ClanLeagueReturnCamp = ColorSchema.parse(
+        60, 606, 102, 652, "AAE3FF", "9|0|7D98E6,17|0|364C9C,25|0|7DA0E8,34|0|34456A,0|23|2646C3,9|23|758FFF,17|23|7A9AFF,25|23|92BAFF,34|23|6576B1", 0, 0.9, "联赛回营"
     )
 }

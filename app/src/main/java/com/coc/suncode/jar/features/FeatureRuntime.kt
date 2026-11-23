@@ -14,6 +14,8 @@ object FeatureRuntime {
 
     fun reload() = session.reload()
 
+    fun isEnabled(id: String) = session.enabled(id)
+
     fun requireLogin() = check(session.enabled("login")) { "登录插件已停用，请先在插件管理中启用" }
 
     suspend fun execute(id: String, action: String, account: Int = 0): FeatureResult =

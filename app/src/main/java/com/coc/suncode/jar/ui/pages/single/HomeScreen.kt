@@ -242,6 +242,10 @@ fun HomeScreen(
                                 SettingInputRow(key = GLOBAL_SETTINGS.DELAY_MULTIPLIER.key)
                                 SettingInputRow(key = GLOBAL_SETTINGS.ENTER_GAME_TIMER.key)
                                 SettingSwitchIcon(key = GLOBAL_SETTINGS.RECORD_PROGRESS.key)
+                                SettingSwitchIcon(
+                                    key = GLOBAL_SETTINGS.DEBUG_MODE.key,
+                                    explain = "记录识别结果并临时跳过功能的定时检测间隔。"
+                                )
 
 
                                 SettingDropdown(

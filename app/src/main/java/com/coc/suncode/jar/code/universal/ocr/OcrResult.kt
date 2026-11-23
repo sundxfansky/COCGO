@@ -16,4 +16,3 @@ data class OcrResult(
     val confidence: Float,
     val box: RectF
 )
-

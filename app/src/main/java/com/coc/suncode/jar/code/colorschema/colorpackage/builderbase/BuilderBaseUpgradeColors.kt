@@ -11,6 +11,8 @@ interface IBuilderBaseUpgradeColors {
     val BuilderBaseInsufficientResources: ColorSchema
     val BuilderBaseWorker: ColorSchema
     val BuilderBaseWorker2: ColorSchema
+    val UpgradeHammer2: ColorSchema
+    val NewBuilderBaseWorker: ColorSchema
 }
 
 object BuilderBaseUpgradeColors : IBuilderBaseUpgradeColors {
@@ -31,5 +33,20 @@ object BuilderBaseUpgradeColors : IBuilderBaseUpgradeColors {
     )
     override val BuilderBaseWorker2 = ColorSchema.parse(
         518, 5, 1009, 78, "A0BBF5", "7|0|7687F1,14|0|7483EA,21|0|A8C6E7,28|0|DBD8E7,0|7|426BC0,7|7|5384E8,14|7|5081E5,21|7|3760B6,28|7|AEACCD", 0, 0.9,
+    )
+
+    override val UpgradeHammer2 = ColorSchema.parse(
+        156, 493, 1127, 638, "DAC9C5", "3|2|EFEFF7,6|5|F0E7F1,6|10|BF9882,12|10|FFFEFF,12|15|CFA388,17|15|E6D8D8,17|22|C09A82,31|30|294A79,33|33|284A75", 0, 0.9, "大本营武器剑"
+    )
+
+    override val NewBuilderBaseWorker = ColorSchema.parse(
+        1138,
+        501,
+        1189,
+        556,
+        "5484E7",
+        "-3|-7|314E8B,-1|-14|52595C,4|-11|537AD1,7|-10|4874CF,8|-8|345392,10|-5|EFFFFF,10|0|4C7BDC,3|3|95AACB,-1|3|8F98C3",
+        0,
+        0.9,
     )
 }

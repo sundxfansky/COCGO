@@ -98,7 +98,7 @@ suspend fun mainBaseTutorial(): Boolean {
     }
 
     // Dynamic Offset for Inner Shop
-    findMultiColors(schema = MyColors.ShopInnerArrow, increment = 1)?.let {
+    findMultiColorsUntil(schemas = listOf(MyColors.ShopInnerArrow, MyColors.ShopInnerArrow2, MyColors.ShopInnerArrow3), duration = 100, increment = 1)?.let {
         TouchActions.tap(it.x - 100, it.y + 50, delayTime = 500)
 
     }

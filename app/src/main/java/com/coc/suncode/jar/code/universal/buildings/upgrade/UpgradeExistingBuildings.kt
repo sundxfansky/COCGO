@@ -1,5 +1,6 @@
 package com.coc.suncode.jar.code.universal.buildings.upgrade
 
+import com.coc.suncode.jar.code.universal.buildings.WorkerAndResearch
 import com.coc.suncode.core.util.basic.ShowMessage
 import com.coc.suncode.jar.code.universal.buildings.BaseType
 import com.coc.suncode.core.util.basic.delayWithMultiplier
@@ -90,9 +91,7 @@ suspend fun upgradeAllExistingBuildings(buildings: List<String>, currentBase: Ba
             clickRightBottom(1)
 
             // Locate the worker icon
-            val worker = if (currentBase == BaseType.Builder) findMultiColorsUntil(
-                schemas = listOf(MyColors.BuilderBaseWorker, MyColors.BuilderBaseWorker2), duration = 1000
-            ) else findMultiColorsUntil(schemas = listOf(MyColors.MainBaseWorker, MyColors.MainBaseWorker2, MyColors.MainBaseWorker3), duration = 1000)
+            val worker = WorkerAndResearch.findUpgradeEntry(currentBase)
 
             // Pre-condition check: if it cannot continue building or worker not found, skip to next
             // Pass skipOrdering as isWallUpgrade so the saved worker is available for wall upgrades
@@ -314,7 +313,7 @@ private suspend fun upgradeHero(building: String): LoopAction {
 private suspend fun upgradeBuilding(building: String, currentBase: BaseType, attempt: Int): LoopAction {
     TouchActions.tap(1233, 37)// tap gold to close worker list
     // Check for the upgrade action (Hammer icon)
-    val hammer = findMultiColorsUntil(schemas = listOf(MyColors.UpgradeHammer), duration = 1000) ?: return LoopAction.Continue // Should not happen if build was found, but be safe
+    val hammer = findMultiColorsUntil(schemas = listOf(MyColors.UpgradeHammer, MyColors.UpgradeHammer2), duration = 1000) ?: return LoopAction.Continue // Should not happen if build was found, but be safe
 
     TouchActions.tap(hammer.x, hammer.y, delayTime = 500)
 

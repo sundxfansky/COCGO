@@ -29,6 +29,7 @@ interface IMainBaseTutorial {
     val UpgradeTHArrow: ColorSchema
     val TutorialTrainBarbarian: ColorSchema
     val BattlePageColor: ColorSchema
+    val ShopInnerArrow3: ColorSchema
 }
 
 object MainBaseTutorial : IMainBaseTutorial {
@@ -103,5 +104,9 @@ object MainBaseTutorial : IMainBaseTutorial {
     )
     override val BattlePageColor = ColorSchema.parse(
         180, 249, 389, 402, "79ADB4", "42|0|394D72,84|0|213F78,125|0|283228,167|0|2E3733,0|77|5F7D8A,42|77|253E4A,84|77|499DD4,125|77|5E67A5,167|77|394970", 0, 0.9,
+    )
+
+    override val ShopInnerArrow3 = ColorSchema.parse(
+        20, 264, 1270, 397, "45DBF3", "-7|-7|4ADFF3,7|-10|1BB3F9,13|-18|0FA7FA,27|-17|1DBAFD,36|-3|17ABFD,34|0|11A3FB,15|4|22BDF6,18|17|3CD3F5,24|24|3CD1F5", 0, 0.9, "商店内部箭头3"
     )
 }

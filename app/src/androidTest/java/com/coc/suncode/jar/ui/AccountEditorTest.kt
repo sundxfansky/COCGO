@@ -1,13 +1,16 @@
 package com.coc.suncode.jar.ui
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasAnySibling
+import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -16,6 +19,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextReplacement
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.coc.suncode.core.data.database.GlobalVars
@@ -82,7 +86,18 @@ class AccountEditorTest {
 
     @Test
     fun accountListHasReadOnlySingleLineRowsAndOpensSeparateEditor() {
-        compose.setContent { MaterialTheme { EnterMainCode().ShowMainUI(LocalContext.current) {} } }
+        compose.setContent {
+            MaterialTheme {
+                // Exercise the native editor directly now that the main route uses WebView.
+                var editingAccount by remember { mutableStateOf<Int?>(null) }
+                val index = editingAccount
+                if (index == null) {
+                    HomeScreen(onNavigateAccount = { editingAccount = it })
+                } else {
+                    AccountDetailScreen(initialIndex = index, onBack = { editingAccount = null })
+                }
+            }
+        }
         compose.onNodeWithText("账号设置").performClick()
         compose.onNodeWithText("提取存档").assertIsDisplayed()
         val remark = compose.onNodeWithText("1 · 测试账号1")
@@ -104,7 +119,7 @@ class AccountEditorTest {
 
     @Test
     fun arrowNavigationKeepsEditsIndependentAndMasterSwitchDisablesWorldControls() {
-        compose.setContent { MaterialTheme { AccountDetailScreen(1, {}, {}, {}) } }
+        compose.setContent { MaterialTheme { AccountDetailScreen(initialIndex = 1, onBack = {}) } }
         compose.onNode(hasSetTextAction() and hasText("测试账号1")).performTextReplacement("新备注")
         compose.onNode(hasSetTextAction() and hasText("10001")).performTextReplacement("12345")
         compose.onNodeWithContentDescription("主世界总开关", useUnmergedTree = true).performClick()
@@ -126,6 +141,7 @@ class AccountEditorTest {
     fun kickCooldownDefaultsToThreeMinutesAndCanBeEditedWithoutManualSwitchMode() {
         compose.setContent { MaterialTheme { HomeScreen() } }
         compose.onNodeWithText("启动手动切号模式").assertDoesNotExist()
+        compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("切号并冷却被顶账号"))
         compose.onNodeWithText("切号并冷却被顶账号").performScrollTo().assertIsDisplayed()
         val label = Schema.GLOBAL_SETTINGS.AFTER_KICK_COOLDOWN_MINUTES.displayName
         compose.onNodeWithText(label).performScrollTo().assertIsDisplayed()

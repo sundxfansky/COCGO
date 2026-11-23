@@ -55,6 +55,17 @@ class OcrRuntimeTest {
         assertRecognizesText(bitmap)
     }
 
+    @Test
+    fun recognitionOnlyUsesTheSameBitmapWithoutLoadingTheDetector() = withRuntime { bitmap ->
+        PpOcrEngine.loadRec()
+        assertTrue(PpOcrEngine.isRecLoaded)
+        assertFalse(PpOcrEngine.isLoaded)
+        val text = PpOcrEngine.recognizeRegion(bitmap, 0, 0, bitmap.width, bitmap.height).text
+        assertTrue("Expected the digits from the test image, received: $text", "12345" in text)
+        assertFalse("Full-region recognition must preserve the caller's bitmap", bitmap.isRecycled)
+        assertFalse(PpOcrEngine.isLoaded)
+    }
+
     private fun assertRecognizesText(bitmap: Bitmap) {
         val results = PpOcrEngine.recognize(bitmap)
         assertTrue("OCR must detect text in the generated image", results.isNotEmpty())

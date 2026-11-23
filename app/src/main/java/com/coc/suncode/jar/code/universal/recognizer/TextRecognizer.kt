@@ -21,6 +21,25 @@ data class RecognizedText(
 
 object TextRecognizer {
 
+    /** Reads a known single-line counter without running text detection. */
+    suspend fun recognizeSingleLine(left: Int, top: Int, right: Int, bottom: Int): String {
+        val frame = ScreenCaptureManager.capture(asBitmap = true) as? Bitmap ?: return ""
+        try {
+            if (left < 0 || top < 0 || right > frame.width || bottom > frame.height) return ""
+            return withContext(Dispatchers.IO) {
+                ScreenCaptureManager.getContext()?.let { PpOcrEngine.initialize(it) }
+                PpOcrEngine.recognizeRegion(frame, left, top, right, bottom).text
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            ShowMessage.record("Single-line OCR failed", throwable = e)
+            return ""
+        } finally {
+            frame.recycle()
+        }
+    }
+
     suspend fun recognize(
         startX: Int,
         startY: Int,
@@ -81,10 +100,19 @@ object TextRecognizer {
                     }
                 }
 
-                // 3. Recognize the image
-                return recognizeTextSync(bitmapToRecognize, useChinese)
+                val recognized = recognizeTextSync(bitmapToRecognize)
+                if (!applyPreprocess || useChinese || recognized.any { line -> line.text.any { it.isDigit() } }) {
+                    return recognized
+                }
+                // A binary image can recover white counters missed by the RGB model.
+                val binary = preprocess(croppedBitmap, threshold, invertBinarization)
+                try {
+                    return recognizeTextSync(binary).ifEmpty { recognized }
+                } finally {
+                    binary.recycle()
+                }
             } finally {
-                if (!croppedBitmap.isRecycled) croppedBitmap.recycle()
+                if (croppedBitmap !== screenBuffer) croppedBitmap.recycle()
             }
         } catch (e: CancellationException) {
             // Important: if it's a cancellation exception, must rethrow it for coroutine system to handle
@@ -132,7 +160,7 @@ object TextRecognizer {
         return out
     }
 
-    private suspend fun recognizeTextSync(bitmap: Bitmap, useChinese: Boolean): List<RecognizedText> =
+    private suspend fun recognizeTextSync(bitmap: Bitmap): List<RecognizedText> =
         withContext(Dispatchers.IO) {
             // Use the bundled PP-OCR engine so recognition works without ML Kit or a remote service.
             ScreenCaptureManager.getContext()?.let { PpOcrEngine.initialize(it) }

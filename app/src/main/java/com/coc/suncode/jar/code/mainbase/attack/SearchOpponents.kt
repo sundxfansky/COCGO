@@ -1,5 +1,8 @@
 package com.coc.suncode.jar.code.mainbase.attack
 
+import com.coc.suncode.jar.code.mainbase.others.mainBaseDeployTroops
+import com.coc.suncode.jar.code.universal.GameVersion
+import com.coc.suncode.jar.code.universal.isInHomePage
 import com.coc.suncode.core.util.basic.ShowMessage
 import com.coc.suncode.core.util.basic.delayWithMultiplier
 import com.coc.suncode.core.util.fileactions.LogHelper.logAndRestart
@@ -10,7 +13,7 @@ import com.coc.suncode.jar.code.universal.colors.findMultiColors
 import com.coc.suncode.jar.code.universal.colors.findMultiColorsUntil
 import com.coc.suncode.jar.code.universal.enterMainScreen
 import com.coc.suncode.jar.code.universal.recognizer.findButtonByText
-import com.coc.suncode.jar.code.universal.recognizer.recognizeResources
+import com.coc.suncode.jar.code.universal.recognizer.recognizeResourcesOrNull
 import com.coc.suncode.jar.code.universal.smalltools.StorageKeys
 import com.coc.suncode.jar.code.universal.smalltools.checkReconnections
 import com.coc.suncode.jar.code.universal.smalltools.getBooleanConfigRuntime
@@ -102,8 +105,8 @@ suspend fun searchOpponentsAndDeployTroops(): Boolean {
     var searchStarted = false
     val battleStartTime = System.currentTimeMillis()
     while (System.currentTimeMillis() - battleStartTime < SEARCH_TIMEOUT_MS) {
-        val battleIcon = findMultiColorsUntil(schemas = listOf(MyColors.TrainTroops), duration = 500)
-        if (battleIcon != null) {
+        if (isInHomePage()) {
+            searchStarted = false
             TouchActions.tap(83, 631, delayTime = 500)
         }
         // Detect attack cooldown screen; abort search so mainBaseAttack() can skip battle logic
@@ -126,16 +129,26 @@ suspend fun searchOpponentsAndDeployTroops(): Boolean {
             break
         }
         if (!checkReconnections()) return false
-        val nextOpponent = findMultiColors(schema = MyColors.NextOpponent)
+        if (findMultiColorsUntil(
+                schemas = listOf(MyColors.CanNotAttack, MyColors.CanNotAttack2, MyColors.CanNotAttack3), duration = 0
+            ) != null) return false
+        val nextOpponent = findMultiColorsUntil(schemas = listOf(MyColors.NextOpponent, MyColors.NextOpponent2), duration = 0)
         if (nextOpponent != null) {
             searchTimes++
             delayWithMultiplier(200)
-            val res = recognizeResources(true)
+            val skipResourceCheck = !isDynamicAdjust && targetGold < 10 && targetElixir < 10 && targetDarkElixir < 10
+            val res = if (skipResourceCheck) null else recognizeResourcesOrNull(true)
+            if (!skipResourceCheck && res == null) {
+                ShowMessage("对手资源识别失败，继续搜索")
+                TouchActions.tap(nextOpponent.x, nextOpponent.y, delayTime = 2000)
+                searchTimes--
+                continue
+            }
 
             // Cap recognized resource values to their in-game maximums to filter out OCR misreads
-            val cappedGold = res.gold.coerceAtMost(2_000_000)
-            val cappedElixir = res.elixir.coerceAtMost(2_000_000)
-            val cappedDarkElixir = res.darkElixir.coerceAtMost(12_000)
+            val cappedGold = res?.gold?.coerceAtMost(2_000_000) ?: 0
+            val cappedElixir = res?.elixir?.coerceAtMost(2_000_000) ?: 0
+            val cappedDarkElixir = res?.darkElixir?.coerceAtMost(12_000) ?: 0
 
             // Incrementally update target resource thresholds using a running average.
             // When restored from memory, the value already encodes past sessions,
@@ -164,10 +177,13 @@ suspend fun searchOpponentsAndDeployTroops(): Boolean {
                 }
             }
 
-            ShowMessage("账号${InGamesVars.currentAccountNumber}，搜索次数：$searchTimes\n对手资源：\n${res.gold}金, ${res.elixir}水, ${res.darkElixir}黑\n目标资源：\n${targetGold}金, ${targetElixir}水, ${targetDarkElixir}黑")
+            if (res != null) ShowMessage("账号${InGamesVars.currentAccountNumber}，搜索次数：$searchTimes\n对手资源：\n${res.gold}金, ${res.elixir}水, ${res.darkElixir}黑\n目标资源：\n${targetGold}金, ${targetElixir}水, ${targetDarkElixir}黑")
 
             // Skip the first search result when dynamic adjustment is enabled, so the average has at least one data point
-            val meetsCriteria = (!isDynamicAdjust || searchTimes > 2) && res.gold >= targetGold && res.elixir >= targetElixir && res.darkElixir >= targetDarkElixir
+            val meetsCriteria = skipResourceCheck || (
+                res != null && (!isDynamicAdjust || searchTimes > 2) &&
+                    res.gold >= targetGold && res.elixir >= targetElixir && res.darkElixir >= targetDarkElixir
+                )
             if (meetsCriteria) {
                 // Persist the final averaged thresholds so the next session can start from this value.
                 if (isDynamicAdjust) {
@@ -176,6 +192,13 @@ suspend fun searchOpponentsAndDeployTroops(): Boolean {
                     writeMemory(darkElixirKey, targetDarkElixir.toString())
                 }
 
+                // The global preparation screen can start the battle on the first deployment.
+                if (InGamesVars.currentGameVersion == GameVersion.GLOBAL &&
+                    findMultiColorsUntil(schemas = listOf(MyColors.EndBattle, MyColors.EndBattle2), duration = 100) != null
+                ) {
+                    mainBaseDeployTroops()
+                    return true
+                }
                 // The attack button is only actionable after the resource decision. Clicking it
                 // before reading the opponent screen transitions into battle and hides NextOpponent,
                 // which previously left the search loop running until its timeout.
@@ -194,7 +217,7 @@ suspend fun searchOpponentsAndDeployTroops(): Boolean {
                     TouchActions.tap(attackButton.x, attackButton.y, delayTime = 500)
                     val battlePage = findButtonByText(MyColors.EndBattle, "结束战斗")
                         ?: findMultiColorsUntil(
-                            schemas = listOf(MyColors.EndBattle, MyColors.BattlePage),
+                            schemas = listOf(MyColors.EndBattle, MyColors.EndBattle2),
                             duration = 5000,
                             increment = 1
                         )

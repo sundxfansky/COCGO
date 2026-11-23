@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "c83b23d7a197afa1",
+  "schemaVersion": "0cc164bfb9f0d17e",
   "modules": [
     {
       "name": "GLOBAL_SETTINGS",
@@ -75,6 +75,12 @@
           "key": "record_progress",
           "displayName": "记录账号进度",
           "defaultValue": "1",
+          "kind": "toggle"
+        },
+        {
+          "key": "debug_mode",
+          "displayName": "调试模式",
+          "defaultValue": "0",
           "kind": "toggle"
         },
         {
@@ -562,6 +568,123 @@
           "kind": "toggle"
         },
         {
+          "key": "play_tournament",
+          "displayName": "排位对战",
+          "defaultValue": "0",
+          "kind": "toggle"
+        },
+        {
+          "key": "play_league_donation",
+          "displayName": "联赛捐兵",
+          "defaultValue": "0",
+          "kind": "toggle"
+        },
+        {
+          "key": "league_donation_troop_1",
+          "displayName": "联赛捐兵兵种1",
+          "defaultValue": "1",
+          "kind": "select",
+          "options": [
+            "无",
+            "戈仑冰人",
+            "弓箭手",
+            "烈焰锅炉"
+          ]
+        },
+        {
+          "key": "league_donation_count_1",
+          "displayName": "联赛捐兵数量1",
+          "defaultValue": "5",
+          "kind": "number"
+        },
+        {
+          "key": "league_donation_troop_2",
+          "displayName": "联赛捐兵兵种2",
+          "defaultValue": "3",
+          "kind": "select",
+          "options": [
+            "无",
+            "戈仑冰人",
+            "弓箭手",
+            "烈焰锅炉"
+          ]
+        },
+        {
+          "key": "league_donation_count_2",
+          "displayName": "联赛捐兵数量2",
+          "defaultValue": "5",
+          "kind": "number"
+        },
+        {
+          "key": "league_donation_troop_3",
+          "displayName": "联赛捐兵兵种3",
+          "defaultValue": "2",
+          "kind": "select",
+          "options": [
+            "无",
+            "戈仑冰人",
+            "弓箭手",
+            "烈焰锅炉"
+          ]
+        },
+        {
+          "key": "league_donation_count_3",
+          "displayName": "联赛捐兵数量3",
+          "defaultValue": "10",
+          "kind": "number"
+        },
+        {
+          "key": "start_clan_league_size",
+          "displayName": "对战人数",
+          "defaultValue": "1",
+          "kind": "select",
+          "options": [
+            "11v11（新版）",
+            "15v15",
+            "30v30"
+          ]
+        },
+        {
+          "key": "start_clan_league_new_size",
+          "displayName": "已开放新对战人数",
+          "defaultValue": "0",
+          "kind": "toggle"
+        },
+        {
+          "key": "event_league_start_day",
+          "displayName": "额外联赛开放起始日",
+          "defaultValue": "0",
+          "kind": "select",
+          "options": [
+            "关闭",
+            "11日",
+            "12日",
+            "13日",
+            "14日",
+            "15日",
+            "16日",
+            "17日",
+            "18日",
+            "19日",
+            "20日",
+            "21日",
+            "22日"
+          ]
+        },
+        {
+          "key": "distribute_clan_league_rewards",
+          "displayName": "分配部落联赛奖励",
+          "defaultValue": "0",
+          "kind": "toggle"
+        },
+        {
+          "key": "export_game_json",
+          "displayName": "导出游戏内 JSON",
+          "defaultValue": "0",
+          "kind": "toggle",
+          "help": "每个账号每天导出一次，文件保存在设备的 sunFiles/exports 目录。"
+        },
+        {
           "key": "play_league",
           "displayName": "打联赛",
           "defaultValue": "0",
@@ -570,7 +693,7 @@
         {
           "key": "play_raid",
           "displayName": "打都城突袭",
-          "defaultValue": "1",
+          "defaultValue": "0",
           "kind": "toggle"
         },
         {
@@ -690,6 +813,30 @@
         {
           "key": "sell_ring_of_wall",
           "displayName": "卖壁垒之戒",
+          "defaultValue": "0",
+          "kind": "toggle"
+        },
+        {
+          "key": "upgrade_equipments_quick",
+          "displayName": "快速升级装备",
+          "defaultValue": "1",
+          "kind": "toggle"
+        },
+        {
+          "key": "upgrade_equipments_by_hero",
+          "displayName": "按英雄升级装备",
+          "defaultValue": "0",
+          "kind": "toggle"
+        },
+        {
+          "key": "upgrade_equipments_strict_priority",
+          "displayName": "严格遵循装备优先级",
+          "defaultValue": "0",
+          "kind": "number"
+        },
+        {
+          "key": "claim_villager_commissions",
+          "displayName": "领取村民委托",
           "defaultValue": "0",
           "kind": "toggle"
         },
@@ -1545,6 +1692,510 @@
           "displayName": "贪婪渡鸦",
           "defaultValue": "1",
           "kind": "toggle"
+        }
+      ]
+    },
+    {
+      "name": "MAIN_BASE_EQUIPMENTS",
+      "scope": "PROFILE",
+      "settings": [
+        {
+          "key": "barbarian_king_puppet",
+          "displayName": "野蛮人木偶",
+          "defaultValue": "1",
+          "kind": "toggle"
+        },
+        {
+          "key": "barbarian_king_rage_vial",
+          "displayName": "狂暴药水瓶",
+          "defaultValue": "1",
+          "kind": "toggle"
+        },
+        {
+          "key": "barbarian_king_earthquake_boots",
+          "displayName": "地震金靴",
+          "defaultValue": "1",
+          "kind": "toggle"
+        },
+        {
+          "key": "barbarian_king_healing_beard",
+          "displayName": "治疗胡须",
+          "defaultValue": "1",
+          "kind": "toggle"
+        },
+        {
+          "key": "barbarian_king_spiked_soccer",
+          "displayName": "尖刺足球",
+          "defaultValue": "1",
+          "kind": "toggle"
+        },
+        {
+          "key": "barbarian_king_giant_gauntlet",
+          "displayName": "巨型手套",
+          "defaultValue": "1",
+          "kind": "toggle"
+        },
+        {
+          "key": "barbarian_king_snake_bracelet",
+          "displayName": "灵蛇手镯",
+          "defaultValue": "1",
+          "kind": "toggle"
+        },
+        {
+          "key": "barbarian_king_stick_horse",
+          "displayName": "木棍马驹",
+          "defaultValue": "1",
+          "kind": "toggle"
+        },
+        {
+          "key": "archer_queen_cloak",
+          "displayName": "隐形药水瓶",
+          "defaultValue": "1",
+          "kind": "toggle"
+        },
+        {
+          "key": "archer_queen_puppet",
+          "displayName": "弓箭手木偶",
+          "defaultValue": "1",
+          "kind": "toggle"
+        },
+        {
+          "key": "archer_queen_giant_arrow",
+          "displayName": "巨型箭矢",
+          "defaultValue": "1",
+          "kind": "toggle"
+        },
+        {
+          "key": "archer_queen_healer_puppet",
+          "displayName": "天使木偶",
+          "defaultValue": "1",
+          "kind": "toggle"
+        },
+        {
+          "key": "archer_queen_frost_arrow",
+          "displayName": "冰封箭矢",
+          "defaultValue": "1",
+          "kind": "toggle"
+        },
+        {
+          "key": "archer_queen_clone_mirror",
+          "displayName": "克隆魔镜",
+          "defaultValue": "1",
+          "kind": "toggle"
+        },
+        {
+          "key": "archer_queen_action_figure",
+          "displayName": "动作人偶",
+          "defaultValue": "1",
+          "kind": "toggle"
+        },
+        {
+          "key": "archer_queen_monolith_arrow",
+          "displayName": "擎天箭矢",
+          "defaultValue": "1",
+          "kind": "toggle"
+        },
+        {
+          "key": "grand_warden_eternal_tome",
+          "displayName": "永恒书卷",
+          "defaultValue": "1",
+          "kind": "toggle"
+        },
+        {
+          "key": "grand_warden_life_gem",
+          "displayName": "生命宝石",
+          "defaultValue": "1",
+          "kind": "toggle"
+        },
+        {
+          "key": "grand_warden_healing_tome",
+          "displayName": "治疗书卷",
+          "defaultValue": "1",
+          "kind": "toggle"
+        },
+        {
+          "key": "grand_warden_rage_gem",
+          "displayName": "狂暴宝石",
+          "defaultValue": "1",
+          "kind": "toggle"
+        },
+        {
+          "key": "grand_warden_giant_fireball",
+          "displayName": "巨大火球",
+          "defaultValue": "1",
+          "kind": "toggle"
+        },
+        {
+          "key": "grand_warden_lava_balloon_puppet",
+          "displayName": "熔岩气球玩偶",
+          "defaultValue": "1",
+          "kind": "toggle"
+        },
+        {
+          "key": "grand_warden_heroic_torch",
+          "displayName": "英雄火炬",
+          "defaultValue": "1",
+          "kind": "toggle"
+        },
+        {
+          "key": "minion_prince_guardian_puppet",
+          "displayName": "护卫玩偶",
+          "defaultValue": "1",
+          "kind": "toggle"
+        },
+        {
+          "key": "minion_prince_iron_pants",
+          "displayName": "铁甲短裤",
+          "defaultValue": "1",
+          "kind": "toggle"
+        },
+        {
+          "key": "minion_prince_noble_dumbbell",
+          "displayName": "贵族哑铃",
+          "defaultValue": "1",
+          "kind": "toggle"
+        },
+        {
+          "key": "minion_prince_dark_orb",
+          "displayName": "暗黑魔球",
+          "defaultValue": "1",
+          "kind": "toggle"
+        },
+        {
+          "key": "minion_prince_dark_crown",
+          "displayName": "暗黑皇冠",
+          "defaultValue": "1",
+          "kind": "toggle"
+        },
+        {
+          "key": "minion_prince_meteor_staff",
+          "displayName": "陨石法杖",
+          "defaultValue": "1",
+          "kind": "toggle"
+        },
+        {
+          "key": "royal_champion_seeking_shield",
+          "displayName": "寻踪飞盾",
+          "defaultValue": "1",
+          "kind": "toggle"
+        },
+        {
+          "key": "royal_champion_hog_puppet",
+          "displayName": "野猪骑士木偶",
+          "defaultValue": "1",
+          "kind": "toggle"
+        },
+        {
+          "key": "royal_champion_royal_gem",
+          "displayName": "皇家宝石",
+          "defaultValue": "1",
+          "kind": "toggle"
+        },
+        {
+          "key": "royal_champion_speed_vial",
+          "displayName": "急速药水瓶",
+          "defaultValue": "1",
+          "kind": "toggle"
+        },
+        {
+          "key": "royal_champion_frozen_crystal",
+          "displayName": "冷冽冰晶",
+          "defaultValue": "1",
+          "kind": "toggle"
+        },
+        {
+          "key": "royal_champion_rocket_spear",
+          "displayName": "火箭飞矛",
+          "defaultValue": "1",
+          "kind": "toggle"
+        },
+        {
+          "key": "royal_champion_electro_boots",
+          "displayName": "雷电战靴",
+          "defaultValue": "1",
+          "kind": "toggle"
+        },
+        {
+          "key": "dragon_duke_fire_ring",
+          "displayName": "烈焰之心",
+          "defaultValue": "1",
+          "kind": "toggle"
+        },
+        {
+          "key": "dragon_duke_scale_armor",
+          "displayName": "爆震器",
+          "defaultValue": "1",
+          "kind": "toggle"
+        },
+        {
+          "key": "dragon_duke_combustor",
+          "displayName": "助燃器",
+          "defaultValue": "1",
+          "kind": "toggle"
+        },
+        {
+          "key": "dragon_duke_lightning_fang",
+          "displayName": "雷电獠牙",
+          "defaultValue": "1",
+          "kind": "toggle"
+        },
+        {
+          "key": "dragon_duke_rocket_pack",
+          "displayName": "火箭背包",
+          "defaultValue": "1",
+          "kind": "toggle"
+        }
+      ]
+    },
+    {
+      "name": "MAIN_BASE_EQUIPMENT_PRIORITIES",
+      "scope": "PROFILE",
+      "settings": [
+        {
+          "key": "barbarian_king_puppet_priority",
+          "displayName": "野蛮人木偶",
+          "defaultValue": "1",
+          "kind": "number"
+        },
+        {
+          "key": "barbarian_king_rage_vial_priority",
+          "displayName": "狂暴药水瓶",
+          "defaultValue": "2",
+          "kind": "number"
+        },
+        {
+          "key": "barbarian_king_earthquake_boots_priority",
+          "displayName": "地震金靴",
+          "defaultValue": "3",
+          "kind": "number"
+        },
+        {
+          "key": "barbarian_king_healing_beard_priority",
+          "displayName": "治疗胡须",
+          "defaultValue": "4",
+          "kind": "number"
+        },
+        {
+          "key": "barbarian_king_spiked_soccer_priority",
+          "displayName": "尖刺足球",
+          "defaultValue": "5",
+          "kind": "number"
+        },
+        {
+          "key": "barbarian_king_giant_gauntlet_priority",
+          "displayName": "巨型手套",
+          "defaultValue": "6",
+          "kind": "number"
+        },
+        {
+          "key": "barbarian_king_snake_bracelet_priority",
+          "displayName": "灵蛇手镯",
+          "defaultValue": "7",
+          "kind": "number"
+        },
+        {
+          "key": "barbarian_king_stick_horse_priority",
+          "displayName": "木棍马驹",
+          "defaultValue": "8",
+          "kind": "number"
+        },
+        {
+          "key": "archer_queen_cloak_priority",
+          "displayName": "隐形药水瓶",
+          "defaultValue": "9",
+          "kind": "number"
+        },
+        {
+          "key": "archer_queen_puppet_priority",
+          "displayName": "弓箭手木偶",
+          "defaultValue": "10",
+          "kind": "number"
+        },
+        {
+          "key": "archer_queen_giant_arrow_priority",
+          "displayName": "巨型箭矢",
+          "defaultValue": "11",
+          "kind": "number"
+        },
+        {
+          "key": "archer_queen_healer_puppet_priority",
+          "displayName": "天使木偶",
+          "defaultValue": "12",
+          "kind": "number"
+        },
+        {
+          "key": "archer_queen_frost_arrow_priority",
+          "displayName": "冰封箭矢",
+          "defaultValue": "13",
+          "kind": "number"
+        },
+        {
+          "key": "archer_queen_clone_mirror_priority",
+          "displayName": "克隆魔镜",
+          "defaultValue": "14",
+          "kind": "number"
+        },
+        {
+          "key": "archer_queen_action_figure_priority",
+          "displayName": "动作人偶",
+          "defaultValue": "15",
+          "kind": "number"
+        },
+        {
+          "key": "archer_queen_monolith_arrow_priority",
+          "displayName": "擎天箭矢",
+          "defaultValue": "16",
+          "kind": "number"
+        },
+        {
+          "key": "grand_warden_eternal_tome_priority",
+          "displayName": "永恒书卷",
+          "defaultValue": "17",
+          "kind": "number"
+        },
+        {
+          "key": "grand_warden_life_gem_priority",
+          "displayName": "生命宝石",
+          "defaultValue": "18",
+          "kind": "number"
+        },
+        {
+          "key": "grand_warden_healing_tome_priority",
+          "displayName": "治疗书卷",
+          "defaultValue": "19",
+          "kind": "number"
+        },
+        {
+          "key": "grand_warden_rage_gem_priority",
+          "displayName": "狂暴宝石",
+          "defaultValue": "20",
+          "kind": "number"
+        },
+        {
+          "key": "grand_warden_giant_fireball_priority",
+          "displayName": "巨大火球",
+          "defaultValue": "21",
+          "kind": "number"
+        },
+        {
+          "key": "grand_warden_lava_balloon_puppet_priority",
+          "displayName": "熔岩气球玩偶",
+          "defaultValue": "22",
+          "kind": "number"
+        },
+        {
+          "key": "grand_warden_heroic_torch_priority",
+          "displayName": "英雄火炬",
+          "defaultValue": "23",
+          "kind": "number"
+        },
+        {
+          "key": "minion_prince_guardian_puppet_priority",
+          "displayName": "护卫玩偶",
+          "defaultValue": "24",
+          "kind": "number"
+        },
+        {
+          "key": "minion_prince_iron_pants_priority",
+          "displayName": "铁甲短裤",
+          "defaultValue": "25",
+          "kind": "number"
+        },
+        {
+          "key": "minion_prince_noble_dumbbell_priority",
+          "displayName": "贵族哑铃",
+          "defaultValue": "26",
+          "kind": "number"
+        },
+        {
+          "key": "minion_prince_dark_orb_priority",
+          "displayName": "暗黑魔球",
+          "defaultValue": "27",
+          "kind": "number"
+        },
+        {
+          "key": "minion_prince_dark_crown_priority",
+          "displayName": "暗黑皇冠",
+          "defaultValue": "28",
+          "kind": "number"
+        },
+        {
+          "key": "minion_prince_meteor_staff_priority",
+          "displayName": "陨石法杖",
+          "defaultValue": "29",
+          "kind": "number"
+        },
+        {
+          "key": "royal_champion_seeking_shield_priority",
+          "displayName": "寻踪飞盾",
+          "defaultValue": "30",
+          "kind": "number"
+        },
+        {
+          "key": "royal_champion_hog_puppet_priority",
+          "displayName": "野猪骑士木偶",
+          "defaultValue": "31",
+          "kind": "number"
+        },
+        {
+          "key": "royal_champion_royal_gem_priority",
+          "displayName": "皇家宝石",
+          "defaultValue": "32",
+          "kind": "number"
+        },
+        {
+          "key": "royal_champion_speed_vial_priority",
+          "displayName": "急速药水瓶",
+          "defaultValue": "33",
+          "kind": "number"
+        },
+        {
+          "key": "royal_champion_frozen_crystal_priority",
+          "displayName": "冷冽冰晶",
+          "defaultValue": "34",
+          "kind": "number"
+        },
+        {
+          "key": "royal_champion_rocket_spear_priority",
+          "displayName": "火箭飞矛",
+          "defaultValue": "35",
+          "kind": "number"
+        },
+        {
+          "key": "royal_champion_electro_boots_priority",
+          "displayName": "雷电战靴",
+          "defaultValue": "36",
+          "kind": "number"
+        },
+        {
+          "key": "dragon_duke_fire_ring_priority",
+          "displayName": "烈焰之心",
+          "defaultValue": "37",
+          "kind": "number"
+        },
+        {
+          "key": "dragon_duke_scale_armor_priority",
+          "displayName": "爆震器",
+          "defaultValue": "38",
+          "kind": "number"
+        },
+        {
+          "key": "dragon_duke_combustor_priority",
+          "displayName": "助燃器",
+          "defaultValue": "39",
+          "kind": "number"
+        },
+        {
+          "key": "dragon_duke_lightning_fang_priority",
+          "displayName": "雷电獠牙",
+          "defaultValue": "40",
+          "kind": "number"
+        },
+        {
+          "key": "dragon_duke_rocket_pack_priority",
+          "displayName": "火箭背包",
+          "defaultValue": "41",
+          "kind": "number"
         }
       ]
     },

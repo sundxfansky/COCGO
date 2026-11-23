@@ -1,5 +1,11 @@
 package com.coc.suncode.jar.code.universal.recognizer
 
+import com.coc.suncode.jar.code.universal.GameVersion
+import com.coc.suncode.jar.code.universal.InGamesVars
+import com.coc.suncode.jar.code.universal.smalltools.getStaticConfig
+import com.coc.suncode.jar.ui.schema.Schema
+import com.coc.suncode.core.util.basic.ShowMessage
+
 /**
  * Data class representing the game's core resources.
  */
@@ -21,20 +27,32 @@ data class Resources(
  * - Largest is Dark Elixir.
  *
  * @param isOpponent Whether to recognize the opponent's resources instead of own.
- * @return A [Resources] object containing the detected values.
+ * @return Recognized values, or null when the screenshot lacks readable resource counters.
  */
-suspend fun recognizeResources(isOpponent: Boolean = false): Resources {
-    // Select crop area based on target
-    val (startX, startY, endX, endY) = if (isOpponent) {
-        listOf(50, 98, 293, 209)
-    } else {
-        listOf(990, 20, 1270, 190)
-    }
-    val preProcess = !isOpponent
-    val results = TextRecognizer.recognize(startX, startY, endX, endY, useChinese = false, applyPreprocess = preProcess, threshold = 240)
+suspend fun recognizeResources(isOpponent: Boolean = false): Resources =
+    recognizeResourcesOrNull(isOpponent) ?: Resources()
 
-    // Sort by the top coordinate of the bounding box
+suspend fun recognizeResourcesOrNull(isOpponent: Boolean = false): Resources? {
+    suspend fun readCounters(left: Int, top: Int, right: Int, bottom: Int): List<RecognizedText> =
+        TextRecognizer.recognize(
+            left, top, right, bottom, useChinese = false, threshold = if (isOpponent) 150 else 240
+        ).filter { line -> line.text.any { it.isDigit() } }
+
+    val results = if (!isOpponent) {
+        readCounters(990, 20, 1270, 190)
+    } else if (InGamesVars.currentGameVersion == GameVersion.GLOBAL) {
+        // The current global opponent screen places loot above the usual rows.
+        readCounters(50, 80, 200, 210).takeIf { it.size >= 2 }
+            ?: readCounters(50, 98, 293, 209)
+    } else {
+        readCounters(50, 98, 293, 209)
+    }
+
     val sortedResults = results.sortedBy { it.position?.top ?: Int.MAX_VALUE }
+    if (getStaticConfig(Schema.GLOBAL_SETTINGS.DEBUG_MODE.key) == "1") {
+        ShowMessage.record("资源识别（对手=$isOpponent）：${sortedResults.joinToString { it.text }}")
+    }
+    if (sortedResults.size < 2) return null
 
     var gold = 0
     var elixir = 0

@@ -1,5 +1,9 @@
 package com.coc.suncode.jar.code.universal.buildings.upgrade
 
+import com.coc.suncode.jar.code.universal.InGamesVars
+import com.coc.suncode.jar.code.universal.smalltools.StorageKeys
+import com.coc.suncode.jar.code.universal.smalltools.writeMemory
+import com.coc.suncode.jar.features.FeatureRuntime
 import android.graphics.Point
 import com.coc.suncode.jar.code.universal.buildings.BaseType
 import com.coc.suncode.core.util.basic.ShowMessage
@@ -9,7 +13,6 @@ import com.coc.suncode.core.util.touchactions.TouchActions
 import com.coc.suncode.jar.code.builderbase.upgrade.builderBaseFindBuildButton
 import com.coc.suncode.jar.code.mainbase.upgrade.mainBaseFindBuildButton
 import com.coc.suncode.jar.code.universal.clickRightBottom
-import com.coc.suncode.jar.code.universal.smalltools.killGame
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import kotlin.math.sqrt
@@ -57,7 +60,12 @@ suspend fun tryToFindBuildPosition(baseType: BaseType): Point? {
     } else {
         ShowMessage("未找到红色叉，错误截图已保存到/sdcard/sunFiles/bugReporter\n请将截图反馈给作者")
         BugReporter.takeScreenshot("Red_Cross_Not_Found")
-        killGame()
+        if (baseType == BaseType.Main && FeatureRuntime.isEnabled("tutorial")) {
+            // A tutorial can cover the placement controls. Let the tutorial check run again.
+            val key = StorageKeys.withAccountNumber(StorageKeys.MAIN_BASE_CHECK_TUTORIALS, InGamesVars.currentAccountNumber)
+            writeMemory(key, "0")
+            FeatureRuntime.run("tutorial", "check")
+        }
         clickRightBottom(1)
         return null
     }

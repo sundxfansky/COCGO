@@ -58,7 +58,11 @@ function settingsFor(name) {
 }
 
 // Presentation metadata does not duplicate the canonical labels or defaults.
+const leagueTroops = ['无', '戈仑冰人', '弓箭手', '烈焰锅炉'];
 const options = {
+  start_clan_league_size: ['11v11（新版）', '15v15', '30v30'],
+  event_league_start_day: ['关闭', ...Array.from({ length: 12 }, (_, index) => `${index + 11}日`)],
+  league_donation_troop_1: leagueTroops, league_donation_troop_2: leagueTroops, league_donation_troop_3: leagueTroops,
   auto_update: ['关闭自动更新', '仅启动时更新', '实时自动更新'],
   after_kick_option: ['立刻重连', '切号并冷却被顶账号', '原地等待'],
   game_version: ['国服', '国际服'], extract_version: ['国服', '国际服'],
@@ -71,6 +75,7 @@ const numeric = new Set(['account_count', 'config_count', 'create_start_id', 'cr
 const textFields = new Set(['cn_path', 'global_path', 'data_content', 'clan_tag', 'clan_name', 'clan_join_message',
   'device_remark', 'remark', 'create_prefix', 'email']);
 const help = {
+  export_game_json: '每个账号每天导出一次，文件保存在设备的 sunFiles/exports 目录。',
   account_count: '每个账号拥有独立的主世界和夜世界配置。减少数量不会删除已保存的其他账号配置。',
   delay_multiplier: '低性能设备建议 1.5–2.5；数值越大，操作之间等待越长。',
   after_kick_cooldown_minutes: '选择切号并冷却时，被顶号的账号在此时间内不会再次登录。',

@@ -1,5 +1,8 @@
 package com.coc.suncode.jar.code.universal.buildings
 
+import android.graphics.Point
+import com.coc.suncode.jar.code.universal.GameVersion
+import com.coc.suncode.jar.code.universal.InGamesVars
 import android.graphics.Bitmap
 import androidx.compose.ui.graphics.Color
 import com.coc.suncode.core.system.screencapture.ScreenCaptureManager
@@ -26,6 +29,20 @@ enum class BaseType {
  * Dispatches on [BaseType] to handle base-specific differences (color schemas, goblin checks, messages).
  */
 object WorkerAndResearch {
+    // Detect the current layout first so legacy global accounts can still use the top bar.
+    suspend fun findUpgradeEntry(baseType: BaseType): Point? {
+        val oldIcons = when (baseType) {
+            BaseType.Main -> MyColors.MainBaseWorkerSchemas
+            BaseType.Builder -> MyColors.BuilderBaseWorkerSchemas
+        }
+        val icons = if (InGamesVars.currentGameVersion == GameVersion.GLOBAL) {
+            listOf(if (baseType == BaseType.Main) MyColors.MainBaseBuildingUpgradeEntryGlobal else MyColors.NewBuilderBaseWorker) + oldIcons
+        } else {
+            oldIcons
+        }
+        return findMultiColorsUntil(schemas = icons, duration = 1000)
+    }
+
 
     /**
      * Detects the number of workers for the given base type.
@@ -34,14 +51,18 @@ object WorkerAndResearch {
     suspend fun detectWorkerNumber(baseType: BaseType): WorkerInfo {
         // Must double-check to wait for a little bit, otherwise the detection will fail.
         if (!enterMainScreen(true)) return WorkerInfo(0, 0)
-        // MainBase-only: goblin worker pre-check
-        if (baseType == BaseType.Main && findMultiColors(schema = MyColors.GoblinWorker) != null) {
+        if (InGamesVars.currentGameVersion == GameVersion.GLOBAL) {
+            val icon = if (baseType == BaseType.Main) MyColors.MainBaseWorker6 else MyColors.NewBuilderBaseWorker
+            if (findMultiColors(icon, increment = 1) != null) return detectGlobalWorkers(baseType)
+        }
+        // The regular counter does not include the goblin worker.
+        if (baseType == BaseType.Main && listOf(MyColors.GoblinWorker, MyColors.GoblinWorker2).any { findMultiColors(it) != null }) {
             return WorkerInfo(0, 6)
         }
 
         val workerSchemas = when (baseType) {
-            BaseType.Builder -> listOf(MyColors.BuilderBaseWorker, MyColors.BuilderBaseWorker2)
-            BaseType.Main -> listOf(MyColors.MainBaseWorker, MyColors.MainBaseWorker2, MyColors.MainBaseWorker3)
+            BaseType.Builder -> MyColors.BuilderBaseWorkerSchemas
+            BaseType.Main -> MyColors.MainBaseWorkerSchemas
         }
         val baseName = when (baseType) {
             BaseType.Builder -> "夜世界"; BaseType.Main -> "主世界"
@@ -53,9 +74,9 @@ object WorkerAndResearch {
         val worker = findMultiColorsUntil(schemas = workerSchemas, duration = 200)
         if (worker != null) {
             // Define the crop region for the worker number text
-            val startX = worker.x - 50
+            val startX = (worker.x - 50).coerceAtLeast(0)
             val startY = 0
-            val endX = worker.x + 250
+            val endX = (worker.x + 250).coerceAtMost(1280)
             val endY = 70
 
             val results = TextRecognizer.recognize(startX, startY, endX, endY, useChinese = false, applyPreprocess = true, threshold = 240)
@@ -69,6 +90,18 @@ object WorkerAndResearch {
         }
         ShowMessage("未检测到${baseName}工人，已将错误截图保存到/sdcard/sunFiles/bugReporter\n请反馈给作者")
         BugReporter.takeScreenshot("${bugTag}_Not_Detected")
+        return WorkerInfo(0, 0)
+    }
+
+    private suspend fun detectGlobalWorkers(baseType: BaseType): WorkerInfo {
+        val results = TextRecognizer.recognizeSingleLine(1186, 531, 1247, 572)
+        val recognized = parseWorkerInfo(results)
+        if (recognized.total > 0) return recognized
+
+        // The Builder Base counter may show a single available-worker digit.
+        if (baseType == BaseType.Builder) {
+            return detectWorkerByColorMatch(1186, 531, 1247, 572, useGlobalDigit = true)
+        }
         return WorkerInfo(0, 0)
     }
 
@@ -98,9 +131,9 @@ object WorkerAndResearch {
             ?: findMultiColors(schema = MyColors.ResearchIcon2)
         if (research != null) {
             // Define the crop region for the researcher number text
-            val startX = research.x - 100
+            val startX = (research.x - 100).coerceAtLeast(0)
             val startY = 0
-            val endX = research.x + 200
+            val endX = (research.x + 200).coerceAtMost(1280)
             val endY = 70
 
             val results = TextRecognizer.recognize(startX, startY, endX, endY, useChinese = false, applyPreprocess = true, threshold = 240)
@@ -131,21 +164,35 @@ object WorkerAndResearch {
      * to match BinarySlash and BinaryOne patterns when OCR fails.
      */
     private suspend fun detectWorkerByColorMatch(
-        startX: Int, startY: Int, endX: Int, endY: Int
+        startX: Int, startY: Int, endX: Int, endY: Int, useGlobalDigit: Boolean = false
     ): WorkerInfo {
         val screenBuffer = ScreenCaptureManager.capture(asBitmap = true) as? Bitmap
             ?: return WorkerInfo(0, 0)
 
-        val cropWidth = endX - startX
-        val cropHeight = endY - startY
-        if (startX + cropWidth > screenBuffer.width || startY + cropHeight > screenBuffer.height) {
-            return WorkerInfo(0, 0)
+        try {
+            if (startX < 0 || startY < 0 || endX > screenBuffer.width || endY > screenBuffer.height) {
+                return WorkerInfo(0, 0)
+            }
+            val crop = Bitmap.createBitmap(screenBuffer, startX, startY, endX - startX, endY - startY)
+            val preprocessed = TextRecognizer.preprocess(crop, if (useGlobalDigit) 235 else 240, true)
+            try {
+                if (useGlobalDigit) {
+                    val one = ColorSchema.rescope(MyColors.BinaryOne3, 0, 0, crop.width, crop.height)
+                    return if (findMultiColors(bitmap = preprocessed, schema = one, increment = 1) != null) WorkerInfo(1, 2) else WorkerInfo(0, 0)
+                }
+                return matchWorkerFraction(preprocessed)
+            } finally {
+                preprocessed.recycle()
+                if (crop !== screenBuffer) crop.recycle()
+            }
+        } finally {
+            screenBuffer.recycle()
         }
+    }
 
-        val croppedBitmap = Bitmap.createBitmap(screenBuffer, startX, startY, cropWidth, cropHeight)
-        // Apply the same preprocess as TextRecognizer.recognize (grayscale + binarization)
-        val preprocessed = TextRecognizer.preprocess(croppedBitmap, threshold = 240, invertBinarization = true)
-
+    private suspend fun matchWorkerFraction(preprocessed: Bitmap): WorkerInfo {
+        val cropWidth = preprocessed.width
+        val cropHeight = preprocessed.height
         // Step 1: find the slash character "/" in the preprocessed bitmap
         val slashSchema = ColorSchema.rescope(MyColors.BinarySlash, 0, 0, cropWidth, cropHeight)
         val slashPoint = findMultiColors(bitmap = preprocessed, schema = slashSchema)

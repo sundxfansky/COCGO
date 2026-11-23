@@ -1,5 +1,7 @@
 package com.coc.suncode.jar.code.universal.tutorial
 
+import com.coc.suncode.jar.code.universal.GameVersion
+import com.coc.suncode.jar.code.universal.InGamesVars
 import com.coc.suncode.core.system.screencapture.ScreenCaptureManager
 import com.coc.suncode.core.util.basic.ShowMessage
 import com.coc.suncode.core.util.basic.delayWithMultiplier
@@ -7,7 +9,6 @@ import com.coc.suncode.jar.code.universal.colors.findMultiColors
 import com.coc.suncode.core.util.fileactions.LogHelper
 import com.coc.suncode.core.util.touchactions.TouchActions
 import com.coc.suncode.jar.code.colorschema.MyColors
-import com.coc.suncode.jar.code.universal.InGamesVars
 import com.coc.suncode.jar.code.universal.smalltools.checkReconnections
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
@@ -58,11 +59,12 @@ object AllTutorials {
         }
         // If a point is found, it means a tutorial element is on screen
         if (point != null) {
-            if (times < 10) {
-                // New logic: Perform a direct tap if times is less than 10
+            if (InGamesVars.currentGameVersion == GameVersion.GLOBAL && times in 3..5) {
+                // The updated tutorial can wait for the build control before progressing.
+                TouchActions.tap(1195, 630, delayTime = 500)
+            } else if (times < 6) {
                 TouchActions.tap(point.x, point.y, delayTime = 500)
             } else {
-                // Existing logic: Trigger the complex tutorial sequence if times is 10 or more
                 allBaseTutorial()
             }
             return true

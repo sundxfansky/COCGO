@@ -11,6 +11,10 @@ private fun prioritiesFor(items: List<SettingDef>, category: String): List<Setti
 /** The priority setting key paired with an item setting key. */
 fun priorityKey(item: SettingDef): String = "${item.key}_priority"
 
+object MainBaseEquipmentPriorities {
+    val all = prioritiesFor(MainBaseEquipments.all, "MAIN_BASE_EQUIPMENT_PRIORITIES")
+}
+
 object MainBaseResearchPriorities {
     val all = prioritiesFor(MainBaseTroopsAndSpells.all, "MAIN_BASE_RESEARCH_PRIORITIES")
 }

@@ -1,5 +1,6 @@
 package com.coc.suncode.jar.code.mainbase.attack
 
+import com.coc.suncode.jar.code.universal.GameVersion
 import com.coc.suncode.core.data.database.GlobalVars
 import com.coc.suncode.core.util.basic.ShowMessage
 import com.coc.suncode.core.util.basic.delayWithMultiplier
@@ -26,7 +27,9 @@ suspend fun mainBaseTrainTroops(): Boolean {
         GlobalVars.absorbEdge = 1
 
         // Open training menu
-        var point = findMultiColorsUntil(schemas = listOf(MyColors.TrainTroops), duration = 1500)
+        val isGlobal = InGamesVars.currentGameVersion == GameVersion.GLOBAL
+        val trainButtons = if (isGlobal) listOf(MyColors.TrainTroopsGlobal, MyColors.TrainTroops) else listOf(MyColors.TrainTroops)
+        var point = findMultiColorsUntil(schemas = trainButtons, duration = 1500)
         if (point != null) {
             TouchActions.tap(point.x, point.y, delayTime = 500)
         } else {
@@ -35,8 +38,16 @@ suspend fun mainBaseTrainTroops(): Boolean {
             return enterMainScreen()
         }
 
-        // Verify training page
-        point = findMultiColorsUntil(schemas = listOf(MyColors.AttackInTrainingPage, MyColors.AttackInTrainingPage2, MyColors.AttackInTrainingPage3), duration = 1500)
+        // The current global layout opens an army overview before the training editor.
+        val editArmy = if (isGlobal) findMultiColorsUntil(schemas = listOf(MyColors.EditArmyButton), duration = 600) else null
+        if (editArmy != null) TouchActions.tap(editArmy.x, editArmy.y, delayTime = 800)
+
+        val trainingScreens = if (editArmy != null) {
+            listOf(MyColors.TrainingPageGlobal)
+        } else {
+            listOf(MyColors.AttackInTrainingPage, MyColors.AttackInTrainingPage2, MyColors.AttackInTrainingPage3)
+        }
+        point = findMultiColorsUntil(schemas = trainingScreens, duration = 1500)
         if (point == null) {
             ShowMessage("账号${InGamesVars.currentAccountNumber}，未找到训练标志")
             GlobalVars.absorbEdge = 0
@@ -122,9 +133,10 @@ suspend fun mainBaseTrainTroops(): Boolean {
         TouchActions.tap(219, 139, delayTime = 1000)
         TouchActions.tap(1232, 65, delayTime = 300)
 
-        writeMemory(storageKey, (System.currentTimeMillis() / 60_000).toString())
         GlobalVars.absorbEdge = 0
-        return enterMainScreen()
+        val returned = enterMainScreen()
+        if (returned) writeMemory(storageKey, (System.currentTimeMillis() / 60_000).toString())
+        return returned
     } else {
         ShowMessage("账号${InGamesVars.currentAccountNumber}，该账号今日已练兵")
         return true

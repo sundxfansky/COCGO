@@ -1,6 +1,11 @@
 package com.coc.suncode.jar.code.mainbase
 
 
+import com.coc.suncode.jar.code.clancapital.playClanCapital
+import com.coc.suncode.jar.code.mainbase.daily.collectVillagerCommission
+import com.coc.suncode.jar.code.mainbase.league.playClanLeague
+import com.coc.suncode.jar.code.mainbase.league.playTournament
+import com.coc.suncode.jar.code.universal.smalltools.exportGameJson
 import com.coc.suncode.jar.features.FeatureRuntime
 import com.coc.suncode.jar.code.mainbase.others.zoomSmallMainBase
 import com.coc.suncode.jar.code.universal.smalltools.enterMainBase
@@ -12,10 +17,18 @@ suspend fun playMainBase(): Boolean {
     // Disabling a world skips every action in its module, including training and maintenance.
     if (!getBooleanConfigRuntime(Schema.MAIN_BASE_SETTINGS.ENABLED.key)) return true
     if (!enterMainBase()) return false
+    if (!exportGameJson()) return false
 
+    // The core handles this new action for compatibility with existing collection plug-ins.
+    if (FeatureRuntime.isEnabled("collection") && !collectVillagerCommission()) return false
     zoomSmallMainBase()
     if (!FeatureRuntime.run("main_attack", "train")) return false
     if (!FeatureRuntime.run("main_attack", "attack")) return false
+    if (FeatureRuntime.isEnabled("main_attack") && !playTournament()) return false
+    if (FeatureRuntime.isEnabled("clan")) {
+        if (!playClanCapital()) return false
+        if (!playClanLeague()) return false
+    }
     if (!FeatureRuntime.run("obstacles", "main")) return false
     if (!FeatureRuntime.run("clan", "join")) return false
     if (!FeatureRuntime.run("clan", "request")) return false
@@ -25,6 +38,6 @@ suspend fun playMainBase(): Boolean {
     if (!FeatureRuntime.run("main_research", "research")) return false
     if (!FeatureRuntime.run("heroes", "place")) return false
     if (!FeatureRuntime.run("tutorial", "check")) return false
-//    if (!upgradeGears()) return false
+    if (!FeatureRuntime.run("heroes", "upgrade")) return false
     return true
 }

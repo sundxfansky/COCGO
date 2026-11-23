@@ -1,8 +1,8 @@
-# building — Detector Inference Service for Android
+# ZKQbuilding — Detector Inference Service for Android
 
-**Version:** 1.11
+**Version:** 1.12
 
-An Android app that runs a local HTTP server exposing detector inference and text recognition. The app launches a foreground service on startup, making the detection API available to other apps or automation tools on the device via `http://localhost:13462`.
+An Android app that runs a local HTTP server exposing detector inference and text recognition (PP-OCRv6 Tiny FP16). The app launches a foreground service on startup, making the detection API available to other apps or automation tools on the device via `http://localhost:13462`.
 
 ---
 
@@ -11,7 +11,7 @@ An Android app that runs a local HTTP server exposing detector inference and tex
 1. [Quick Start](#quick-start)
 2. [Supported Models](#supported-models)
 3. [API Reference](#api-reference)
-4. [Text Recognition (PP-OCRv6 small)](#text-recognition-ppocrv6-small)
+4. [Text Recognition (PP-OCRv6 Tiny)](#text-recognition-ppocrv6-tiny)
 5. [Usage Examples](#usage-examples)
 
 ---
@@ -73,9 +73,9 @@ internally by the self-contained [`POST /ocr`](#post-ocr) endpoint:
 
 | Model | Model file | Purpose |
 |---|---|---|
-| PP-OCRv6 small (det) | `ppocrv6_small_det.onnx` | DB text-line detection |
-| PP-OCRv6 small (rec) | `ppocrv6_small_rec.onnx` | CTC text recognition |
-| PP-OCRv6 dictionary | `ppocrv6_dict.json` | Character dictionary for CTC decoding |
+| PP-OCRv6 Tiny (det fp16) | `ppocr_v6_tiny_det.onnx` | DB text-line detection (~967 KB) |
+| PP-OCRv6 Tiny (rec fp16) | `ppocr_v6_tiny_rec.onnx` | CTC text recognition (~2.16 MB) |
+| PP-OCRv6 character list | `ppocr_v6_tiny_characters.json` | Character dictionary for CTC decoding |
 
 > **Note:** `modelType` is required. Omitting it or passing an unrecognized value will result in an error.
 > If a model asset has not been packaged under `app/src/main/assets`, `/load` will fail with a missing-model error.
@@ -99,7 +99,7 @@ Health check. Returns the server status, version, and current model state.
 ```json
 {
   "status": "running",
-  "version": "1.11",
+  "version": "1.12",
   "modelLoaded": true,
   "modelType": "walls-detect",
   "ocrLoaded": false
@@ -112,7 +112,7 @@ Health check. Returns the server status, version, and current model state.
 | `version` | string | Current server version. |
 | `modelLoaded` | boolean | Whether a model is currently loaded in memory. |
 | `modelType` | string \| null | The `modelType` that was used to load the current model, or `null` if none. |
-| `ocrLoaded` | boolean | Whether the PP-OCRv6 small det + rec models are currently loaded in memory. |
+| `ocrLoaded` | boolean | Whether PP-OCRv6 Tiny det + rec models are currently loaded in memory. |
 
 ---
 
@@ -226,26 +226,28 @@ Unload model weights and free the TFLite interpreter.
 
 ---
 
-## Text Recognition (PP-OCRv6 small)
+## Text Recognition (PP-OCRv6 Tiny)
 
 Text recognition is exposed as a **self-contained endpoint**: `POST /ocr`.
-It requires no load step — the PP-OCRv6 small detection and recognition
-models are loaded lazily on the first request and stay resident in memory for
-fast subsequent calls. Two optional management endpoints are also provided:
-`POST /ocr/load` (pre-warm the models) and `POST /ocr/clear` (free OCR
-memory on demand). The models are also released automatically when the
-service is destroyed.
+It requires no explicit load step — the PP-OCRv6 Tiny FP16 detection and recognition
+models are loaded lazily on the first request and stay resident in memory for fast
+subsequent calls (~3.1 MB combined, optimized for mobile efficiency).
+
+Two optional management endpoints are also provided: `POST /ocr/load`
+(pre-warm models) and `POST /ocr/clear` (free OCR memory on demand). Models
+are also released automatically when the foreground service is destroyed.
 
 ### Pipeline
 
-1. **Detection preprocess** — the image long side is scaled to `limit` (dims rounded to multiples of 32) and normalized with ImageNet mean/std in BGR channel order.
-2. **DB postprocess** — the probability map is binarized at `detThreshold` (default `0.2`), 8-connected components are extracted, components smaller than 3 px are dropped, boxes whose mean probability is below `boxThreshold` are filtered out, boxes are expanded by `unclipRatio` (default `1.4`), and coordinates are scaled back to the original image space.
-3. **Recognition preprocess** — each text box is cropped, resized to height `48` (width clamped to `2..3200`), zero-padded to a minimum width of `recMinWidth` (default `64`), and normalized to `[-1, 1]`.
-4. **CTC greedy decode** — index `0` is blank, `dict size + 1` is space, and `1..dict size` map to the characters in `ppocrv6_dict.json`.
+1. **Detection preprocess** — the image long side is scaled to `limit` (dims rounded to multiples of 32, max 4000) and normalized with ImageNet mean/std in BGR channel order.
+2. **DB postprocess** — the probability map is binarized at `detThreshold` (default `0.20`), 8-connected components are extracted, boxes below `boxThreshold` (default `0.45`) are filtered out, expanded by `unclipRatio` (default `1.4`), and scaled back to original image space.
+3. **Reading order sorting** — text boxes are grouped into horizontal rows and sorted top-to-bottom, left-to-right.
+4. **Recognition preprocess** — each text box is cropped, resized to height `48` (width clamped to `2..3200`), zero-padded to a minimum width of `recMinWidth` (default `320`), and normalized to `[-1, 1]` in RGB channel order.
+5. **CTC greedy decode** — index `0` is blank, index `1..N` map to characters in `ppocr_v6_tiny_characters.json`, and index `N + 1` is space (`" "`).
 
 ### POST /ocr
 
-Run text recognition on a posted image and return the recognized text lines with their bounding boxes. Results are sorted top-to-bottom, then left-to-right.
+Run text recognition on a posted image and return the recognized text lines with their bounding boxes, detection scores, and recognition confidences.
 
 **Request:**
 
@@ -253,22 +255,20 @@ Run text recognition on a posted image and return the recognized text lines with
 - **Content-Type:** `application/octet-stream` (or any; the server reads raw bytes).
 - **Content-Length:** Must be set and non-zero.
 
-**Query parameters:**
-
-All parameters are optional — omitted parameters fall back to their defaults.
+**Query parameters (all optional):**
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `limit` | int | `736` | Long-side limit for the detection input. Larger values improve accuracy on big images at the cost of latency. |
-| `boxThreshold` | float | `0.45` | Minimum mean-probability confidence for a text box to be recognized. |
-| `detThreshold` | float | `0.2` | DB probability binarization threshold for the text mask. Lower values detect fainter text at the cost of noise. |
-| `unclipRatio` | float | `1.4` | Box expansion ratio: `d = w * h * ratio / (2 * (w + h))`. Larger values produce looser boxes around the text. |
-| `recMinWidth` | int | `64` | Minimum padded width for the recognition input. Short labels are padded to this width. |
+| `limit` | int | `960` | Long-side limit for detection input. |
+| `boxThreshold` | float | `0.45` | Minimum mean-probability confidence for a text box. |
+| `detThreshold` | float | `0.20` | DB probability binarization threshold. |
+| `unclipRatio` | float | `1.4` | Box expansion ratio: `d = w * h * ratio / (2 * (w + h))`. |
+| `recMinWidth` | int | `320` | Minimum padded width for recognition input. |
 
 **Example:**
 
 ```
-POST /ocr?limit=736&boxThreshold=0.45&detThreshold=0.2&unclipRatio=1.4&recMinWidth=64 HTTP/1.1
+POST /ocr?limit=960&boxThreshold=0.45 HTTP/1.1
 Content-Length: 54321
 
 <raw image bytes>
@@ -281,11 +281,12 @@ Content-Length: 54321
   "results": [
     {
       "text": "Town Hall 15",
-      "score": 0.87,
-      "x1": 102,
-      "y1": 200,
-      "x2": 350,
-      "y2": 232
+      "score": 0.88,
+      "confidence": 0.96,
+      "x1": 102.0,
+      "y1": 200.0,
+      "x2": 350.0,
+      "y2": 232.0
     }
   ]
 }
@@ -294,26 +295,16 @@ Content-Length: 54321
 | Field | Type | Description |
 |---|---|---|
 | `text` | string | Recognized text content of the line. |
-| `score` | float | Detection confidence — mean DB probability of the text box (0–1). |
-| `x1`, `y1` | float | Top-left corner of the text box (original image pixel coordinates). |
+| `score` | float | Detection confidence — mean DB probability of the box (0–1). |
+| `confidence` | float | Recognition confidence — mean CTC confidence of the characters (0–1). |
+| `x1`, `y1` | float | Top-left corner of the text box (original image coordinates). |
 | `x2`, `y2` | float | Bottom-right corner of the text box. |
-
-**Error responses:**
-
-| Status | Condition |
-|---|---|
-| 400 | Empty request body. |
-| 400 | Image bytes could not be decoded. |
-| 500 | Model loading or inference failed (message included). |
 
 ---
 
 ### POST /ocr/load
 
-Optional warm-up: pre-load the PP-OCRv6 small det + rec models so the first
-`/ocr` call does not pay the model-loading latency. No-op if already loaded.
-
-**Request body:** *(empty or ignored)*
+Optional warm-up: pre-loads det + rec models into memory. No-op if already loaded.
 
 **Success response:**
 
@@ -321,20 +312,11 @@ Optional warm-up: pre-load the PP-OCRv6 small det + rec models so the first
 { "success": true }
 ```
 
-**Error response (500) — models failed to load:**
-
-```json
-{ "success": false, "error": "..." }
-```
-
 ---
 
 ### POST /ocr/clear
 
-Unload the PP-OCRv6 small det + rec models and free their memory. The next
-`/ocr` call will lazily reload them.
-
-**Request body:** *(empty or ignored)*
+Unload the active PP-OCRv6 Tiny models and free their memory. The next `/ocr` call will lazily reload them.
 
 **Success response:**
 
@@ -357,10 +339,8 @@ BASE = "http://localhost:13462"
 r = requests.get(f"{BASE}/status")
 print(r.json())
 
-# Load a model
+# 1. Object Detection
 requests.post(f"{BASE}/load", json={"modelType": "capital-building-detect"})
-
-# Detect objects in a screenshot
 with open("screenshot.png", "rb") as f:
     r = requests.post(
         f"{BASE}/detect",
@@ -369,24 +349,20 @@ with open("screenshot.png", "rb") as f:
         headers={"Content-Type": "application/octet-stream"},
     )
 print(r.json()["detections"])
-
-# Unload model when done
 requests.post(f"{BASE}/clear")
 
-# Text recognition — self-contained, no load step needed
-# All query params are optional; omitted ones use defaults:
-#   limit=736, boxThreshold=0.45, detThreshold=0.2, unclipRatio=1.4, recMinWidth=64
+# 2. Text Recognition
 with open("screenshot.png", "rb") as f:
     r = requests.post(
         f"{BASE}/ocr",
-        params={"limit": 736, "boxThreshold": 0.45},
+        params={"limit": 960},
         data=f.read(),
         headers={"Content-Type": "application/octet-stream"},
     )
 for line in r.json()["results"]:
-    print(line["text"], line["score"], line["x1"], line["y1"], line["x2"], line["y2"])
+    print(line["text"], line["score"], line["confidence"], line["x1"], line["y1"])
 
-# Optional: pre-warm OCR models before the first /ocr call
+# Optional: pre-warm OCR models
 requests.post(f"{BASE}/ocr/load")
 
 # Optional: free OCR memory when done
@@ -399,12 +375,15 @@ requests.post(f"{BASE}/ocr/clear")
 # Forward port from PC to device
 adb forward tcp:13462 tcp:13462
 
-# Now use curl from your PC
+# Check status
 curl http://localhost:13462/status
+
+# Object detection
 curl -X POST http://localhost:13462/load -d '{"modelType":"numbers"}'
 curl -X POST http://localhost:13462/detect \
   -H "Content-Type: application/octet-stream" \
   --data-binary @image.png
+curl -X POST http://localhost:13462/clear
 
 # Text recognition
 curl -X POST http://localhost:13462/ocr \

@@ -1,5 +1,7 @@
 package com.coc.suncode.jar.code.colorschema
 
+import com.coc.suncode.jar.code.colorschema.colorpackage.mainbase.IMainBaseEquipmentColors
+import com.coc.suncode.jar.code.colorschema.colorpackage.mainbase.MainBaseEquipmentColors
 import com.coc.suncode.jar.code.colorschema.colorpackage.builderbase.BuilderBaseAttackColors
 import com.coc.suncode.jar.code.colorschema.colorpackage.FeatureColors
 import com.coc.suncode.jar.code.colorschema.colorpackage.builderbase.IBuilderBaseAttackColors
@@ -39,11 +41,24 @@ import com.coc.suncode.jar.code.colorschema.colorpackage.mainbase.IMainBaseHeroH
 import com.coc.suncode.jar.code.colorschema.colorpackage.mainbase.MainBaseClanColors
 import com.coc.suncode.jar.code.colorschema.colorpackage.mainbase.MainBaseHeroHallColors
 
-object MyColors : IUIColors by UIColors, IFeatureColors by FeatureColors, IMainBaseTutorial by MainBaseTutorial, IBuilderBaseTutorial by BuilderBaseTutorial, IMainBaseTraining by MainBaseTraining,
+import com.coc.suncode.jar.code.colorschema.colorpackage.clancapital.ClanCapitalColors
+import com.coc.suncode.jar.code.colorschema.colorpackage.clancapital.IClanCapitalColors
+
+import com.coc.suncode.jar.code.colorschema.colorpackage.mainbase.MainBaseTournamentColors
+import com.coc.suncode.jar.code.colorschema.colorpackage.mainbase.IMainBaseTournamentColors
+
+import com.coc.suncode.jar.code.colorschema.colorpackage.mainbase.MainBaseClanWarColors
+import com.coc.suncode.jar.code.colorschema.colorpackage.mainbase.IMainBaseClanWarColors
+
+import com.coc.suncode.jar.code.colorschema.colorpackage.mainbase.MainBaseShopColors
+import com.coc.suncode.jar.code.colorschema.colorpackage.mainbase.IMainBaseShopColors
+
+object MyColors : IMainBaseShopColors by MainBaseShopColors, IMainBaseClanWarColors by MainBaseClanWarColors, IMainBaseTournamentColors by MainBaseTournamentColors, IClanCapitalColors by ClanCapitalColors, IUIColors by UIColors, IFeatureColors by FeatureColors, IMainBaseTutorial by MainBaseTutorial, IBuilderBaseTutorial by BuilderBaseTutorial, IMainBaseTraining by MainBaseTraining,
     IBuilderBaseResourcesColors by BuilderBaseResourcesColors, IBuilderBaseObstaclesRemovalColors by BuilderBaseObstaclesRemovalColors, IBuilderBaseTrainingColors by BuilderBaseTrainingColors,
     IBuilderBaseUpgradeColors by BuilderBaseUpgradeColors, IBuilderBaseResearchColors by BuilderBaseResearchColors, IBuilderBaseAttackColors by BuilderBaseAttackColors, IUniversalUpgradeColors by UniversalUpgradeColors,
     IMainBaseUpgradeColors by MainBaseUpgradeColors, IMainBaseResearchColors by MainBaseResearchColors, IMainBaseResearchLevelColors by MainBaseResearchLevelColors,
-    IClanCapitalTutorialColors by ClanCapitalTutorialColors, IMainBaseAttackColors by MainBaseAttackColors, IMainBaseClanColors by MainBaseClanColors, IMainBaseHeroHallColors by MainBaseHeroHallColors {
+    IClanCapitalTutorialColors by ClanCapitalTutorialColors, IMainBaseAttackColors by MainBaseAttackColors, IMainBaseClanColors by MainBaseClanColors, IMainBaseHeroHallColors by MainBaseHeroHallColors,
+    IMainBaseEquipmentColors by MainBaseEquipmentColors {
     //Main Base Pets Colors
     val Lassi = ColorSchema.parse(
         175, 385, 1110, 665, "FA51FA", "15|-34|CEA79B,37|-33|AA604D,55|-7|4E322D,81|-6|694337,88|-57|DF6B8F,93|-75|FF85FF,135|-55|834D3F,135|-28|E88E6D,116|-17|C06350", 0, 0.9, "莱希"
@@ -100,5 +115,94 @@ object MyColors : IUIColors by UIColors, IFeatureColors by FeatureColors, IMainB
     )
     val MeleeGuardsIcon = ColorSchema.parse(
         165, 502, 1133, 632, "56281F", "6|0|FFD451,12|0|FFE13E,17|0|BCFFC4,23|0|43BFFF,0|17|8E9AAA,6|17|7C899A,12|17|748294,17|17|91AABA,23|17|9BB5C2", 0, 0.9, "近战守卫图标"
+    )
+
+    val FinishCommission = ColorSchema.parse(
+        1093, 96, 1250, 695, "92FFEB", "12|0|92FFEB,34|0|92FFEB,62|0|92FFEB,84|0|92FFEB,96|34|2CC97A,20|34|2CC97A,17|34|2CC97A,100|1|91FFEA,5|29|2CCA7B", 0, 0.9, "搞定按钮"
+    )
+
+
+    val CNCultivationAd = ColorSchema.parse(
+        930, 126, 988, 186, "FFFFFF", "-12|2|7C75FF,-14|-10|948CFF,16|-10|968BFF,16|2|7C74FF,16|16|1313E4,0|19|1710DA,-12|19|1611D8,-5|9|F7F7F7,1|6|F6F6F6", 0, 0.9, "国服修仙广告"
+    )
+
+    val GoblinWorker2 = ColorSchema.parse(
+        450, 10, 850, 80, "5FA5E8", "4|9|41B4A3,-5|10|43BCCD,-14|6|328F8A,-14|-1|1D6871,-10|-6|53D6C1,-2|-6|53EFE2,8|-10|34A990,2|-14|4CFBE3,8|-1|54DDDE", 0, 0.9, "哥布林工人2"
+    )
+
+    val QueenArcher4 = ColorSchema.parse(
+        0, 590, 1200, 720, "618BEA", "4|0|88AFFA,9|0|772A3F,13|0|B14269,17|0|C14E76,0|27|8F3256,4|27|90314D,9|27|9F3A60,13|27|391221,17|27|A23B60", 0, 0.9, "弓箭女皇4"
+    )
+
+    val DragonDuke2 = ColorSchema.parse(
+        0, 590, 1200, 720, "0E0A0B", "13|0|746690,26|0|1A1760,39|0|171253,52|0|9AA2EE,0|15|0A0511,13|15|725870,26|15|E1E8FF,39|15|9A99D1,52|15|D2A8AD", 0, 0.9, "飞龙公爵2"
+    )
+
+    val MainBaseWorker4 = ColorSchema.parse(
+        450, 10, 850, 80, "687ECB", "7|0|9CBEEF,13|0|5F72CA,19|0|6371CE,26|0|93B4EB,0|11|7482C2,7|11|A3AABC,13|11|CAD3E2,19|11|C9D2E2,26|11|989EAF", 0, 0.9,
+    )
+
+    val MainBaseWorker5 = ColorSchema.parse(
+        450, 10, 850, 80, "6888D5", "6|0|728DE0,12|0|748DE6,18|0|7CA6E9,24|0|637ACA,0|9|8F97A8,6|9|BAC3D2,12|9|CAD4E1,18|9|A3ACBD,24|9|22242D", 0, 0.9,
+    )
+
+    val MainBaseLightningWorker = ColorSchema.parse(
+        450, 10, 850, 80, "D2E0FE", "7|0|7489D9,13|0|5073DF,19|0|BBD1FF,26|0|BCD0FE,0|8|A9BACF,7|8|50668A,13|8|495881,19|8|496386,26|8|A2B6C1", 0, 0.9,
+    )
+
+    val MainBaseLightningWorker2 = ColorSchema.parse(
+        450, 10, 850, 80, "EDF3F9", "7|0|A2BBFB,14|0|6C8EF4,20|0|BFD3FC,27|0|E5EFFA,0|6|AAC5FF,7|6|8AABF0,14|6|6981CA,20|6|A8C6FE,27|6|A3C3FD", 0, 0.9,
+    )
+
+    val BuilderBaseWorker3 = ColorSchema.parse(
+        518, 5, 1009, 78, "A0C0FA", "6|0|5660AB,13|0|6B7ADC,19|0|A7CDFD,25|0|7687E1,0|9|111E3A,6|9|5E73A0,13|9|9AB0CC,19|9|41517C,25|9|2B4D90", 0, 0.9,
+    )
+
+
+    val ShopInnerArrow2 = ColorSchema.parse(
+        27, 264, 1236, 400, "00A3FD", "15|-21|20B3FF,30|-15|29BEFF,40|-8|2AB1FF,18|0|06A5FF,3|7|00A8FD,14|18|00A4FC,20|22|01A0FF,0|28|05ACFF,-8|9|01AAFE", 0, 0.9, "商店内部箭头2"
+    )
+    // Keep the classic worker icons available for accounts on the earlier layout.
+    val MainBaseWorkerSchemas = listOf(
+        MainBaseWorker, MainBaseWorker2, MainBaseWorker3, MainBaseWorker4, MainBaseWorker5,
+        MainBaseLightningWorker, MainBaseLightningWorker2
+    )
+    val BuilderBaseWorkerSchemas = listOf(BuilderBaseWorker, BuilderBaseWorker2, BuilderBaseWorker3)
+    val BattleRewardSchemas = listOf(BattleRewardSelection, BattleRewardSelection2)
+
+    val NextOpponent2 = ColorSchema.parse(
+        1065, 470, 1270, 565, "4CCBFF", "-96|-4|4CCBFF,-100|7|4CCBFF,-101|14|4CCBFF,-156|41|2676F5,-156|46|2676F5,-153|48|2676F5,-147|48|2676F5,-143|48|2676F5,-135|49|2676F5", 0, 0.9
+    )
+
+    val CanNotAttack = ColorSchema.parse(
+        550, 262, 750, 444, "ABAFEB", "0|2|ADB1ED,0|5|ADB2EF,7|-8|1872AE,4|-21|083454,-3|3|A9AEEA,13|7|B2B6F3,2|-12|1B567F,7|-33|EBF0F2,5|-36|C3CBCE", 0, 0.95, "无法进攻"
+    )
+
+    val CanNotAttack2 = ColorSchema.parse(
+        556, 366, 670, 451, "BDBEFE", "0|-2|BDBEFE,0|-5|BDBEFE,0|-8|BDBEFE,5|-4|BDBEFE,5|-1|B6B9F7,1|15|125584,-3|15|10466C,-2|-18|0A3655,2|-18|256E9C", 0, 0.95, "无法进攻2"
+    )
+
+    val CanNotAttack3 = ColorSchema.parse(
+        636, 382, 691, 422, "C5C6FB", "0|1|C5C5F7,0|2|C6C6F6,0|3|C6C7F4,-14|3|C6C6FE,-15|3|C6C6FE,-17|3|BFBFFF,-18|10|C0C0FF,-17|10|BFBFFF,-16|10|C0C0FF", 0, 0.9, "无法进攻3"
+    )
+
+    val TroopColorAtDeploymentBar2 = ColorSchema.parse(
+        0, 590, 1200, 720, "E29A56", "-2|0|E29A56,-4|0|E19A57,-6|0|E19A56,-8|0|E59A55,-5|8|FFFFFF,-5|10|FFFFFF,-3|10|FFFFFF,-2|12|FFFFFF,0|13|FFFFFF", 0, 0.95, "部队颜色2"
+    )
+
+    val DonateSword = ColorSchema.parse(
+        0, 0, 0, 0, "EFE2DF", "-2|-2|AF8870,-4|-4|B08971,-1|1|C1977B,2|4|C9B3AA,4|7|D6C5C4,5|10|2D79A8,6|12|1A3C68,7|14|1D3E68,9|16|317398", 0, 0.9, "捐赠的剑"
+    )
+
+    val DonateHumanFigure = ColorSchema.parse(
+        0, 0, 0, 0, "000000", "0|3|000000,1|10|000000,2|10|000000,2|23|B8733F,-7|21|A36540,11|21|CF8953,8|2|000000,-2|2|000000,0|-1|000000", 0, 0.9, "捐赠人影"
+    )
+
+    val TroopConfigCastleIcon = ColorSchema.parse(
+        0, 0, 0, 0, "4B596D", "3|0|6D7C8E,7|0|495568,11|0|485465,14|0|495565,0|11|282F40,3|11|1D2026,7|11|1F2023,11|11|232326,14|11|8E9BA6", 0, 0.9
+    )
+
+    val ApproveJoinButton = ColorSchema.parse(
+        5, 72, 482, 652, "2EBD76", "-1|-23|7DF3D8,-41|-21|78F0D3,-76|-23|7DF3D8,-76|2|30B66D,-211|2|1511DB,-203|-19|7571FF,-162|-23|807AFF,-130|-20|7573FF,-130|2|1511DB", 0, 0.9, "批准加入按钮"
     )
 }

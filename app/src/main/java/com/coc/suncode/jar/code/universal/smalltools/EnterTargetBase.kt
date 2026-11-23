@@ -1,5 +1,7 @@
 package com.coc.suncode.jar.code.universal.smalltools
 
+import com.coc.suncode.jar.code.universal.GameVersion
+import com.coc.suncode.jar.code.universal.InGamesVars
 import com.coc.suncode.core.util.basic.ShowMessage
 import com.coc.suncode.core.util.basic.delayWithMultiplier
 import com.coc.suncode.jar.code.universal.colors.findMultiColors
@@ -17,10 +19,17 @@ import kotlinx.coroutines.delay
  * Attempts to enter the Main Base, timing out after 30 seconds.
  */
 suspend fun enterMainBase(): Boolean {
+    val isGlobal = InGamesVars.currentGameVersion == GameVersion.GLOBAL
+    val legacySchemas = MyColors.MainBaseWorkerSchemas + listOf(MyColors.GoblinWorker, MyColors.GoblinWorker2, MyColors.GoblinResearcher)
+    val mainBaseSchemas = if (isGlobal) {
+        listOf(MyColors.MainBaseBuildingUpgradeEntryGlobal, MyColors.MainBaseWorker6) + legacySchemas
+    } else {
+        legacySchemas
+    }
     val loopStart = System.currentTimeMillis()
     clickRightBottom(1)
     while (System.currentTimeMillis() - loopStart < 30_000L) {
-        val workers = findMultiColorsUntil(schemas = listOf(MyColors.MainBaseWorker, MyColors.MainBaseWorker2, MyColors.MainBaseWorker3, MyColors.GoblinWorker, MyColors.GoblinResearcher), duration = 200)
+        val workers = findMultiColorsUntil(schemas = mainBaseSchemas, duration = 200)
         if (workers != null) {
             ShowMessage("已进入主世界")
             clickRightBottom(1)
@@ -43,7 +52,7 @@ suspend fun enterMainBase(): Boolean {
             }
         }
         for (x in 1000..1050 step 30) {
-            for (y in 250..330 step 30) {
+            for (y in 250..300 step 50) {
                 TouchActions.tap(x, y, isJitter = false, delayTime = 50)
             }
         }
@@ -61,7 +70,7 @@ suspend fun enterBuilderBase(isCheck: Boolean): Boolean {
     while (System.currentTimeMillis() - loopStart < 30_000L) {
         val remaining = (30_000L - (System.currentTimeMillis() - loopStart)) / 1000.0
         // 1. Check for Builder Base success indicator
-        if (findMultiColorsUntil(schemas = listOf(MyColors.BuilderBaseWorker, MyColors.BuilderBaseWorker2), duration = 200) != null) {
+        if (findMultiColorsUntil(schemas = MyColors.BuilderBaseWorkerSchemas + MyColors.NewBuilderBaseWorker, duration = 200) != null) {
             ShowMessage("已进入夜世界")
             return true
         }
@@ -85,7 +94,7 @@ suspend fun enterBuilderBase(isCheck: Boolean): Boolean {
                 // Polling loop for state transition (0.5s window)
                 while (System.currentTimeMillis() - loopStartTime < checkDuration) {
                     // 1. Check for Builder Base success indicator
-                    if (findMultiColorsUntil(schemas = listOf(MyColors.BuilderBaseWorker, MyColors.BuilderBaseWorker2), duration = 200) != null) {
+                    if (findMultiColorsUntil(schemas = MyColors.BuilderBaseWorkerSchemas + MyColors.NewBuilderBaseWorker, duration = 200) != null) {
                         ShowMessage("已进入夜世界")
                         return true
                     }

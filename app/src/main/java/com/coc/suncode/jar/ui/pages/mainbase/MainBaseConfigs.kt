@@ -15,6 +15,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.coc.suncode.core.data.database.GlobalVars
+import com.coc.suncode.jar.code.colorschema.colorpackage.mainbase.MainBaseClanWarColors
 import com.coc.suncode.jar.ui.components.CustomButton
 import com.coc.suncode.jar.ui.components.SettingSwitchIcon
 import com.coc.suncode.jar.ui.components.SettingDropdown
@@ -43,6 +44,7 @@ fun LazyListScope.MainBaseConfig(
     item {
         SettingSection(visible = isExpanded, enabled = enabled) {
             SettingSwitchIcon(key = "${MAIN_BASE_SETTINGS.CLAIM_DAILY_REWARD.key}_c$index")
+            SettingSwitchIcon(key = "${MAIN_BASE_SETTINGS.CLAIM_VILLAGER_COMMISSIONS.key}_c$index")
             SettingSwitchIcon(key = "${MAIN_BASE_SETTINGS.AUTO_ATTACK.key}_c$index")
             Text(
                 text = "辅助会自动配兵，若想手动配兵，请勾选手动配兵选项。",
@@ -184,6 +186,84 @@ fun LazyListScope.MainBaseConfig(
 
             AnimatedVisibility(visible = GlobalVars.configStates["${MAIN_BASE_SETTINGS.BUILD_SETTING.key}_c$index"]?.value == "1") {
                 MainBaseUpgradeConfigs(index)
+            }
+        }
+    }
+
+    item {
+        SettingSection(visible = isExpanded, enabled = enabled) {
+            Column {
+                SettingSwitchIcon(key = "${MAIN_BASE_SETTINGS.UPGRADE_WERA_GEAR.key}_c$index")
+                SettingSwitchIcon(key = "${MAIN_BASE_SETTINGS.UPGRADE_ALL_GEAR.key}_c$index")
+                AnimatedVisibility(visible = GlobalVars.configStates["${MAIN_BASE_SETTINGS.UPGRADE_ALL_GEAR.key}_c$index"]?.value == "1") {
+                    Column {
+                        SettingSwitchIcon(key = "${MAIN_BASE_SETTINGS.UPGRADE_EQUIPMENTS_QUICK.key}_c$index")
+                        SettingSwitchIcon(key = "${MAIN_BASE_SETTINGS.UPGRADE_EQUIPMENTS_BY_HERO.key}_c$index")
+                        AnimatedVisibility(visible = GlobalVars.configStates["${MAIN_BASE_SETTINGS.UPGRADE_EQUIPMENTS_BY_HERO.key}_c$index"]?.value == "1") {
+                            SettingSwitchIcon(key = "${MAIN_BASE_SETTINGS.UPGRADE_EQUIPMENTS_STRICT_PRIORITY.key}_c$index")
+                        }
+                        MainBaseEquipmentConfigs(index)
+                    }
+                }
+            }
+        }
+    }
+
+    item {
+        SettingSection(visible = isExpanded, enabled = enabled) {
+            Column {
+                FlowRow {
+                    SettingSwitchIcon(key = "${MAIN_BASE_SETTINGS.PLAY_TOURNAMENT.key}_c$index")
+                    SettingSwitchIcon(key = "${MAIN_BASE_SETTINGS.PLAY_LEAGUE.key}_c$index")
+                    SettingSwitchIcon(key = "${MAIN_BASE_SETTINGS.START_LEAGUE_SETTINGS.key}_c$index")
+                    SettingSwitchIcon(key = "${MAIN_BASE_SETTINGS.DISTRIBUTE_CLAN_LEAGUE_REWARDS.key}_c$index")
+                    SettingSwitchIcon(key = "${MAIN_BASE_SETTINGS.PLAY_LEAGUE_DONATION.key}_c$index")
+                }
+                AnimatedVisibility(visible = GlobalVars.configStates["${MAIN_BASE_SETTINGS.START_LEAGUE_SETTINGS.key}_c$index"]?.value == "1") {
+                    Column {
+                        SettingSwitchIcon(key = "${MAIN_BASE_SETTINGS.START_CLAN_LEAGUE_NEW_SIZE.key}_c$index")
+                        SettingDropdown(
+                            key = "${MAIN_BASE_SETTINGS.START_CLAN_LEAGUE_SIZE.key}_c$index",
+                            options = listOf("11v11（新版）", "15v15", "30v30")
+                        )
+                    }
+                }
+                SettingDropdown(
+                    key = "${MAIN_BASE_SETTINGS.EVENT_LEAGUE_START_DAY.key}_c$index",
+                    options = listOf("关闭") + (11..22).map { "${it}日" }
+                )
+                AnimatedVisibility(visible = GlobalVars.configStates["${MAIN_BASE_SETTINGS.PLAY_LEAGUE_DONATION.key}_c$index"]?.value == "1") {
+                    Column {
+                        val troopChoices = MainBaseClanWarColors.leagueDonatableTroopNames
+                        listOf(
+                            MAIN_BASE_SETTINGS.LEAGUE_DONATION_TROOP_1 to MAIN_BASE_SETTINGS.LEAGUE_DONATION_COUNT_1,
+                            MAIN_BASE_SETTINGS.LEAGUE_DONATION_TROOP_2 to MAIN_BASE_SETTINGS.LEAGUE_DONATION_COUNT_2,
+                            MAIN_BASE_SETTINGS.LEAGUE_DONATION_TROOP_3 to MAIN_BASE_SETTINGS.LEAGUE_DONATION_COUNT_3
+                        ).forEach { (troop, count) ->
+                            SettingDropdown(key = "${troop.key}_c$index", options = troopChoices)
+                            SettingInputRow(key = "${count.key}_c$index")
+                        }
+                    }
+                }
+                FlowRow {
+                    SettingSwitchIcon(key = "${MAIN_BASE_SETTINGS.BUY_RESEARCH_POTION_WITH_LEAGUE_MEDAL.key}_c$index")
+                    SettingSwitchIcon(key = "${MAIN_BASE_SETTINGS.BUY_BUILDER_POTION_WITH_LEAGUE_MEDAL.key}_c$index")
+                }
+            }
+        }
+    }
+
+    item {
+        SettingSection(visible = isExpanded, enabled = enabled) {
+            FlowRow {
+                SettingSwitchIcon(key = "${MAIN_BASE_SETTINGS.CLAIM_CAPITAL_GOLD.key}_c$index")
+                SettingSwitchIcon(key = "${MAIN_BASE_SETTINGS.DONATE_CAPITAL_GOLD.key}_c$index")
+                SettingSwitchIcon(key = "${MAIN_BASE_SETTINGS.START_RAID.key}_c$index")
+                SettingSwitchIcon(key = "${MAIN_BASE_SETTINGS.PLAY_RAID.key}_c$index")
+                SettingSwitchIcon(
+                    key = "${MAIN_BASE_SETTINGS.EXPORT_GAME_JSON.key}_c$index",
+                    explain = "进入游戏后每天保存一次。可在 sunFiles/exports 下按区服和账号序号找到 JSON。"
+                )
             }
         }
     }

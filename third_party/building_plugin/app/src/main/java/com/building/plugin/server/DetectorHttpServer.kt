@@ -16,9 +16,9 @@ import com.building.plugin.ocr.PpOcrEngine
  *   POST /load       — load model weights
  *   POST /detect     — run inference on a posted image
  *   POST /clear      — unload model weights
- *   POST /ocr        — self-contained text recognition (PP-OCRv6 small) on a posted image
- *   POST /ocr/load   — pre-load OCR model weights (optional warm-up)
- *   POST /ocr/clear  — unload OCR model weights
+ *   POST /ocr        — self-contained text recognition (PP-OCRv6 Tiny FP16)
+ *   POST /ocr/load   — pre-load OCR models (optional warm-up)
+ *   POST /ocr/clear  — unload OCR models
  */
 class DetectorHttpServer(port: Int) : NanoHTTPD(port) {
 
@@ -57,7 +57,7 @@ class DetectorHttpServer(port: Int) : NanoHTTPD(port) {
     private fun handleStatus(): Response {
         val json = JSONObject()
             .put("status", "running")
-            .put("version", "1.11")
+            .put("version", "1.12")
             .put("modelLoaded", BuildingDetector.isModelLoaded())
             .put("modelType", BuildingDetector.getModelType() ?: JSONObject.NULL)
             .put("ocrLoaded", PpOcrEngine.isLoaded)
@@ -162,16 +162,14 @@ class DetectorHttpServer(port: Int) : NanoHTTPD(port) {
     // ── POST /ocr ───────────────────────────────────────────────────────────
 
     /**
-     * Self-contained text recognition endpoint (PP-OCRv6 small).
-     * Receives raw image bytes, lazily loads the det + rec models on first
-     * call, and returns recognized text lines with their bounding boxes.
+     * Self-contained text recognition endpoint (PP-OCRv6 Tiny FP16).
      *
      * Query parameters (all optional):
-     *   limit        — det long-side limit (default 736)
+     *   limit        — det long-side limit (default 960)
      *   boxThreshold — minimum mean-probability box confidence (default 0.45)
-     *   detThreshold — DB probability binarization threshold (default 0.2)
+     *   detThreshold — DB probability binarization threshold (default 0.20)
      *   unclipRatio  — box expansion ratio (default 1.4)
-     *   recMinWidth  — recognition minimum padded width (default 64)
+     *   recMinWidth  — recognition minimum padded width (default 320)
      */
     private fun handleOcr(session: IHTTPSession): Response {
         val params = session.parameters
@@ -186,7 +184,6 @@ class DetectorHttpServer(port: Int) : NanoHTTPD(port) {
         val recMinWidth = params["recMinWidth"]?.firstOrNull()?.toIntOrNull()
             ?: PpOcrEngine.DEFAULT_REC_MIN_WIDTH
 
-        // Read raw image bytes from request body
         val contentLength = session.headers["content-length"]?.toIntOrNull() ?: 0
         if (contentLength == 0) {
             return jsonResponse(
@@ -222,6 +219,7 @@ class DetectorHttpServer(port: Int) : NanoHTTPD(port) {
                 JSONObject()
                     .put("text", ocr.text)
                     .put("score", ocr.score.toDouble())
+                    .put("confidence", ocr.confidence.toDouble())
                     .put("x1", ocr.box.left.toDouble())
                     .put("y1", ocr.box.top.toDouble())
                     .put("x2", ocr.box.right.toDouble())
@@ -238,14 +236,15 @@ class DetectorHttpServer(port: Int) : NanoHTTPD(port) {
     // ── POST /ocr/load ──────────────────────────────────────────────────────
 
     /**
-     * Optional warm-up endpoint: pre-loads the PP-OCRv6 small det + rec models
-     * so the first /ocr call does not pay the model-loading latency.
-     * No-op if the models are already loaded.
+     * Optional warm-up endpoint: pre-loads det + rec models into memory.
      */
     private fun handleOcrLoad(): Response {
         return try {
             PpOcrEngine.load()
-            jsonResponse(Response.Status.OK, JSONObject().put("success", true))
+            jsonResponse(
+                Response.Status.OK,
+                JSONObject().put("success", true)
+            )
         } catch (e: Exception) {
             Log.e(TAG, "Failed to load OCR models", e)
             jsonResponse(
@@ -257,7 +256,7 @@ class DetectorHttpServer(port: Int) : NanoHTTPD(port) {
 
     // ── POST /ocr/clear ─────────────────────────────────────────────────────
 
-    /** Unloads the PP-OCRv6 small det + rec models and frees their memory. */
+    /** Unloads active OCR models and frees their memory. */
     private fun handleOcrClear(): Response {
         PpOcrEngine.clear()
         return jsonResponse(Response.Status.OK, JSONObject().put("success", true))

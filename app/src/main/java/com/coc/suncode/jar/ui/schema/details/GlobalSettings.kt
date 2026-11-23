@@ -16,6 +16,7 @@ object GlobalSettings {
     val DELAY_MULTIPLIER = SettingDef(
         "delay_multiplier", "延时倍率(低性能设备建议设置1.5-2.5)", "1", "GLOBAL_SETTINGS"
     )
+    val DEBUG_MODE = SettingDef("debug_mode", "调试模式", 0, "GLOBAL_SETTINGS")
     val RECORD_PROGRESS = SettingDef("record_progress", "记录账号进度", 1, "GLOBAL_SETTINGS")
     val AUTO_UPDATE = SettingDef("auto_update", "自动更新", "2", "GLOBAL_SETTINGS")
     val BATCH_CREATE_ACCOUNT = SettingDef("batch_create_account", "批量创号", 0, "GLOBAL_SETTINGS")
@@ -51,6 +52,7 @@ object GlobalSettings {
         ENTER_GAME_TIMER,
         DELAY_MULTIPLIER,
         RECORD_PROGRESS,
+        DEBUG_MODE,
         AUTO_UPDATE,
         BATCH_CREATE_ACCOUNT,
         CREATE_START_ID,

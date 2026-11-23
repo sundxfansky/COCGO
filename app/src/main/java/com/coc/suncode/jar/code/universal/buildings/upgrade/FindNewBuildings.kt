@@ -1,20 +1,13 @@
 package com.coc.suncode.jar.code.universal.buildings.upgrade
 
+import com.coc.suncode.jar.code.universal.buildings.WorkerAndResearch
 import com.coc.suncode.core.util.basic.ShowMessage
 import com.coc.suncode.core.util.touchactions.TouchActions
-import com.coc.suncode.jar.code.colorschema.MyColors
 import com.coc.suncode.jar.code.universal.buildings.BaseType
 import com.coc.suncode.jar.code.universal.buildings.iterateBuilderBaseBuildingUpgradeList
-import com.coc.suncode.jar.code.universal.colors.findMultiColorsUntil
 
 suspend fun builderBaseFindNewBuildings(currentBase: BaseType): Boolean {
-    val worker = when (currentBase) {
-        BaseType.Builder ->
-            findMultiColorsUntil(schemas = listOf(MyColors.BuilderBaseWorker, MyColors.BuilderBaseWorker2), duration = 1000)
-
-        BaseType.Main ->
-            findMultiColorsUntil(schemas = listOf(MyColors.MainBaseWorker, MyColors.MainBaseWorker2, MyColors.MainBaseWorker3), duration = 1000)
-    }
+    val worker = WorkerAndResearch.findUpgradeEntry(currentBase)
     if (worker != null) {
         TouchActions.tap(worker.x, worker.y, delayTime = 500)
         var found = false

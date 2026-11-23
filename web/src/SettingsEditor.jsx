@@ -23,18 +23,22 @@ export function acceptRuntimeSchema(runtime) {
 }
 const INTERNAL_GLOBALS = new Set(['config_count', 'account_profiles_version', 'account_count', 'email', 'password', 'sync_source_account', 'sync_target_start', 'sync_target_end', 'sync_include_builder_base']);
 const DEVICE_TOOL_KEYS = new Set(['qq_account_slot', 'extract_version', 'extract_cn', 'extract_global']);
-const GENERAL_KEYS = new Set(['delay_multiplier', 'enter_game_timer', 'record_progress', 'device_remark', 'runtime_screenshot']);
+const GENERAL_KEYS = new Set(['delay_multiplier', 'enter_game_timer', 'record_progress', 'device_remark', 'runtime_screenshot', 'debug_mode']);
 const START_KEYS = new Set(['auto_start', 'auto_update', 'after_kick_option', 'after_kick_cooldown_minutes']);
 const BATCH_KEYS = new Set(['batch_create_account', 'create_start_id', 'create_end_id', 'create_prefix', 'add_suffix_setting', 'create_gem_build', 'gem_count']);
 const moduleTitles = {
   MAIN_BASE_SETTINGS: ['日常与对战', 'blue'], MAIN_BASE_TROOPS_AND_SPELLS: ['兵种与法术', 'violet'],
   MAIN_BASE_BUILDINGS: ['建筑升级', 'amber'], MAIN_BASE_PETS: ['战宠', 'rose'],
   MAIN_BASE_BUILDING_PRIORITIES: ['建筑优先级', 'amber'], MAIN_BASE_RESEARCH_PRIORITIES: ['研究优先级', 'violet'],
-  MAIN_BASE_PET_PRIORITIES: ['战宠优先级', 'rose'], BUILDER_BASE_SETTINGS: ['夜世界日常', 'violet'],
+  MAIN_BASE_PET_PRIORITIES: ['战宠优先级', 'rose'], MAIN_BASE_EQUIPMENT_PRIORITIES: ['装备优先级', 'amber'], BUILDER_BASE_SETTINGS: ['夜世界日常', 'violet'],
   BUILDER_BASE_TROOPS: ['夜世界兵种', 'teal'], BUILDER_BASE_BUILDINGS: ['夜世界建筑', 'amber'],
   BUILDER_BASE_BUILDINGS_PRIORITY: ['夜世界建筑优先级', 'amber'],
 };
-const pairedModules = { MAIN_BASE_BUILDING_PRIORITIES: 'MAIN_BASE_BUILDINGS', MAIN_BASE_RESEARCH_PRIORITIES: 'MAIN_BASE_TROOPS_AND_SPELLS', MAIN_BASE_PET_PRIORITIES: 'MAIN_BASE_PETS', BUILDER_BASE_BUILDINGS_PRIORITY: 'BUILDER_BASE_BUILDINGS' };
+const pairedModules = { MAIN_BASE_BUILDING_PRIORITIES: 'MAIN_BASE_BUILDINGS', MAIN_BASE_RESEARCH_PRIORITIES: 'MAIN_BASE_TROOPS_AND_SPELLS', MAIN_BASE_PET_PRIORITIES: 'MAIN_BASE_PETS', MAIN_BASE_EQUIPMENT_PRIORITIES: 'MAIN_BASE_EQUIPMENTS', BUILDER_BASE_BUILDINGS_PRIORITY: 'BUILDER_BASE_BUILDINGS' };
+const equipmentHeroes = [
+  ['barbarian_king_', '野蛮人之王'], ['archer_queen_', '弓箭女皇'], ['minion_prince_', '亡灵王子'],
+  ['grand_warden_', '大守护者'], ['royal_champion_', '飞盾战神'], ['dragon_duke_', '飞龙公爵'],
+];
 const pairedNames = new Set(Object.values(pairedModules));
 const isPriority = (module) => Boolean(pairedModules[module.name]);
 const matches = (setting, search) => !search || `${setting.displayName} ${setting.help || ''}`.toLowerCase().includes(search.toLowerCase());
@@ -69,9 +73,10 @@ function FieldGrid({ settings, search = '', ...props }) {
   return <div className="field-grid">{filtered.map((setting) => <Field key={setting.key} setting={setting} {...props}/>)}</div>;
 }
 
-function PriorityList({ module, config, onChange, account, disabled, search }) {
+function PriorityList({ module, config, onChange, account, disabled, search, equipmentHero }) {
   const { schema } = useSchema();
-  const toggles = schema.modules.find((item) => item.name === pairedModules[module.name])?.settings || [];
+  const pairedSettings = schema.modules.find((item) => item.name === pairedModules[module.name])?.settings || [];
+  const toggles = equipmentHero ? pairedSettings.filter((item) => item.key.startsWith(equipmentHero)) : pairedSettings;
   const ordered = useMemo(() => [...module.settings].sort((a, b) => Number(settingValue(config, a, 'PROFILE', account)) - Number(settingValue(config, b, 'PROFILE', account))), [module, config, account]);
   const selectedToggleKeys = new Set();
   const rows = ordered.map((setting, index) => {
@@ -87,12 +92,23 @@ function PriorityList({ module, config, onChange, account, disabled, search }) {
   return <><div className="priority-list">{rows}</div><FieldGrid settings={toggles.filter((setting) => !selectedToggleKeys.has(setting.key))} search={search} scope="PROFILE" account={account} config={config} onChange={onChange} disabled={disabled}/></>;
 }
 
+function EquipmentPriorityList({ module, search, ...props }) {
+  return equipmentHeroes.map(([prefix, hero]) => {
+    const settings = module.settings.filter((setting) => setting.key.startsWith(prefix));
+    if (!settings.some((setting) => matches(setting, search))) return null;
+    return <section key={prefix}>
+      <h4>{hero}</h4>
+      <PriorityList module={{ ...module, settings }} search={search} equipmentHero={prefix} {...props}/>
+    </section>;
+  });
+}
+
 function ProfileSection({ module, ...props }) {
   const [title, accent] = moduleTitles[module.name] || [module.name, 'blue'];
   if (props.search && !module.settings.some((setting) => matches(setting, props.search))) return null;
   return <details className={`card module-card accent-${accent}`} open={props.search ? true : undefined}>
     <summary><span className="card-icon"><Icon name={isPriority(module) ? 'bolt' : 'settings'}/></span><h3>{title}</h3><span className="count-label">{module.settings.length} 项</span><Icon name="arrow" size={16}/></summary>
-    <div className="module-body">{isPriority(module) ? <><p className="compact-help">越靠前越优先 <Help>用上下箭头调整顺序。开关决定该项目是否参与，保存后生效。</Help></p><PriorityList module={module} {...props}/></> : <FieldGrid settings={module.settings.filter((setting) => !['main_base_enabled', 'builder_base_enabled', 'no_builder_base'].includes(setting.key))} scope="PROFILE" {...props}/>}</div>
+    <div className="module-body">{isPriority(module) ? <><p className="compact-help">越靠前越优先 <Help>用上下箭头调整顺序。开关决定该项目是否参与，保存后生效。</Help></p>{module.name === 'MAIN_BASE_EQUIPMENT_PRIORITIES' ? <EquipmentPriorityList module={module} {...props}/> : <PriorityList module={module} {...props}/>}</> : <FieldGrid settings={module.settings.filter((setting) => !['main_base_enabled', 'builder_base_enabled', 'no_builder_base'].includes(setting.key))} scope="PROFILE" {...props}/>}</div>
   </details>;
 }
 

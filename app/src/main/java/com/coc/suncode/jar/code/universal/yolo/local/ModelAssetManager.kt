@@ -1,5 +1,6 @@
 package com.coc.suncode.jar.code.universal.yolo.local
 
+import java.io.InputStream
 import android.content.Context
 import android.util.Log
 import com.coc.suncode.core.util.basic.ShowMessage
@@ -44,7 +45,11 @@ object ModelAssetManager {
     }
 
     /** Resolves one model, extracting only that asset when necessary. */
-    fun resolveModelFile(context: Context, assetName: String): File {
+    fun resolveModelFile(
+        context: Context,
+        assetName: String,
+        openAsset: (() -> InputStream)? = null
+    ): File {
         require(assetName.endsWith(ONNX_SUFFIX)) { "Unsupported model asset: $assetName" }
         val appContext = context.applicationContext
         val modelsDir = modelsDir(appContext)
@@ -79,7 +84,7 @@ object ModelAssetManager {
             val temporary = File.createTempFile(assetName.removeSuffix(ONNX_SUFFIX) + "-", ".tmp", modelsDir)
             try {
                 var copiedBytes = 0L
-                appContext.assets.open(assetName).use { input ->
+                (openAsset?.invoke() ?: appContext.assets.open(assetName)).use { input ->
                     FileOutputStream(temporary).use { output ->
                         val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
                         var count = input.read(buffer)
