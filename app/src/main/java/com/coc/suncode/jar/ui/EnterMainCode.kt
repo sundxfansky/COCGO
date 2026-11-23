@@ -3,47 +3,30 @@
 package com.coc.suncode.jar.ui
 
 import android.content.Context
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Text
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.Modifier
 import com.coc.suncode.core.data.database.GlobalVars
-import com.coc.suncode.core.util.basic.RunShell
+import com.coc.suncode.core.data.websocket.ServerActions
+import com.coc.suncode.core.ui.web.LocalSettingsController
+import com.coc.suncode.core.ui.web.SettingsWebPanel
+import com.coc.suncode.core.ui.web.WebSettingsProvider
+import com.coc.suncode.core.ui.web.WebSettingsSession
+import com.coc.suncode.interfaces.AccountSwitchState
 import com.coc.suncode.interfaces.FeaturePluginClient
 import com.coc.suncode.interfaces.FeatureResult
-import com.coc.suncode.jar.features.FeatureRuntime
 import com.coc.suncode.interfaces.MainCode
-import com.coc.suncode.interfaces.AccountSwitchState
 import com.coc.suncode.interfaces.RuntimeAccountSwitcher
-import com.coc.suncode.jar.code.universal.smalltools.RuntimeAccountSwitch
-import com.coc.suncode.core.data.websocket.ServerActions
 import com.coc.suncode.jar.code.runMainScript
-import com.coc.suncode.jar.ui.components.CustomButton
-import com.coc.suncode.jar.ui.pages.single.WebSettingsScreen
-import com.coc.suncode.jar.ui.pages.single.BugReport
+import com.coc.suncode.jar.code.universal.smalltools.RuntimeAccountSwitch
+import com.coc.suncode.jar.features.FeatureRuntime
+import com.coc.suncode.jar.ui.pages.single.createWebSettingsController as createSettingsController
 import com.coc.suncode.jar.ui.schema.ConfigManager
-import com.coc.suncode.statehelper.AppMode
-import com.coc.suncode.statehelper.AppStateManager
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
-import androidx.compose.runtime.rememberCoroutineScope
-import kotlinx.coroutines.launch
 
-class EnterMainCode : MainCode, RuntimeAccountSwitcher, FeaturePluginClient {
+class EnterMainCode : MainCode, RuntimeAccountSwitcher, FeaturePluginClient, WebSettingsProvider {
     override fun initializeFeatures(context: Context, bundledPlugins: Map<String, String>) =
         FeatureRuntime.initialize(context, bundledPlugins)
 
@@ -59,88 +42,24 @@ class EnterMainCode : MainCode, RuntimeAccountSwitcher, FeaturePluginClient {
         GlobalVars.isConfigLoaded = true
     }
 
+    override fun createWebSettingsController(context: Context): LocalSettingsController =
+        createSettingsController(context)
+
+    /** Retain the original ABI for callers that still render the dynamic plugin entry directly. */
     @Composable
     override fun ShowMainUI(context: Context, onClose: () -> Unit) {
-        // Initialize states from Schema
-        // A prepared plugin can render its home page on the first composition.
-        var isConfigInitialized by remember { mutableStateOf(GlobalVars.isConfigLoaded) }
-
-        LaunchedEffect(Unit) {
-            if (GlobalVars.isConfigLoaded) {
-                isConfigInitialized = true
-                return@LaunchedEffect
-            }
-
-            // Wait for serverActions to become available (may be null if UIWindowService
-            // was restarted by Android before CheckRoot finishes setting up serverActions)
-            val actions = GlobalVars.serverActions ?: run {
-                snapshotFlow { GlobalVars.serverActions }.first { it != null }!!
-            }
-
-            // Wait for configs to load
-            snapshotFlow { actions.isLoading }.first { !it }
-            ConfigManager.initializeAllConfigs(actions)
-            isConfigInitialized = true
-            GlobalVars.isConfigLoaded = true
+        val actions = GlobalVars.serverActions ?: return
+        val currentOnClose = rememberUpdatedState(onClose)
+        val session = remember(actions) {
+            WebSettingsSession(context, createWebSettingsController(context)) { currentOnClose.value() }
         }
-        if (!isConfigInitialized) {
-            ConfigLoadingScreen()
-            return
-        }
-
-        // Route to the appropriate page based on current mode
-        when (AppStateManager.currentMode) {
-            AppMode.BugReport -> {
-                BugReport(onClose = onClose)
-                return
-            }
-            // Older plugins may retain the retired mode; route it to the ordinary settings page.
-            AppMode.Main, AppMode.SwitchAccount -> {
-                // Any touch on any settings page (tabs, scrolling, blank areas) stops the auto-run countdown.
-                // Observed in the Initial pass without consuming, so child controls still receive the event.
-                Box(Modifier.fillMaxSize().pointerInput(Unit) {
-                    awaitEachGesture {
-                        awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-                        GlobalVars.isAutoRunEnabled = false
-                    }
-                }) {
-                    WebSettingsScreen(onClose = onClose)
-                }
-            }
-            else -> {}
-        }
-    }
-
-    override suspend fun runBot() {
-        runMainScript()
-    }
-}
-
-@Composable
-private fun ConfigLoadingScreen() {
-    var countdown by remember { mutableIntStateOf(20) }
-
-    LaunchedEffect(Unit) {
-        while (countdown > 0) {
-            delay(1000L)
-            countdown--
-        }
-        // Skip waitForPlay check — force-stop should execute immediately
-        RunShell.runNoOutput("am force-stop com.coc.suncode >>/dev/null 2>&1", isCheckIsPlaying = false)
-    }
-
-    val scope = rememberCoroutineScope()
-
-    Column {
-        Text("正在初始化配置文件...\n若长时间卡在此界面，将在 $countdown 秒后自动重启。")
-        CustomButton(
-            text = "点击此处手动关闭辅助",
-            onClick = {
-                // Launch on IO dispatcher to avoid blocking the main thread (ANR)
-                scope.launch(Dispatchers.IO) {
-                    RunShell.runNoOutput("am force-stop com.coc.suncode >>/dev/null 2>&1", isCheckIsPlaying = false)
-                }
-            }
+        LaunchedEffect(session) { session.runCountdown() }
+        SettingsWebPanel(
+            modifier = Modifier.fillMaxSize(),
+            onInteraction = { GlobalVars.isAutoRunEnabled = false },
+            request = session::request
         )
     }
+
+    override suspend fun runBot() = runMainScript()
 }

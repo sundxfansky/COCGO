@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.IBinder
 import android.os.Process
 import android.view.Gravity
+import android.view.View
 import android.view.WindowManager
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
@@ -84,9 +85,9 @@ class ControlWindowService : Service(), LifecycleOwner, SavedStateRegistryOwner 
 
     private fun startBotLogic() {
         serviceScope.launch {
-            snapshotFlow { AppStateManager.currentMode }
-                .collect { mode ->
-                    if (mode == AppMode.Run) {
+            snapshotFlow { AppStateManager.currentMode == AppMode.Run && !UIWindowService.isSettingsVisible }
+                .collect { canRun ->
+                    if (canRun) {
                         BotRuntime.start(serviceScope) { GlobalVars.pluginUI?.runBot() }
                     } else {
                         BotRuntime.stop()
@@ -136,6 +137,11 @@ class ControlWindowService : Service(), LifecycleOwner, SavedStateRegistryOwner 
             setViewTreeSavedStateRegistryOwner(this@ControlWindowService)
 
             setContent {
+                val settingsVisible = UIWindowService.isSettingsVisible
+                SideEffect {
+                    // Keep the strip attached so it retains its position when settings closes.
+                    visibility = if (settingsVisible) View.INVISIBLE else View.VISIBLE
+                }
                 ControlWindowContainer { isAtRightSide, horizontalOffset, currentY, contentWidth ->
                     val edgeGravity = Gravity.TOP or if (isAtRightSide) Gravity.RIGHT else Gravity.LEFT
                     // Width changes need no follow-up x correction, so the icon cannot bounce.

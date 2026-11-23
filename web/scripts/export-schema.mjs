@@ -94,8 +94,10 @@ const modules = [...read('SchemaRegistry.kt').matchAll(/ConfigModule\(\s*"(\w+)"
   }),
 }));
 if (!modules.length) throw Error('No registered schema modules found.');
-const version = createHash('sha256').update(JSON.stringify(modules)).digest('hex').slice(0, 16);
-const json = `${JSON.stringify({ schemaVersion: version, modules }, null, 2)}\n`;
+const featurePlugins = JSON.parse(readFileSync(resolve(web, '../app/src/main/assets/feature-plugins.json'), 'utf8'))
+  .map(({ id, name }) => ({ id, name }));
+const version = createHash('sha256').update(JSON.stringify({ modules, featurePlugins })).digest('hex').slice(0, 16);
+const json = `${JSON.stringify({ schemaVersion: version, modules, featurePlugins }, null, 2)}\n`;
 if (check) {
   if (!existsSync(output) || readFileSync(output, 'utf8') !== json) throw Error('Schema snapshot is stale; run npm run schema.');
 } else writeFileSync(output, json);

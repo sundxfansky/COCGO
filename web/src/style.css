@@ -361,6 +361,114 @@ details.card[open] > summary { border-bottom: 1px solid var(--line); }
   .overview-card strong.status-value { font-size: 14px; }
   .field-select { grid-column: 1 / -1; }
 }
+
+/* The embedded settings window has less room than the browser workspace. */
+.embedded-settings .app-header { height: 42px; padding-inline: 12px; }
+.embedded-settings .brand { gap: 8px; }
+.embedded-settings .brand-mark { width: 27px; height: 27px; border-radius: 8px; }
+.embedded-settings .brand-mark svg { width: 18px; height: 18px; }
+.embedded-settings .brand strong { font-size: 15px; }
+.embedded-settings .brand strong span { font-size: 11px; }
+.embedded-settings .dashboard { width: min(1220px, calc(100% - 16px)); padding-block: 8px 4px; }
+.embedded-settings .workspace { padding-top: 0; }
+.embedded-settings .workspace-heading { gap: 8px; margin-bottom: 8px; }
+.embedded-settings .workspace-heading h1 { gap: 6px; font-size: clamp(16px, 4.2vw, 23px); }
+.embedded-settings .overview-grid { gap: 6px; margin-bottom: 8px; }
+.embedded-settings .overview-card { display: block; text-align: center; padding: 5px 4px; border-radius: 8px; }
+.embedded-settings .overview-card > div { gap: 2px; }
+.embedded-settings .overview-card > div > span { font-size: 10px; }
+.embedded-settings .overview-card strong { font-size: 14px; }
+.embedded-settings .overview-card strong.status-value { font-size: 12px; }
+.embedded-settings .stat-icon, .embedded-settings .stat-extra { display: none; }
+.embedded-settings .navigation-row { gap: 6px; margin-bottom: 8px; }
+.embedded-settings .tabs { padding: 3px; }
+.embedded-settings button:where(:not(.switch)) { min-height: 34px; gap: 5px; padding: 5px 9px; border-radius: 8px; }
+.embedded-settings .icon-button { width: 34px; flex-basis: 34px; padding: 0; }
+.embedded-settings .search { padding-inline: 8px; gap: 5px; }
+.embedded-settings .search input { min-height: 33px; padding: 5px 0; }
+.embedded-settings .search .icon-button { width: 25px; min-height: 25px; flex-basis: 25px; }
+.embedded-settings .home-grid, .embedded-settings .profile-grid { gap: 8px; }
+.embedded-settings .card { padding: 10px; border-radius: 10px; }
+.embedded-settings .card-heading { gap: 7px; margin-bottom: 8px; }
+.embedded-settings .card-icon { width: 26px; height: 26px; border-radius: 7px; }
+.embedded-settings .card-icon svg { width: 15px; height: 15px; }
+.embedded-settings .connection-card, .embedded-settings .module-card, .embedded-settings .copy-card { padding: 0; }
+.embedded-settings .connection-card, .embedded-settings .copy-card { margin: 0 0 8px; }
+.embedded-settings .connection-actions { gap: 8px; }
+.embedded-settings details.card > summary { min-height: 38px; gap: 7px; padding: 6px 10px; }
+.embedded-settings .connection-card .status-pill { margin-inline-start: auto; padding: 3px 6px; }
+.embedded-settings .connection-card > summary > svg:last-child { margin-inline-start: 0; }
+.embedded-settings .module-body { padding: 9px 10px; }
+.embedded-settings .module-body > .secondary { margin-top: 8px; }
+.embedded-settings .field-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 10px; }
+.embedded-settings .field-select { grid-column: auto; }
+.embedded-settings .field-label { gap: 4px; min-height: 0; margin-bottom: 4px; }
+.embedded-settings .field-toggle { min-height: 40px; gap: 5px; padding: 5px 0; }
+.embedded-settings .field-toggle .field-label { margin-bottom: 0; }
+.embedded-settings input:not(.search input), .embedded-settings textarea { min-height: 34px; padding: 5px 8px; border-radius: 8px; }
+.embedded-settings .actions, .embedded-settings .account-tools, .embedded-settings .account-grid { gap: 8px; }
+.embedded-settings .account-card { padding: 10px; border-radius: 10px; }
+.embedded-settings .account-card-top { margin-bottom: 6px; }
+.embedded-settings .avatar { width: 29px; height: 29px; border-radius: 7px; }
+.embedded-settings .detail-toolbar, .embedded-settings .pagination { margin: 6px 0 10px; }
+.embedded-settings .list-heading, .embedded-settings .world-bar { margin: 8px 0; }
+.embedded-settings .priority-row { padding: 4px 0; }
+.embedded-settings :is(.notice, .readonly-banner, .conflict-banner) { padding: 6px 8px; margin-bottom: 8px; }
+.embedded-settings .save-bar { bottom: 3px; padding: 4px 6px 4px 9px; margin-top: 8px; border-radius: 8px; }
+.embedded-settings .save-bar > button { min-height: 32px; }
+.embedded-settings .save-caption { display: none; }
+/* A fixed dialog is sized by the embedded viewport even when WebView reports zero viewport units. */
+.embedded-settings .modal { position: fixed; inset: 0; max-height: calc(100% - 24px); padding: 14px; border-radius: 12px; }
+.embedded-settings .modal-heading, .embedded-settings .modal > p { margin-bottom: 9px; }
+.embedded-settings .modal .actions { margin-top: 10px; }
+@media (max-width: 340px) {
+  .embedded-settings .field-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+.embedded-settings .select-trigger { width: 100%; justify-content: space-between; text-align: start; color: #3b4660; background: #f9fafc; border-color: #e5e8f0; font-weight: 400; }
+.select-trigger span, .select-options span { min-width: 0; overflow-wrap: anywhere; }
+.embedded-settings .select-trigger svg { transform: rotate(90deg); }
+.embedded-settings .select-trigger:hover:not(:disabled), .embedded-settings .select-trigger[aria-expanded=true] { border-color: #9385e2; background: #fff; }
+.select-popup { position: fixed; inset: auto; padding: 4px; margin: 0; overflow-y: auto; overscroll-behavior: contain; border: 1px solid #ded9ee; border-radius: 9px; background: #fff; color: var(--ink); box-shadow: 0 6px 20px #2420352c; }
+.select-popup::backdrop { background: transparent; }
+.select-options { display: grid; gap: 2px; }
+.embedded-settings .select-options button { width: 100%; justify-content: space-between; text-align: start; color: var(--ink); background: transparent; font-weight: 400; }
+.embedded-settings .select-options button:hover:not(:disabled), .embedded-settings .select-options button[aria-pressed=true] { background: #f0edff; color: #6252c3; }
+.select-options button:focus-visible { outline-offset: -2px; }
+
+/* Launcher and floating settings use identical content inside their own viewport. */
+:root[data-surface=overlay], :root[data-surface=logs], :root[data-surface=message] { background: transparent; }
+:root[data-surface=activity] body, :root[data-surface=overlay] body { min-width: 0; }
+.local-window { position: fixed; inset: 0; display: flex; flex-direction: column; background: #f5f6fa; color: var(--ink); }
+.local-window.local-overlay { border: 1px solid #73839b; border-radius: 12px; overflow: hidden; }
+.local-window-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 34px; padding: 1px 5px 1px 9px; border-bottom: 1px solid var(--line); font-size: 11px; }
+.local-window-header > button { min-height: 30px; padding: 2px 5px; }
+.local-window-header > .icon-button { width: 32px; flex-basis: 32px; padding: 0; color: var(--ink); }
+.local-window-body { flex: 1; min-height: 0; overflow: auto; }
+.local-window-actions { display: flex; gap: 5px; overflow-x: auto; padding: 5px 7px; border-top: 1px solid var(--line); }
+.local-window-actions button { flex-shrink: 0; min-height: 34px; padding: 4px 8px; border-radius: 8px; font-size: 12px; white-space: nowrap; }
+.local-window-error { padding: 4px 9px; color: #9f4557; font-size: 12px; }
+.local-status { display: grid; justify-items: center; align-content: start; gap: 12px; padding: 24px 16px; text-align: center; }
+.local-status > button { min-height: 34px; padding: 5px 10px; }
+.device-tools { display: grid; gap: 8px; }
+.workspace-tools > button.secondary { white-space: nowrap; }
+.device-authorization-qr { display: grid; justify-items: start; gap: 8px; margin: 12px 0 0; }
+.device-authorization-qr img { display: block; width: min(256px, 100%); height: auto; border: 1px solid var(--line); }
+.device-authorization-qr figcaption { font-size: 12px; color: var(--muted); }
+.device-tools .card > :is(.actions, p) { margin-top: 7px; }
+.device-tools .card > p { font-size: 12px; }
+.device-plugin-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr)); gap: 3px 12px; padding-bottom: 8px; }
+.device-plugin { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 3px 0; border-bottom: 1px solid var(--line); font-size: 12px; }
+.device-plugin small { margin-left: 6px; color: var(--muted); }
+.device-tools .device-plugin button { min-height: 30px; font-size: 11px; }
+.floating-logs { position: fixed; inset: 0; display: flex; flex-direction: column; background: #08090a; color: white; }
+.floating-logs header { display: flex; align-items: center; gap: 4px; padding: 2px 5px; border-bottom: 1px solid #ffffff30; font-size: 11px; }
+.floating-logs h1 { flex: 1; font-size: 12px; letter-spacing: 0; }
+.floating-logs button { min-height: 28px; min-width: 28px; padding: 3px 5px; background: transparent; font-size: 11px; }
+.floating-logs button:hover:not(:disabled), .floating-logs button[aria-pressed=true] { background: #ffffff28; }
+.floating-log-lines { flex: 1; overflow: auto; padding: 3px 6px; font: 11px/1.4 monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.floating-log-lines > p { text-align: center; color: #fff; margin-top: 10px; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }

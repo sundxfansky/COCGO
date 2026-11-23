@@ -18,9 +18,10 @@ import (
 )
 
 type server struct {
-	db      *sql.DB
-	secret  []byte
-	limiter authLimiter
+	db               *sql.DB
+	secret           []byte
+	limiter          authLimiter
+	qqAuthorizations qqAuthorizations
 }
 
 type credentials struct {

@@ -15,12 +15,15 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** Stable host API shared by the bundled UI and independently loaded plugins. */
 object QqAuthorizationManager {
@@ -30,6 +33,7 @@ object QqAuthorizationManager {
     )
     internal class Request(val id: String, val slot: Int, val login: Boolean, val allowCapture: Boolean = true) {
         val completion = CompletableDeferred<Boolean>()
+        val toolOpened = CompletableDeferred<Unit>()
         var job: Job? = null
         var watchdog: Job? = null
         var resetStarted = false
@@ -47,6 +51,51 @@ object QqAuthorizationManager {
         // Manual authorization owns the foreground until the user explicitly resumes automation.
         if (started) GlobalVars.isPlaying.value = false
         return started
+    }
+
+    /** The cloud can request a fresh QR authorization; the result remains in the local grant store. */
+    internal suspend fun authorizeFromCloud(
+        context: Context,
+        slot: Int,
+        timeoutMillis: Long,
+        publishQr: suspend (String) -> Unit
+    ): Boolean = coroutineScope {
+        val request = withContext(Dispatchers.Main.immediate) {
+            val started = start(context, slot, login = false) ?: return@withContext null
+            GlobalVars.isAutoRunEnabled = false
+            GlobalVars.isPlaying.value = false
+            started
+        } ?: return@coroutineScope false
+        val preview = launch(Dispatchers.IO) {
+            request.toolOpened.await()
+            var previous: String? = null
+            while (!request.completion.isCompleted) {
+                try {
+                    // Decode only while the verified companion owns the screen, and publish a QR image alone.
+                    val qr = if (isToolAtFront()) QqAuthorizationQr.capture() else null
+                    if (qr != null && qr != previous && isToolAtFront() && !request.completion.isCompleted) {
+                        publishQr(qr)
+                        previous = qr
+                    }
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (_: IOException) {
+                    // Retry transient frame or network errors without logging authorization data.
+                }
+                delay(1500)
+            }
+        }
+        try {
+            withTimeoutOrNull(timeoutMillis) { request.completion.await() } == true
+        } finally {
+            withContext(NonCancellable + Dispatchers.Main.immediate) {
+                preview.cancelAndJoin()
+                if (!request.completion.isCompleted) {
+                    request.job?.cancel()
+                    finish(request, false, "远端 QQ 授权已取消或超时")
+                }
+            }
+        }
     }
 
     /** Reuse a shared grant without implicitly opening a new capture flow. */
@@ -242,7 +291,8 @@ object QqAuthorizationManager {
     suspend fun isToolAtFront(): Boolean {
         val result = ServerShell.exec("dumpsys activity activities")
         return result.isSuccess && result.out.any {
-            (it.contains("mResumedActivity") || it.contains("topResumedActivity")) && it.contains(QqToolBackend.ACTIVITY)
+            (it.contains("mResumedActivity") || it.contains("topResumedActivity")) &&
+                it.contains("${QqToolBackend.PACKAGE}/${QqToolBackend.ACTIVITY}")
         }
     }
 

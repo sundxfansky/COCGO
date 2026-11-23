@@ -1,114 +1,33 @@
 package com.coc.suncode.jar.ui.pages.single
 
-import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
-import com.coc.suncode.core.data.cloud.CloudSyncManager
+import android.content.Context
 import com.coc.suncode.core.data.database.GlobalVars
 import com.coc.suncode.core.ui.web.LocalSettingsController
-import com.coc.suncode.core.ui.web.SettingsWebView
-import com.coc.suncode.core.util.exit.AppExitHelper
-import com.coc.suncode.jar.ui.components.CustomButton
 import com.coc.suncode.jar.ui.schema.ConfigManager
 import com.coc.suncode.jar.ui.schema.Schema
 import com.coc.suncode.jar.ui.schema.SchemaRegistry
 import com.coc.suncode.jar.ui.schema.Scope
 import com.coc.suncode.jar.ui.schema.SettingDef
-import com.coc.suncode.statehelper.AppMode
-import com.coc.suncode.statehelper.AppStateManager
-import com.google.gson.JsonObject
 import com.google.gson.JsonArray
-import kotlinx.coroutines.delay
+import com.google.gson.JsonObject
 
-/** All ordinary settings share the same bundled web UI as the server; device operations stay native. */
-@Composable
-fun WebSettingsScreen(onClose: () -> Unit) {
-    val context = LocalContext.current
-    val actions = GlobalVars.serverActions ?: return
-    var toolsVisible by remember { mutableStateOf(false) }
-    val controller = remember(actions) {
-        LocalSettingsController(
-            context.applicationContext,
-            savedSnapshot = { actions.configJson },
-            normalize = ::webConfigSnapshot,
-            persist = { expected, config ->
-                val saved = actions.persistConfigIfUnchanged(expected, webConfigSnapshot(config))
-                if (saved == true) ConfigManager.initializeAllConfigs(actions)
-                saved
-            },
-            schema = ::webSettingsSchema
-        )
-    }
-    val useSavedSettings: (Boolean) -> Unit = { play ->
-        // Browser drafts are committed by the page's Save button; native actions use the last saved revision.
-        ConfigManager.initializeAllConfigs(actions)
-        GlobalVars.isAutoRunEnabled = false
-        GlobalVars.updateWindowPosition = true
-        GlobalVars.isPlaying.value = play
-        AppStateManager.setMode(AppMode.Run)
-        onClose()
-    }
-    LaunchedEffect(actions) { CloudSyncManager.ensureStarted(context) }
-    LaunchedEffect(GlobalVars.isAutoRunEnabled, GlobalVars.autoRunTimer) {
-        if (GlobalVars.isAutoRunEnabled) {
-            delay(1000)
-            GlobalVars.autoRunTimer--
-            if (GlobalVars.autoRunTimer <= 0) useSavedSettings(true)
-        }
-    }
-    BackHandler(enabled = toolsVisible) { toolsVisible = false }
-    Box(Modifier.fillMaxSize()) {
-        // Keep the WebView mounted underneath tools so an unsaved browser draft survives a round trip.
-        Column(Modifier.fillMaxSize().background(Color(0xFFF4F6FB))) {
-            SettingsWebView(controller, Modifier.weight(1f).fillMaxWidth(), onInteraction = { GlobalVars.isAutoRunEnabled = false })
-            if (GlobalVars.isAutoRunEnabled) {
-                Text("${GlobalVars.autoRunTimer} 秒后运行已保存配置，触摸任意位置停止", modifier = Modifier.padding(horizontal = 10.dp))
+/** The active JAR supplies normalization and canonical labels for the host WebView. */
+internal fun createWebSettingsController(context: Context): LocalSettingsController {
+    val actions = checkNotNull(GlobalVars.serverActions) { "本地配置尚未加载" }
+    return LocalSettingsController(
+        context.applicationContext,
+        savedSnapshot = { actions.configJson },
+        normalize = ::webConfigSnapshot,
+        persist = { expected, config ->
+            val saved = actions.persistConfigIfUnchanged(expected, webConfigSnapshot(config))
+            if (saved == true) {
+                // The bundled web adapter may be serving a legacy dynamically loaded runtime.
+                GlobalVars.pluginUI?.refreshConfigs(actions) ?: ConfigManager.initializeAllConfigs(actions)
             }
-            FlowRow(Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
-                CustomButton(text = "运行已保存配置", onClick = { useSavedSettings(true) })
-                CustomButton(text = "暂停", onClick = { useSavedSettings(false) })
-                CustomButton(text = "设备工具", onClick = { GlobalVars.isAutoRunEnabled = false; toolsVisible = true })
-                CustomButton(text = "退出", onClick = { AppExitHelper.exitApplication(context) })
-            }
-        }
-        if (toolsVisible) NativeDeviceTools(onBack = { toolsVisible = false }, onClose = onClose)
-    }
-}
-
-@Composable
-private fun NativeDeviceTools(onBack: () -> Unit, onClose: () -> Unit) {
-    Column(Modifier.fillMaxSize().background(Color(0xFFF4F6FB))) {
-        CustomButton(text = "返回设置", onClick = onBack)
-        // Existing device-only utilities remain native and are never exported to the web bridge.
-        LazyColumn(Modifier.weight(1f).padding(4.dp)) {
-            if (!CloudSyncManager.remoteEnabled) item { QqAuthorizationSettings() }
-            item { FeaturePluginsSettings() }
-            if (!CloudSyncManager.remoteEnabled) item { ExtractGameSaveContent() }
-            item {
-                CustomButton(text = "截屏反馈问题", onClick = {
-                    AppStateManager.setMode(AppMode.BugReport)
-                    onClose()
-                })
-            }
-        }
-    }
+            saved
+        },
+        schema = ::webSettingsSchema
+    )
 }
 
 /** Derive editor defaults from saved values only, preserving unknown keys and legacy profile migration. */

@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useEffect, useId, useMemo, useState } from 'react';
 import schema from './schema.json';
-import { Card, Help, Icon, Modal, Toggle } from './components.jsx';
+import { Card, EmbeddedSelect, Help, Icon, Modal, Toggle } from './components.jsx';
 import { copyProfiles, countAccounts, movePriority, normalizeConfig, settingKey, settingValue, updateSetting } from './model.js';
+import { isLocal } from './transport.js';
 
 const SchemaContext = createContext(schema);
 function useSchema() {
@@ -21,6 +22,7 @@ export function acceptRuntimeSchema(runtime) {
   return { ...schema, modules: runtime.modules.map((module) => ({ ...module, settings: module.settings.map((setting) => ({ ...byKey[setting.key], ...setting, kind: byKey[setting.key]?.kind || 'text' })) })) };
 }
 const INTERNAL_GLOBALS = new Set(['config_count', 'account_profiles_version', 'account_count', 'email', 'password', 'sync_source_account', 'sync_target_start', 'sync_target_end', 'sync_include_builder_base']);
+const DEVICE_TOOL_KEYS = new Set(['qq_account_slot', 'extract_version', 'extract_cn', 'extract_global']);
 const GENERAL_KEYS = new Set(['delay_multiplier', 'enter_game_timer', 'record_progress', 'device_remark', 'runtime_screenshot']);
 const START_KEYS = new Set(['auto_start', 'auto_update', 'after_kick_option', 'after_kick_cooldown_minutes']);
 const BATCH_KEYS = new Set(['batch_create_account', 'create_start_id', 'create_end_id', 'create_prefix', 'add_suffix_setting', 'create_gem_build', 'gem_count']);
@@ -46,13 +48,18 @@ function Field({ setting, scope = 'GLOBAL', account = 1, config, onChange, disab
   const change = (next) => onChange(updateSetting(config, key, next));
   const help = fixed ? '该序号与当前账号保持一致，由客户端自动管理。' : setting.help;
   const options = setting.key === 'start_method' && config[`game_version${account}`] === '1' ? setting.options?.slice(0, 2) : setting.options;
+  const choices = options?.map((option, index) => ({ value: String(index), label: typeof option === 'string' ? option : option.label }));
+  if (choices?.length && !choices.some((option) => option.value === value)) {
+    choices.push({ value, label: `自定义值：${value}` });
+  }
   return <div className={`field field-${setting.kind}`}>
     <div className="field-label"><label htmlFor={fieldId}>{label}</label><Help label={`${label}说明`}>{help}</Help></div>
     {setting.kind === 'toggle' ? <Toggle label={label} checked={value === '1'} disabled={disabled || fixed} onChange={(next) => change(next ? '1' : '0')}/> :
-      setting.kind === 'select' && options?.length ? <select id={fieldId} value={value} disabled={disabled || fixed} onChange={(event) => change(event.target.value)}>
-        {options.map((option, index) => <option key={index} value={String(index)}>{typeof option === 'string' ? option : option.label}</option>)}
-        {!options.some((_, index) => String(index) === value) && <option value={value}>自定义值：{value}</option>}
-      </select> : <input id={fieldId} type={setting.kind === 'number' ? 'number' : setting.kind === 'password' ? 'password' : 'text'} step="any" value={value} disabled={disabled || fixed} autoComplete="off" onChange={(event) => change(event.target.value)}/>
+      setting.kind === 'select' && choices?.length ? (isLocal() ?
+        <EmbeddedSelect id={fieldId} label={label} value={value} options={choices} disabled={disabled || fixed} onChange={change}/> :
+        <select id={fieldId} value={value} disabled={disabled || fixed} onChange={(event) => change(event.target.value)}>
+          {choices.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+        </select>) : <input id={fieldId} type={setting.kind === 'number' ? 'number' : setting.kind === 'password' ? 'password' : 'text'} step="any" value={value} disabled={disabled || fixed} autoComplete="off" onChange={(event) => change(event.target.value)}/>
     }
   </div>;
 }
@@ -157,7 +164,7 @@ function Accounts({ config, onChange, disabled, onMessage, search }) {
   </>;
 }
 
-function SettingsEditorContent({ config, onChange, readOnly, busy, onMessage, homeContent }) {
+function SettingsEditorContent({ config, onChange, readOnly, busy, onMessage, homeContent, deviceTools }) {
   const { globalSettings } = useSchema();
   const tabsId = useId();
   const [tab, setTab] = useState(0);
@@ -167,7 +174,7 @@ function SettingsEditorContent({ config, onChange, readOnly, busy, onMessage, ho
     { title: '运行偏好', icon: 'settings', accent: 'blue', settings: globalSettings.filter((setting) => GENERAL_KEYS.has(setting.key)) },
     { title: '启动与更新', icon: 'bolt', accent: 'amber', settings: globalSettings.filter((setting) => START_KEYS.has(setting.key)) },
     { title: '批量创建', icon: 'users', accent: 'violet', settings: globalSettings.filter((setting) => BATCH_KEYS.has(setting.key)) },
-    { title: '其他设置', icon: 'settings', accent: 'teal', settings: globalSettings.filter((setting) => !INTERNAL_GLOBALS.has(setting.key) && !GENERAL_KEYS.has(setting.key) && !START_KEYS.has(setting.key) && !BATCH_KEYS.has(setting.key)) },
+    { title: '其他设置', icon: 'settings', accent: 'teal', settings: globalSettings.filter((setting) => !INTERNAL_GLOBALS.has(setting.key) && !GENERAL_KEYS.has(setting.key) && !START_KEYS.has(setting.key) && !BATCH_KEYS.has(setting.key) && !(deviceTools && DEVICE_TOOL_KEYS.has(setting.key))) },
   ];
   return <>
     <div className="navigation-row"><div className="tabs" role="tablist" aria-label="设置页面">{[{ label: '主页设置', icon: 'home' }, { label: '账号设置', icon: 'users' }].map((item, index) => <button type="button" key={item.label} id={`${tabsId}-tab-${index}`} role="tab" aria-selected={tab === index} aria-controls={`${tabsId}-panel-${index}`} tabIndex={tab === index ? 0 : -1} onClick={() => setTab(index)} onKeyDown={(event) => { if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) { event.preventDefault(); const next = event.key === 'Home' ? 0 : event.key === 'End' ? 1 : 1 - tab; setTab(next); document.getElementById(`${tabsId}-tab-${next}`)?.focus(); } }}><Icon name={item.icon} size={18}/>{item.label}</button>)}</div><label className="search setting-search"><Icon name="search" size={18}/><input value={search} aria-label="搜索设置项" placeholder="搜索设置项" onChange={(event) => setSearch(event.target.value)}/>{search && <button type="button" aria-label="清空设置搜索" className="icon-button" onClick={() => setSearch('')}><Icon name="close" size={14}/></button>}</label></div>

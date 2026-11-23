@@ -2,14 +2,12 @@ package com.coc.suncode.loadjar
 
 import android.content.Context
 import android.util.Base64
-import androidx.compose.foundation.layout.Column
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
 import com.coc.suncode.BuildConfig
 import com.coc.suncode.core.data.database.GlobalVars
 import com.coc.suncode.core.data.websocket.ServerActions
 import com.coc.suncode.core.system.daemon.ServerApkInstaller
-import com.coc.suncode.core.ui.localcomponents.LocalCustomButton
+import com.coc.suncode.core.ui.web.LocalSettingsController
+import com.coc.suncode.core.ui.web.WebSettingsProvider
 import com.coc.suncode.core.util.basic.ShowMessage
 import com.coc.suncode.interfaces.FeaturePluginClient
 import com.coc.suncode.loadjar.features.FeatureStore
@@ -17,8 +15,6 @@ import com.coc.suncode.loadjar.features.FeatureArchive
 import com.coc.suncode.loadjar.features.readBytesLimited
 import java.util.zip.ZipInputStream
 import com.coc.suncode.interfaces.MainCode
-import com.coc.suncode.statehelper.AppMode
-import com.coc.suncode.statehelper.AppStateManager
 import java.io.File
 import java.security.MessageDigest
 
@@ -26,13 +22,11 @@ class Loadjar(private val context: Context) {
     companion object { private const val ENTRY = "com.coc.suncode.jar.ui.EnterMainCode" }
     private var pluginUI: MainCode? = null
 
-    @Composable fun LoadAndShowUI(loadStatus: String, onClose: () -> Unit) {
-        if (loadStatus == "Plugin loaded successfully") {
-            (GlobalVars.pluginUI ?: pluginUI)?.ShowMainUI(context, onClose)
-        } else Column {
-            Text(loadStatus)
-            LocalCustomButton(text = "关闭悬浮窗", onClick = { AppStateManager.setMode(AppMode.Run); onClose() })
-        }
+    fun createWebSettingsController(): LocalSettingsController {
+        // Legacy JARs keep their runtime entry point; the APK supplies their web settings UI.
+        val provider = GlobalVars.pluginUI as? WebSettingsProvider
+            ?: context.classLoader.loadClass(ENTRY).getDeclaredConstructor().newInstance() as WebSettingsProvider
+        return provider.createWebSettingsController(context)
     }
 
     fun startLoading(assetFileName: String = "code.jar", onStatusChange: (String) -> Unit) {

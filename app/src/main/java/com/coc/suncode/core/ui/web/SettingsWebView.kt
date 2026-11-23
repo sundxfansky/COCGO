@@ -2,14 +2,15 @@ package com.coc.suncode.core.ui.web
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.graphics.Color
 import android.view.KeyEvent
 import android.view.MotionEvent
+import android.view.View
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -25,6 +26,7 @@ import com.coc.suncode.core.data.cloud.CloudSyncManager
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withLock
 import java.io.ByteArrayInputStream
@@ -37,6 +39,8 @@ class LocalSettingsController(
     private val persist: suspend (JsonObject, JsonObject) -> Boolean?,
     private val schema: () -> JsonObject
 ) {
+    internal fun settingsVersion(): String = CloudConfigPolicy.fingerprint(savedSnapshot())
+
     suspend fun request(method: String, params: JsonObject): JsonObject = CloudSyncManager.settingsMutex.withLock {
         when (method) {
             "getState" -> state()
@@ -90,19 +94,30 @@ class LocalSettingsController(
     }
 }
 
-private class SettingsRequestException(val status: Int, message: String) : Exception(message)
+internal class SettingsRequestException(val status: Int, message: String) : Exception(message)
 
 /** Uses a virtual HTTPS asset origin; the root worker never exposes a socket or web-accessible API. */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun SettingsWebView(controller: LocalSettingsController, modifier: Modifier = Modifier, onInteraction: () -> Unit = {}) {
+    SettingsWebPanel(modifier = modifier, onInteraction = onInteraction, request = controller::request)
+}
+
+/** The same local asset page serves settings, startup and authorization status. */
+@Composable
+@SuppressLint("SetJavaScriptEnabled")
+fun SettingsWebPanel(
+    modifier: Modifier = Modifier,
+    surface: String = "settings",
+    onInteraction: () -> Unit = {},
+    beforeFeedback: () -> Unit = {},
+    request: suspend (String, JsonObject) -> JsonObject
+) {
     val scope = rememberCoroutineScope()
     val interaction = rememberUpdatedState(onInteraction)
+    val prepareFeedback = rememberUpdatedState(beforeFeedback)
+    val currentRequest = rememberUpdatedState(request)
     val supported = remember { WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER) }
-    if (!supported) {
-        Text("请更新 Android System WebView 后使用设置页面。", modifier)
-        return
-    }
     AndroidView(
         modifier = modifier,
         factory = { context ->
@@ -111,6 +126,7 @@ fun SettingsWebView(controller: LocalSettingsController, modifier: Modifier = Mo
             val loader = WebViewAssetLoader.Builder()
                 .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(context)).build()
             WebView(context).apply {
+                if (surface in setOf("overlay", "logs", "message")) setBackgroundColor(Color.TRANSPARENT)
                 // AndroidView can intercept input before Compose observes it; stop countdowns without consuming input.
                 setOnTouchListener { _, event ->
                     if (event.actionMasked == MotionEvent.ACTION_DOWN) interaction.value()
@@ -137,7 +153,7 @@ fun SettingsWebView(controller: LocalSettingsController, modifier: Modifier = Mo
                         )
                     }
                 }
-                WebViewCompat.addWebMessageListener(this, "SunSettings", setOf(ASSET_ORIGIN)) { _, message, origin, mainFrame, reply ->
+                if (supported) WebViewCompat.addWebMessageListener(this, "SunSettings", setOf(ASSET_ORIGIN)) { _, message, origin, mainFrame, reply ->
                     if (!mainFrame || origin.toString().trimEnd('/') != ASSET_ORIGIN) return@addWebMessageListener
                     val raw = message.data ?: return@addWebMessageListener
                     if (raw.length > 8 * 1024 * 1024) return@addWebMessageListener
@@ -146,7 +162,22 @@ fun SettingsWebView(controller: LocalSettingsController, modifier: Modifier = Mo
                         try {
                             val envelope = JsonParser.parseString(raw).asJsonObject
                             response.add("id", envelope.get("id"))
-                            val result = controller.request(envelope.get("method")?.asString.orEmpty(), envelope.getAsJsonObject("params") ?: JsonObject())
+                            val method = envelope.get("method")?.asString.orEmpty()
+                            val params = envelope.getAsJsonObject("params") ?: JsonObject()
+                            // Keep the page and its draft mounted while capturing the layer underneath.
+                            val result = if (method == "submitFeedback" && visibility == View.VISIBLE) {
+                                check(BuildConfig.BASE_URL.isNotBlank()) { "宿主未配置反馈服务" }
+                                visibility = View.INVISIBLE
+                                try {
+                                    prepareFeedback.value()
+                                    delay(300)
+                                    currentRequest.value(method, params)
+                                } finally {
+                                    visibility = View.VISIBLE
+                                }
+                            } else if (method == "submitFeedback") {
+                                throw SettingsRequestException(409, "截图正在提交")
+                            } else currentRequest.value(method, params)
                             response.add("result", result)
                         } catch (error: CancellationException) {
                             throw error
@@ -156,15 +187,16 @@ fun SettingsWebView(controller: LocalSettingsController, modifier: Modifier = Mo
                                 addProperty("status", (error as? SettingsRequestException)?.status ?: 400)
                             })
                         }
-                        reply.postMessage(response.toString())
+                        if (isAttachedToWindow) reply.postMessage(response.toString())
                     }
                 }
-                loadUrl("$ASSET_ORIGIN/assets/settings/index.html")
+                val page = if (supported) surface else "unsupported"
+                loadUrl("$ASSET_ORIGIN/assets/settings/index.html?surface=$page")
             }
         },
         onRelease = { view ->
             view.stopLoading()
-            WebViewCompat.removeWebMessageListener(view, "SunSettings")
+            if (supported) WebViewCompat.removeWebMessageListener(view, "SunSettings")
             view.destroy()
         }
     )

@@ -3,6 +3,8 @@ package com.coc.suncode.loadjar.features
 import android.content.Context
 import android.util.Base64
 import com.coc.suncode.BuildConfig
+import com.coc.suncode.core.data.cloud.CloudSyncManager
+import com.coc.suncode.core.data.database.GlobalVars
 import com.coc.suncode.core.system.daemon.ServerApkInstaller
 import com.coc.suncode.core.util.basic.ShowMessage
 import com.coc.suncode.interfaces.FeaturePlugin
@@ -27,7 +29,17 @@ class FeatureStore(private val context: Context) {
     private val preferences = context.getSharedPreferences("feature_plugins", Context.MODE_PRIVATE)
     val specs = FeatureSpec.read(context)
 
-    fun enabled(id: String): Boolean = preferences.getBoolean("enabled.$id", true)
+    // An absent override preserves the device's existing choice, including older configurations.
+    fun cloudOverride(id: String): Boolean? {
+        if (!CloudSyncManager.remoteEnabled) return null
+        return when (GlobalVars.serverActions?.getValue("feature_plugin_enabled_$id")) {
+            "1" -> true
+            "0" -> false
+            else -> null
+        }
+    }
+
+    fun enabled(id: String): Boolean = cloudOverride(id) ?: preferences.getBoolean("enabled.$id", true)
 
     fun setEnabled(id: String, enabled: Boolean) {
         require(specs.any { it.id == id })

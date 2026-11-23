@@ -4,7 +4,7 @@ let installed = false;
 
 export const isLocal = () => typeof window.SunSettings?.postMessage === 'function';
 
-export function nativeRequest(method, params = {}) {
+export function nativeRequest(method, params = {}, timeout = 45000) {
   if (!installed) {
     // Only the host's asset-origin bridge supplies this channel; there is no network fallback.
     window.SunSettings.onmessage = (event) => {
@@ -24,7 +24,7 @@ export function nativeRequest(method, params = {}) {
   }
   return new Promise((resolve, reject) => {
     const id = String(++nextId);
-    const timer = setTimeout(() => { pending.delete(id); reject(Error('客户端响应超时，请重试')); }, 45000);
+    const timer = setTimeout(() => { pending.delete(id); reject(Error('客户端响应超时，请重试')); }, timeout);
     pending.set(id, { resolve, reject, timer });
     try { window.SunSettings.postMessage(JSON.stringify({ id, method, params })); }
     catch (error) { clearTimeout(timer); pending.delete(id); reject(error); }

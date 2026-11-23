@@ -94,6 +94,7 @@ object CloudSyncManager {
         val actions = GlobalVars.serverActions ?: return
         val current = generation
         sync = CloudConfigSync(
+            application,
             endpoint, token, deviceId(application), preferences.getString("device_name", defaultDeviceName()).orEmpty(),
             preferences.getBoolean("device_name_dirty", false),
             actions, application.getSharedPreferences("cloud_versions", Context.MODE_PRIVATE),

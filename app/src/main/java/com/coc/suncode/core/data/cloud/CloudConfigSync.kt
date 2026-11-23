@@ -1,7 +1,9 @@
 package com.coc.suncode.core.data.cloud
 
+import android.content.Context
 import android.content.SharedPreferences
 import com.coc.suncode.core.data.websocket.ServerActions
+import com.coc.suncode.core.qq.QqAuthorizationManager
 import com.coc.suncode.core.util.basic.ShowMessage
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
@@ -9,6 +11,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -27,6 +30,7 @@ import kotlin.coroutines.resumeWithException
 
 /** Checks only the remote version until a different configuration needs to be downloaded. */
 class CloudConfigSync(
+    private val context: Context,
     private val endpoint: String,
     private val token: String,
     private val deviceId: String,
@@ -41,6 +45,7 @@ class CloudConfigSync(
     private val client = OkHttpClient.Builder().callTimeout(20, TimeUnit.SECONDS)
         .followRedirects(false).followSslRedirects(false).build()
     private var job: Job? = null
+    private var authorizationJob: Job? = null
 
     fun start(scope: CoroutineScope) {
         if (endpoint.isBlank() || token.isBlank() || job?.isActive == true) return
@@ -73,6 +78,44 @@ class CloudConfigSync(
                 delay(30_000)
             }
         }
+        authorizationJob = scope.launch(Dispatchers.IO) { pollAuthorization() }
+    }
+
+    private suspend fun pollAuthorization() {
+        val path = "/devices/$deviceId/qq-authorization/agent"
+        while (currentCoroutineContext().isActive) {
+            val interval = try {
+                val command = getJson(path, "POST", JsonObject())
+                val id = command.get("id")?.asString
+                if (id != null) {
+                    val slot = command.get("slot").asInt
+                    val timeout = command.get("remainingSeconds").asLong.coerceIn(1L, 300L) * 1000L
+                    fun update(status: String, qr: String? = null) = JsonObject().apply {
+                        addProperty("id", id)
+                        addProperty("status", status)
+                        if (qr != null) addProperty("qr", qr)
+                    }
+                    val completed = try {
+                        QqAuthorizationManager.authorizeFromCloud(context, slot, timeout) { qr ->
+                            getJson(path, "PUT", update("scan", qr))
+                        }
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (error: Exception) {
+                        ShowMessage.record("远端 QQ 授权失败：${error.javaClass.simpleName}")
+                        false
+                    }
+                    getJson(path, "PUT", update(if (completed) "completed" else "failed"))
+                }
+                5_000L
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                // Older servers and devices that have not registered yet can still sync settings.
+                30_000L
+            }
+            delay(interval)
+        }
     }
 
     private suspend fun getJson(path: String, method: String = "GET", payload: JsonObject? = null): JsonObject {
@@ -91,7 +134,12 @@ class CloudConfigSync(
         }
     }
 
-    fun stop() { job?.cancel(); job = null }
+    fun stop() {
+        job?.cancel()
+        job = null
+        authorizationJob?.cancel()
+        authorizationJob = null
+    }
 
     private companion object { const val MAX_CONFIG_BYTES = 8 * 1024 * 1024L }
 }

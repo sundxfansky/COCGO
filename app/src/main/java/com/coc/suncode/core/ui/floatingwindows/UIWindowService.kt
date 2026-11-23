@@ -12,13 +12,17 @@ import android.view.View
 import android.view.WindowManager
 import androidx.activity.OnBackPressedDispatcher
 import androidx.activity.OnBackPressedDispatcherOwner
+import androidx.activity.compose.BackHandler
 import androidx.activity.setViewTreeOnBackPressedDispatcherOwner
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.Density
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
@@ -32,11 +36,16 @@ import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.coc.suncode.core.data.database.GlobalVars
 import com.coc.suncode.core.system.hotupdate.HotUpdateManager
+import com.coc.suncode.core.ui.web.SettingsRequestException
+import com.coc.suncode.core.ui.web.SettingsWebPanel
+import com.coc.suncode.core.ui.web.WebSettingsSession
 import com.coc.suncode.core.util.basic.ShowMessage
 import com.coc.suncode.core.qq.QqAuthorizationManager
 import com.coc.suncode.loadjar.Loadjar
 import com.coc.suncode.statehelper.AppMode
 import com.coc.suncode.statehelper.AppStateManager
+import com.google.gson.JsonObject
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -45,6 +54,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
+import kotlin.math.roundToInt
 
 class UIWindowService : Service(), LifecycleOwner, SavedStateRegistryOwner, ViewModelStoreOwner,
     OnBackPressedDispatcherOwner {
@@ -52,9 +62,16 @@ class UIWindowService : Service(), LifecycleOwner, SavedStateRegistryOwner, View
     companion object {
         private const val NOTIFICATION_ID = 1000
         private const val HEIGHT_RATIO_MAIN = 0.9f
-        private const val HEIGHT_RATIO_DEFAULT = 0.7f
-        private const val TARGET_DPI = 300f
+        private const val MAIN_WINDOW_SIDE_MARGIN_DP = 10f
         private const val DEFAULT_LOAD_STATUS = "加载中..."
+        private const val LOADED = "Plugin loaded successfully"
+        const val PROJECTION_ONLY = "projection_only"
+
+        // Other in-app overlays yield while the main window owns the foreground.
+        internal var isWindowVisible by mutableStateOf(false)
+            private set
+        internal var isActivityVisible by mutableStateOf(false)
+        internal val isSettingsVisible get() = isWindowVisible || isActivityVisible
 
         // Signal that startForeground() has been called, used to synchronize
         // with ProjectionPermissionHelper before calling getMediaProjection()
@@ -88,30 +105,45 @@ class UIWindowService : Service(), LifecycleOwner, SavedStateRegistryOwner, View
     private val loadStatus = mutableStateOf(DEFAULT_LOAD_STATUS)
     private var isLoadStarted = false
     private var isLoadFinished = false
+    private var hotUpdateStarted = false
 
     override fun onCreate() {
         super.onCreate()
         updateForegroundRecord()
         lifecycleRegistry.currentState = Lifecycle.State.CREATED
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
-        startJarLoading()
-        startHotUpdateListener()
         serviceScope.launch {
             QqAuthorizationManager.status.collect {
-                updateAuthorizationVisibility(it.busy || it.hideSettings)
+                updateSettingsVisibility()
                 if (!it.busy && it.hideSettings) startService(Intent(this@UIWindowService, ControlWindowService::class.java))
             }
+        }
+        serviceScope.launch {
+            snapshotFlow { isActivityVisible }.collect { updateSettingsVisibility() }
         }
     }
 
     private fun startJarLoading() {
         if (!isLoadStarted) {
             isLoadStarted = true
+            if (!hotUpdateStarted) {
+                hotUpdateStarted = true
+                startHotUpdateListener()
+            }
             serviceScope.launch {
                 // Prepare assets, verification and configuration before attaching the Compose window.
                 var preparedStatus = DEFAULT_LOAD_STATUS
-                withContext(Dispatchers.IO) {
-                    loadjar.startLoading { preparedStatus = it }
+                try {
+                    if (GlobalVars.pluginUI != null && GlobalVars.isConfigLoaded) {
+                        preparedStatus = LOADED
+                    } else withContext(Dispatchers.IO) {
+                        loadjar.startLoading { preparedStatus = it }
+                    }
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    preparedStatus = "设备设置加载失败，请重试"
+                    ShowMessage.record(preparedStatus, throwable = error)
                 }
                 loadStatus.value = preparedStatus
                 isLoadFinished = true
@@ -131,7 +163,7 @@ class UIWindowService : Service(), LifecycleOwner, SavedStateRegistryOwner, View
     }
 
     private fun showFloatingWindow() {
-        if (!isLoadFinished || composeView != null) return
+        if (!isLoadFinished || composeView != null || AppStateManager.currentMode == AppMode.Run) return
 
         val (width, height) = calculateWindowSize()
         val windowType = getWindowType()
@@ -144,6 +176,7 @@ class UIWindowService : Service(), LifecycleOwner, SavedStateRegistryOwner, View
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.CENTER
+            title = "SunCodeSettingsOverlay"
             windowAnimations = 0
         }
 
@@ -154,71 +187,79 @@ class UIWindowService : Service(), LifecycleOwner, SavedStateRegistryOwner, View
             setViewTreeOnBackPressedDispatcherOwner(this@UIWindowService)
 
             setContent {
-                if (AppStateManager.currentMode != AppMode.Run) {
-                    FixedDpiTheme {
-                        loadjar.LoadAndShowUI(loadStatus = loadStatus.value, onClose = {
-                            handleUIIClose()
-                        })
+                val status = loadStatus.value
+                val active = GlobalVars.pluginUI
+                val session = remember(active, status) {
+                    if (status == LOADED && active != null) {
+                        WebSettingsSession(this@UIWindowService, loadjar.createWebSettingsController(), ::handleUIIClose)
+                    } else null
+                }
+                LaunchedEffect(session, GlobalVars.isAutoRunEnabled, isActivityVisible) {
+                    if (!isActivityVisible) session?.runCountdown()
+                }
+                LaunchedEffect(AppStateManager.currentMode) {
+                    if (AppStateManager.currentMode == AppMode.Run) closeMainUI()
+                }
+                BackHandler(enabled = session != null) { session?.close(play = false, refresh = false) }
+                SettingsWebPanel(
+                    modifier = Modifier.fillMaxSize(),
+                    surface = "overlay",
+                    onInteraction = { GlobalVars.isAutoRunEnabled = false }
+                ) { method, params ->
+                    when (method) {
+                        "getStartupState" -> JsonObject().apply {
+                            addProperty("ready", session != null)
+                            addProperty("status", if (isLoadFinished) "LOCAL_ERROR" else "CHECKING")
+                            addProperty("message", status)
+                        }
+                        "retryStartup" -> {
+                            if (session == null && isLoadFinished) {
+                                isLoadStarted = false
+                                isLoadFinished = false
+                                loadStatus.value = DEFAULT_LOAD_STATUS
+                                startJarLoading()
+                            }
+                            JsonObject()
+                        }
+                        else -> session?.request(method, params)
+                            ?: throw SettingsRequestException(503, "设备设置正在初始化")
                     }
-                } else {
-                    closeMainUI()
                 }
             }
         }
 
         windowManager.addView(composeView, windowParams)
-        val qqStatus = QqAuthorizationManager.status.value
-        updateAuthorizationVisibility(qqStatus.busy || qqStatus.hideSettings)
+        updateSettingsVisibility()
         lifecycleRegistry.currentState = Lifecycle.State.RESUMED
     }
 
-    private fun updateAuthorizationVisibility(busy: Boolean) {
+    private fun updateSettingsVisibility() {
         val view = composeView ?: return
-        // Retain the settings draft while allowing the external authorization window to receive touches.
-        view.visibility = if (busy) View.INVISIBLE else View.VISIBLE
+        val qqStatus = QqAuthorizationManager.status.value
+        // Retain the draft while the launcher settings or external authorization owns the foreground.
+        val hidden = isActivityVisible || qqStatus.busy || qqStatus.hideSettings
+        view.visibility = if (hidden) View.INVISIBLE else View.VISIBLE
+        isWindowVisible = !hidden
         val hiddenFlags = WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-        windowParams.flags = if (busy) windowParams.flags or hiddenFlags else windowParams.flags and hiddenFlags.inv()
+        windowParams.flags = if (hidden) windowParams.flags or hiddenFlags else windowParams.flags and hiddenFlags.inv()
         windowManager.updateViewLayout(view, windowParams)
     }
 
     private fun handleUIIClose() {
-        when (AppStateManager.currentMode) {
-            AppMode.BugReport, AppMode.Main -> {
-                updateWindowSizeForCurrentMode()
-            }
-
-            else -> {
-                closeMainUI()
-                if (!GlobalVars.isPlaying.value) {// if the script is pause, then run the script for a little bit, show the message, then pause again
-                    ShowMessage("当前已暂停运行。\n若要启动辅助，请通过悬浮窗启动。", false)
-                }
-                startService(Intent(this, ControlWindowService::class.java))
-            }
+        closeMainUI()
+        if (!GlobalVars.isPlaying.value) {
+            ShowMessage("当前已暂停运行。\n若要启动辅助，请通过悬浮窗启动。", false)
         }
-    }
-
-    @Composable
-    private fun FixedDpiTheme(targetDpi: Float = TARGET_DPI, content: @Composable () -> Unit) {
-        val targetDensityValue = targetDpi / 160f
-        val customDensity = Density(density = targetDensityValue, fontScale = 1f)
-
-        CompositionLocalProvider(LocalDensity provides customDensity) {
-            content()
-        }
+        startService(Intent(this, ControlWindowService::class.java))
     }
 
     private fun calculateWindowSize(): Pair<Int, Int> {
         val displayMetrics = resources.displayMetrics
         val screenWidth = displayMetrics.widthPixels
         val screenHeight = displayMetrics.heightPixels
-
-        val height = when (AppStateManager.currentMode) {
-            AppMode.BugReport -> WindowManager.LayoutParams.WRAP_CONTENT
-            AppMode.Main, AppMode.SwitchAccount -> (screenHeight * HEIGHT_RATIO_MAIN).toInt()
-            else -> (screenHeight * HEIGHT_RATIO_DEFAULT).toInt()
-        }
-
-        return Pair(screenWidth, height)
+        // Size the native window to leave a real gap for input outside the settings panel.
+        val sideMargin = (MAIN_WINDOW_SIDE_MARGIN_DP * displayMetrics.density).roundToInt()
+        return Pair((screenWidth - 2 * sideMargin).coerceAtLeast(1), (screenHeight * HEIGHT_RATIO_MAIN).toInt())
     }
 
     private fun updateWindowSizeForCurrentMode() {
@@ -243,6 +284,7 @@ class UIWindowService : Service(), LifecycleOwner, SavedStateRegistryOwner, View
             windowManager.removeView(composeView)
             composeView = null
         }
+        isWindowVisible = false
         stopSelf()
     }
 
@@ -253,6 +295,7 @@ class UIWindowService : Service(), LifecycleOwner, SavedStateRegistryOwner, View
 
     override fun onDestroy() {
         super.onDestroy()
+        isWindowVisible = false
         // Reset the signal so it can be re-awaited on next service start
         foregroundReady = CompletableDeferred()
         serviceScope.cancel()
@@ -268,10 +311,13 @@ class UIWindowService : Service(), LifecycleOwner, SavedStateRegistryOwner, View
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         updateForegroundRecord()
+        // A projection grant requires a foreground service but does not open another settings window.
+        if (intent == null || intent.getBooleanExtra(PROJECTION_ONLY, false)) return START_NOT_STICKY
         lifecycleRegistry.currentState = Lifecycle.State.STARTED
         QqAuthorizationManager.revealSettings()
+        startJarLoading()
         showFloatingWindow()
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
     private fun updateForegroundRecord() {

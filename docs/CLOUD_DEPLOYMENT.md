@@ -22,6 +22,24 @@ PORT=8080 docker compose up -d --build
 
 API 和网站使用同一入口：`/api/v1` 为 API，`/healthz` 为健康检查。后端仅在 Compose 内部网络提供服务，不单独暴露 `8080`。
 
+## macOS 本地部署（无需 Docker）
+
+首次构建需要 Go 1.22+、Node.js 22.12+ 和 npm，可通过 `brew install go node` 安装。脚本使用当前 macOS 登录用户的 `launchd` 会话在后台运行一个 Go 进程，同时提供网站和 API。
+
+在项目根目录运行：
+
+```bash
+./scripts/macos/sun-server.sh start
+./scripts/macos/sun-server.sh status
+./scripts/macos/sun-server.sh logs
+./scripts/macos/sun-server.sh stop
+```
+
+- 打开 `http://127.0.0.1:3280`，首次初始化时使用 `logs` 输出中最新的一次性安装码。首次启动会构建前后端，之后复用产物。更新代码后执行 `./scripts/macos/sun-server.sh start --rebuild` 重新构建并启动。
+- SQLite 和日志默认保存在 `~/Library/Application Support/COCGO/cloud/` 下当前检出目录对应的子目录中，完整路径可用 `status` 查看。每次启动时可用 `SUN_CLOUD_DATA_DIR` 指定当前用户的后台进程可访问的数据目录。
+- 默认监听 `0.0.0.0:3280`，同时支持本机通过 `127.0.0.1` 访问和局域网设备接入。Android 客户端填写 `http://<Mac 的局域网 IP>:3280/api/v1`。只在 Mac 本机使用时，可设置 `SUN_CLOUD_LISTEN=127.0.0.1:3280`。
+- 若需要发布签名插件，在启动时传入 `PLUGIN_PUBLIC_KEY`，见[插件发布指南](PLUGIN_RELEASE.md#一次性配置)。
+
 ## Windows 本地部署（无需 Docker）
 
 后端设置 `WEB_DIR` 后会直接托管前端静态文件，一个 `sun-cloud.exe` 进程即可替代 Compose 中的 backend + nginx，API、网站和 `/healthz` 仍是同一入口。
@@ -49,7 +67,7 @@ scripts\windows\sun-server.bat
 ## 首次网页初始化
 
 1. 打开网站，自动进入初始化页面。
-2. 从部署平台的 **backend 容器日志**复制一次性安装码，也可执行 `docker compose logs backend` 查看。
+2. 从服务日志复制一次性安装码。Compose 部署可执行 `docker compose logs backend`，macOS 可执行 `./scripts/macos/sun-server.sh logs`，Windows 可查看启动窗口。
 3. 在网页填写安装码、管理账号邮箱和密码，完成初始化并自动登录。邮箱用于登录标识，不需要配置 SMTP，也不发送验证码。页面使用一个管理账号统一管理设备，不提供用户注册流程。
 4. 在网页复制连接 Token，在 Android 内置 Web 页的远端同步设置中填写服务端地址、Token 和设备名称，然后启用同步；设备会自动注册到当前管理账号下。
 5. 在服务端页面顶部切换设备标签，再在“主页设置 / 账号设置”中编辑并发布该设备的配置。每台设备的内容和版本互相独立，客户端按版本自动接收更新。
@@ -69,6 +87,8 @@ JWT 签名密钥第一次启动时自动生成并持久化，容器重启后已�
 客户端云端地址使用网站的同源 API，例如 `https://config.example.com/api/v1`。旧部署若直接使用 `:8080/api/v1`，升级后需要改为网站入口。
 
 客户端始终使用 APK 内置的 Web 设置页面，保留“主页设置 / 账号设置”两个 Tab。启用远端同步后，本地设置只读，配置在服务端 Web 页面修改并发布；关闭远端同步后恢复本地编辑。
+
+在服务端选中设备并打开“设备工具”，可以设置功能插件的启停、提取存档的版本和序号，以及 QQ 授权库序号。这些设置随设备配置发布。选择“获取 QQ 授权”时，在线设备会打开授权工具，页面下方显示当前扫码二维码。扫码成功后授权保存在该设备上，二维码会从网页移除。存档提取、删除、插件安装和截屏反馈在设备端执行。
 
 客户端以安装时生成并保存在私有存储的稳定设备标识注册当前设备。服务端顶部的设备标签用于选择目标设备，设备名称可修改，配置不会因为重名而合并。新设备从空配置、版本 `0` 开始，不复制其他设备的设置；同一管理账号下的各设备分别维护版本。其他账号不能读取、修改或列出这些设备。
 

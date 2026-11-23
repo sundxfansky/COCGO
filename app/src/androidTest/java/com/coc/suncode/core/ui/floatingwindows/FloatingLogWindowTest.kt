@@ -7,6 +7,8 @@ import android.provider.Settings
 import android.view.InputDevice
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewGroup
+import android.webkit.WebView
 import android.view.WindowManager
 import android.view.inspector.WindowInspector
 import androidx.compose.foundation.background
@@ -20,10 +22,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalWindowInfo
-import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
-import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -31,6 +31,8 @@ import androidx.test.filters.SdkSuppress
 import com.coc.suncode.core.data.database.GlobalVars
 import com.coc.suncode.core.util.basic.ShowMessage
 import java.io.File
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitCancellation
@@ -118,8 +120,9 @@ class FloatingLogWindowTest {
         compose.runOnIdle { assertTrue(GlobalVars.isPlaying.value) }
         compose.onNodeWithContentDescription("日志").performClick()
         compose.mainClock.advanceTimeByFrame()
-        compose.onNodeWithText("运行日志").assertIsDisplayed()
         val logWindow = findLogWindow()
+        val webView = findLogWebView(logWindow)
+        waitForWebLog(webView, "document.querySelector('.floating-logs h1')?.textContent === '运行日志'")
         verifyWindowMode(logWindow, interactive = false)
         tapWindowCenter(logWindow)
         compose.mainClock.advanceTimeByFrame()
@@ -129,13 +132,13 @@ class FloatingLogWindowTest {
             ShowMessage("日志浮层测试消息")
         }
         compose.mainClock.advanceTimeByFrame()
-        compose.onNodeWithText("日志浮层测试消息", substring = true).assertIsDisplayed()
+        waitForWebLog(webView, "document.body.textContent.includes('日志浮层测试消息')")
         captureLogWindow(isAtRightSide)
         verifyCaptureHidesAndRestoresLogWindow(logWindow)
 
         // Hiding the control strip must not dismiss the independent log window or stop the bot.
         compose.mainClock.advanceTimeBy(3000)
-        compose.onNodeWithText("运行日志").assertIsDisplayed()
+        waitForWebLog(webView, "document.querySelector('.floating-logs h1')?.textContent === '运行日志'")
         compose.runOnIdle { assertTrue(GlobalVars.isPlaying.value) }
 
         compose.onNodeWithContentDescription("Main Icon").performClick()
@@ -155,12 +158,15 @@ class FloatingLogWindowTest {
         }
         verifyWindowMode(logWindow, interactive = true)
         compose.runOnIdle { assertTrue(GlobalVars.isPlaying.value) }
-        compose.onNodeWithContentDescription("清空日志").performClick()
-        compose.mainClock.advanceTimeByFrame()
-        compose.onNodeWithText("暂无日志").assertIsDisplayed()
-        compose.onNodeWithContentDescription("关闭日志").performClick()
-        compose.mainClock.advanceTimeByFrame()
-        compose.onNodeWithText("运行日志").assertDoesNotExist()
+        val clear = """document.querySelector('[aria-label="清空日志"]')"""
+        waitForWebLog(webView, "$clear?.disabled === false")
+        evaluate(webView, "$clear.click()")
+        waitForWebLog(webView, "document.body.textContent.includes('暂无日志')")
+        evaluate(webView, """document.querySelector('[aria-label="关闭日志"]').click()""")
+        compose.waitUntil(5_000) {
+            compose.mainClock.advanceTimeByFrame()
+            !LogOverlayCaptureGuard.isLogVisible()
+        }
         compose.runOnIdle { assertTrue(GlobalVars.isPlaying.value) }
         assertTrue(!LogOverlayCaptureGuard.isLogVisible())
     }
@@ -173,6 +179,38 @@ class FloatingLogWindowTest {
             }
         }
         return requireNotNull(result) { "Log window was not added to WindowManager" }
+    }
+
+    private fun findLogWebView(window: View): WebView {
+        fun find(view: View): WebView? = when (view) {
+            is WebView -> view
+            is ViewGroup -> (0 until view.childCount).firstNotNullOfOrNull { find(view.getChildAt(it)) }
+            else -> null
+        }
+        var result: WebView? = null
+        compose.waitUntil(5_000) {
+            InstrumentationRegistry.getInstrumentation().runOnMainSync { result = find(window) }
+            result != null
+        }
+        return requireNotNull(result)
+    }
+
+    private fun waitForWebLog(view: WebView, expression: String) {
+        // WebView timers use real time while the floating strip animations use the Compose clock.
+        compose.waitUntil(5_000) { evaluate(view, expression) == "true" }
+    }
+
+    private fun evaluate(view: WebView, expression: String): String? {
+        var result: String? = null
+        val done = CountDownLatch(1)
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            view.evaluateJavascript(expression) {
+                result = it
+                done.countDown()
+            }
+        }
+        assertTrue(done.await(3, TimeUnit.SECONDS))
+        return result
     }
 
     private fun verifyWindowMode(window: View, interactive: Boolean) {

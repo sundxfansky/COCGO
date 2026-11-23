@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useRef } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 
 export function Icon({ name, size = 20, ...props }) {
   const paths = {
@@ -43,6 +43,65 @@ export function Modal({ title, children, onClose }) {
     <div className="modal-heading"><h2 id={id}>{title}</h2><button type="button" className="icon-button" aria-label="关闭" onClick={onClose}><Icon name="close"/></button></div>
     {children}
   </dialog>;
+}
+
+export function EmbeddedSelect({ id, label, value, options, disabled, onChange }) {
+  const popup = useRef(null);
+  const popupId = useId();
+  const [expanded, setExpanded] = useState(false);
+  const selectedLabel = options.find((option) => option.value === value)?.label;
+
+  useEffect(() => {
+    if (!expanded) return;
+    const close = () => popup.current?.close();
+    if (disabled) close();
+    window.addEventListener('resize', close);
+    return () => window.removeEventListener('resize', close);
+  }, [expanded, disabled]);
+
+  function open(event) {
+    // WebView in an Android overlay has no activity token for its native select window.
+    // Position an HTML dialog next to the field within the WebView instead.
+    const anchor = event.currentTarget.getBoundingClientRect();
+    const dialog = popup.current;
+    const viewport = document.documentElement;
+    const inset = 8;
+    const gap = 4;
+    const width = Math.min(Math.max(anchor.width, 180), viewport.clientWidth - 2 * inset);
+    const below = viewport.clientHeight - anchor.bottom - gap - inset;
+    const above = anchor.top - gap - inset;
+    dialog.style.width = `${width}px`;
+    dialog.style.left = `${Math.min(Math.max(inset, anchor.left), viewport.clientWidth - width - inset)}px`;
+    dialog.style.maxHeight = 'none';
+    dialog.showModal();
+    const openAbove = dialog.offsetHeight > below && above > below;
+    dialog.style.maxHeight = `${openAbove ? above : below}px`;
+    dialog.style.top = `${openAbove ? anchor.top - gap - dialog.offsetHeight : anchor.bottom + gap}px`;
+    dialog.querySelector('[aria-pressed="true"]')?.focus();
+    setExpanded(true);
+  }
+
+  return <>
+    <button type="button" id={id} className="select-trigger" disabled={disabled} onClick={open}
+      aria-label={`${label}，${selectedLabel}`} aria-haspopup="dialog" aria-expanded={expanded} aria-controls={popupId}>
+      <span>{selectedLabel}</span><Icon name="arrow" size={14}/>
+    </button>
+    <dialog ref={popup} id={popupId} className="select-popup" aria-label={label}
+      onClose={() => setExpanded(false)}
+      onClick={(event) => { if (event.target === event.currentTarget) event.currentTarget.close(); }}>
+      <div className="select-options">
+        {options.map((option) => {
+          const selected = option.value === value;
+          return <button key={option.value} type="button" disabled={disabled} aria-pressed={selected} onClick={() => {
+            if (!selected) onChange(option.value);
+            popup.current.close();
+          }}>
+            <span>{option.label}</span>{selected && <Icon name="check" size={16}/>}
+          </button>;
+        })}
+      </div>
+    </dialog>
+  </>;
 }
 
 export function Card({ title, subtitle, icon = 'settings', accent = 'blue', help, children, className = '' }) {

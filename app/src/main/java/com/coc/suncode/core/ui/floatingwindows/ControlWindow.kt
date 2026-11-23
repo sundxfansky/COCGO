@@ -15,7 +15,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -103,8 +102,8 @@ fun ControlWindow(
     var internalInteractionCount by remember { mutableIntStateOf(0) }
     var isPlaying by remember { GlobalVars.isPlaying }
     var showLogs by remember { mutableStateOf(false) }
+    val logVisible = showLogs && !UIWindowService.isSettingsVisible
     var logInteractionEnabled by remember { mutableStateOf(false) }
-    val logLines by ShowMessage.logLines.collectAsState()
     var accountSwitchState by remember { mutableStateOf(AccountSwitchState()) }
 
     LaunchedEffect(isExpanded, GlobalVars.pluginUI, isSwitchingAccount) {
@@ -138,9 +137,9 @@ fun ControlWindow(
         // Resuming automation always returns the log window to touch-through mode.
         if (isPlaying) logInteractionEnabled = false
     }
-    // Viewing logs must not pause automation or duplicate its temporary messages.
-    DisposableEffect(showLogs) {
-        ShowMessage.setLogOverlayVisible(showLogs)
+    // Suppress duplicate messages only while the separate log window is displayed.
+    DisposableEffect(logVisible) {
+        ShowMessage.setLogOverlayVisible(logVisible)
         onDispose { ShowMessage.setLogOverlayVisible(false) }
     }
 
@@ -285,6 +284,7 @@ fun ControlWindow(
                                     if (GlobalVars.isAdPlaying) return@clickable
                                     internalInteractionCount++
                                     isPlaying = !isPlaying
+                                    if (isPlaying) AppStateManager.setMode(AppMode.Run)
                                     if (!isPlaying) {
                                         ShowMessage("暂停中，请稍后...")
                                         restoreDefaultInputMethod()
@@ -304,6 +304,7 @@ fun ControlWindow(
                                     if (GlobalVars.isAdPlaying) return@clickable
                                     internalInteractionCount++
                                     isPlaying = !isPlaying
+                                    if (isPlaying) AppStateManager.setMode(AppMode.Run)
                                     if (!isPlaying) {
                                         ShowMessage("暂停中，请稍后...")
                                         restoreDefaultInputMethod()
@@ -361,9 +362,8 @@ fun ControlWindow(
         }
     )
 
-    if (showLogs) {
+    if (logVisible) {
         FloatingLogOverlay(
-            logLines = logLines,
             screenWidth = screenWidth,
             screenHeight = screenHeight,
             interactive = logInteractionEnabled,

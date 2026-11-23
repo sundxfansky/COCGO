@@ -21,6 +21,7 @@ class ProjectionPermissionHelper(private val activity: ComponentActivity) {
             // Android 14+ requires a running foreground service with
             // FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION before calling getMediaProjection()
             val serviceIntent = Intent(activity, UIWindowService::class.java)
+                .putExtra(UIWindowService.PROJECTION_ONLY, true)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 activity.startForegroundService(serviceIntent)
             } else {

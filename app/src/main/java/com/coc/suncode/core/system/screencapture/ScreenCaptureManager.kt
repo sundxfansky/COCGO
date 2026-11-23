@@ -349,6 +349,11 @@ object ScreenCaptureManager {
         LogOverlayCaptureGuard.withoutLogs { captureWithoutLogs(asBitmap) }
     }
 
+    /** Capture a fresh display frame after the feedback page has been hidden. */
+    suspend fun captureFeedbackBitmap(): Bitmap? = captureMutex.withLock {
+        LogOverlayCaptureGuard.withoutLogs { captureViaShell(asBitmap = true) as? Bitmap }
+    }
+
     private suspend fun captureWithoutLogs(asBitmap: Boolean): Any? {
         if (LogOverlayCaptureGuard.isLogVisible()) {
             // Projection caches can retain a frame containing logs after the window is hidden.

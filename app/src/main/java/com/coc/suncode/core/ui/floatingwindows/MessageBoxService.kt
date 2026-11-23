@@ -8,21 +8,20 @@ import android.os.Build
 import android.os.IBinder
 import android.view.Gravity
 import android.view.WindowManager
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import android.text.StaticLayout
+import android.text.TextPaint
+import android.text.TextUtils
+import android.util.Base64
+import android.webkit.WebView
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.viewinterop.AndroidView
+import com.coc.suncode.core.ui.web.SettingsRequestException
+import com.coc.suncode.core.ui.web.SettingsWebPanel
+import com.google.gson.JsonArray
+import com.google.gson.JsonObject
+import kotlin.math.roundToInt
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -31,18 +30,11 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalWindowInfo
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
@@ -62,7 +54,6 @@ import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
-import com.coc.suncode.core.ui.localcomponents.LocalCustomButton
 import com.coc.suncode.core.util.basic.ShowMessage
 import com.coc.suncode.core.util.exit.AppExitHelper
 import timber.log.Timber
@@ -242,8 +233,7 @@ class MessageBoxService : Service(), LifecycleOwner, SavedStateRegistryOwner {
             }
         }
 
-        if (isVisible) {
-
+        if (isVisible && !UIWindowService.isSettingsVisible) {
             // Effect to update window position based on size and target rb-corner
             LaunchedEffect(messageX, messageY, boxSize) {
                 if (composeView != null && boxSize != IntSize.Zero) {
@@ -264,17 +254,54 @@ class MessageBoxService : Service(), LifecycleOwner, SavedStateRegistryOwner {
                 }
             }
 
-            Box(
-                modifier = Modifier
-                    .background(Color.Black)
-                    .onGloballyPositioned { coordinates ->
-                        boxSize = coordinates.size
-                    }) {
-                Text(
-                    text = messageText, color = Color.White, fontSize = messageFontSize, fontWeight = FontWeight.Normal
-                )
-            }
+            HtmlMessage(
+                text = messageText,
+                fontSize = messageFontSize,
+                modifier = Modifier.onGloballyPositioned { boxSize = it.size }
+            )
         }
+    }
+
+    @Composable
+    private fun HtmlMessage(text: String, fontSize: TextUnit, modifier: Modifier) {
+        val density = LocalDensity.current
+        val fontPixels = with(density) { fontSize.toPx() }
+        val layout = remember(text, fontPixels, resources.displayMetrics.widthPixels) {
+            val paint = TextPaint().apply { textSize = fontPixels }
+            val measuredWidth = text.lineSequence().maxOf { paint.measureText(it) }
+            val width = measuredWidth.roundToInt().plus(8)
+                .coerceIn(8, resources.displayMetrics.widthPixels.coerceAtLeast(8))
+            val height = StaticLayout.Builder.obtain(text, 0, text.length, paint, width - 4)
+                .build().height + 4
+            IntSize(width, height)
+        }
+        val (width, height) = with(density) { layout.width.toDp() to layout.height.toDp() }
+        AndroidView(
+            modifier = modifier.size(width, height),
+            factory = { context ->
+                WebView(context).apply {
+                    // Transient text is escaped and rendered without a bridge or network access.
+                    settings.blockNetworkLoads = true
+                    settings.allowFileAccess = false
+                    settings.allowContentAccess = false
+                    setBackgroundColor(0)
+                    isVerticalScrollBarEnabled = false
+                    isHorizontalScrollBarEnabled = false
+                }
+            },
+            update = { view ->
+                val html = """
+                    <!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+                    <body style="margin:0;padding:0 2px;background:black;color:white;font-family:sans-serif;
+                        font-size:${fontSize.value}px;white-space:pre-wrap;overflow-wrap:anywhere">${TextUtils.htmlEncode(text)}</body>
+                """.trimIndent()
+                if (view.tag != html) {
+                    view.tag = html
+                    view.loadData(Base64.encodeToString(html.toByteArray(), Base64.NO_WRAP), "text/html; charset=utf-8", "base64")
+                }
+            },
+            onRelease = { it.destroy() }
+        )
     }
 
     // --- Ad overlay window management ---
@@ -290,7 +317,9 @@ class MessageBoxService : Service(), LifecycleOwner, SavedStateRegistryOwner {
 
         val displayMetrics = resources.displayMetrics
         val adParams = WindowManager.LayoutParams(
-            displayMetrics.widthPixels, WindowManager.LayoutParams.WRAP_CONTENT, windowType,
+            (displayMetrics.widthPixels * 0.9).roundToInt(),
+            (displayMetrics.heightPixels * 0.7).roundToInt(),
+            windowType,
             // Focusable so links are clickable (no FLAG_NOT_FOCUSABLE)
             WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN, PixelFormat.TRANSLUCENT
         ).apply {
@@ -328,119 +357,39 @@ class MessageBoxService : Service(), LifecycleOwner, SavedStateRegistryOwner {
 
     @Composable
     private fun AdOverlayContent() {
-        val context = LocalContext.current
-        // Cap the overlay height at 95% of screen to prevent overflow on long ad lists
-        // Use LocalWindowInfo for accurate container dimensions instead of system config
-        val screenHeightDp = with(LocalDensity.current) {
-            LocalWindowInfo.current.containerSize.height.toDp()
-        }
-        // Countdown timer that ticks every second using dynamic duration
-        LaunchedEffect(isAdVisible, adDurationSeconds) {
-            if (isAdVisible) {
-                for (remaining in adDurationSeconds downTo 1) {
-                    adCountdown = remaining
-                    delay(1000L)
-                }
-                adCountdown = 0
+        LaunchedEffect(adDurationSeconds) {
+            for (remaining in adDurationSeconds downTo 1) {
+                adCountdown = remaining
+                delay(1000L)
             }
+            adCountdown = 0
         }
-
-        if (isAdVisible) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = screenHeightDp * 0.95f)
-                    .background(Color(0xCC000000)),
-                contentAlignment = Alignment.Center
-            ) {
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth(0.9f)
-                        .padding(vertical = 24.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    color = Color.White,
-                    shadowElevation = 8.dp
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            text = "广告剩余: ${adCountdown}秒",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.Black,
-                            modifier = Modifier.padding(bottom = 4.dp)
-                        )
-
-                        // Use weight so the list flexes within the height-constrained parent
-                        AdList(context)
-
-                        HorizontalDivider(
-                            modifier = Modifier.padding(vertical = 4.dp),
-                            color = Color.LightGray
-                        )
-
-                        Text(
-                            text = "官网注册账号并赞助，可以免广告。每天仅需0.25卡班积分，用多久扣多少，精确到分钟。\n\n免费用户不限制多开数量，但多开超过2个账号后广告时间会成比例增加。广告播放时，只能退出辅助或等待，不能进行其他操作。",
-                            fontSize = 8.sp,
-                            color = Color.Gray,
-                            modifier = Modifier.align(Alignment.CenterHorizontally)
-                        )
-
-                        // Exit button to let users quit the app during ad playback
-                        LocalCustomButton(
-                            text = "退出辅助",
-                            onClick = { AppExitHelper.exitApplication(context) }
-                        )
-                    }
+        SettingsWebPanel(surface = "advertisement", modifier = Modifier.fillMaxSize()) { method, params ->
+            when (method) {
+                "getAdvertisement" -> JsonObject().apply {
+                    addProperty("seconds", adCountdown)
+                    add("items", JsonArray().apply {
+                        adItems.forEach { item ->
+                            add(JsonObject().apply {
+                                addProperty("content", item.content)
+                                addProperty("hasLink", item.link != null)
+                            })
+                        }
+                    })
                 }
-            }
-        }
-    }
-
-    // Extracted ad list into a ColumnScope extension so weight() modifier is available
-    @Composable
-    private fun ColumnScope.AdList(context: android.content.Context) {
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f, fill = false),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            items(adItems) { item ->
-                if (item.link != null) {
-                    Text(
-                        text = item.content,
-                        fontSize = 13.sp,
-                        color = Color(0xFF2196F3),
-                        textDecoration = TextDecoration.Underline,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                try {
-                                    val intent = Intent(
-                                        Intent.ACTION_VIEW, item.link.toUri()
-                                    ).apply {
-                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                    }
-                                    context.startActivity(intent)
-                                } catch (e: Exception) {
-                                    Timber.e(e, "Failed to open ad link")
-                                }
-                            }
-                            .padding(vertical = 4.dp)
-                    )
-                } else {
-                    Text(
-                        text = item.content,
-                        fontSize = 13.sp,
-                        color = Color.DarkGray,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp)
-                    )
+                "openAdvertisementLink" -> {
+                    // Accept only links from the currently displayed items and standard browser schemes.
+                    val index = params.get("index")?.asInt ?: -1
+                    val uri = adItems.getOrNull(index)?.link?.toUri()
+                    require(uri?.scheme in setOf("http", "https")) { "无效的链接" }
+                    startActivity(Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    JsonObject()
                 }
+                "exitAdvertisement" -> {
+                    AppExitHelper.exitApplication(this@MessageBoxService)
+                    JsonObject()
+                }
+                else -> throw SettingsRequestException(404, "不支持的操作")
             }
         }
     }

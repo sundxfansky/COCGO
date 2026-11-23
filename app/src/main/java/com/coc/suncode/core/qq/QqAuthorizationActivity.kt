@@ -8,21 +8,14 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
+import com.coc.suncode.core.ui.web.SettingsRequestException
+import com.coc.suncode.core.ui.web.SettingsWebPanel
+import com.google.gson.JsonObject
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -41,15 +34,17 @@ class QqAuthorizationActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            val status by QqAuthorizationManager.status.collectAsState()
-            MaterialTheme {
-                Column(
-                    Modifier.fillMaxSize().padding(24.dp),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(status.message)
-                    Button(onClick = { finish() }) { Text("取消并返回") }
+            // Status stays on the bundled page while Android handles the external activity result.
+            SettingsWebPanel(surface = "authorization", modifier = Modifier.fillMaxSize()) { method, _ ->
+                when (method) {
+                    "getAuthorizationActivityStatus" -> JsonObject().apply {
+                        addProperty("message", QqAuthorizationManager.status.value.message)
+                    }
+                    "closeAuthorizationActivity" -> {
+                        finish()
+                        JsonObject()
+                    }
+                    else -> throw SettingsRequestException(404, "不支持的授权操作")
                 }
             }
         }
@@ -60,6 +55,7 @@ class QqAuthorizationActivity : ComponentActivity() {
                     model.externalLaunched = true
                     try {
                         launcher.launch(Intent().setComponent(ComponentName(QqToolBackend.PACKAGE, QqToolBackend.ACTIVITY)))
+                        model.markToolOpened()
                     } catch (_: Exception) {
                         model.result.complete(null)
                     }
@@ -96,6 +92,10 @@ class QqAuthorizationViewModel : ViewModel() {
     private var started = false
     private var request: QqAuthorizationManager.Request? = null
     val resetStarted: Boolean get() = request?.resetStarted == true
+
+    fun markToolOpened() {
+        request?.toolOpened?.complete(Unit)
+    }
 
     fun start(
         context: Context, id: String, slot: Int, login: Boolean, restoreLaunched: Boolean,

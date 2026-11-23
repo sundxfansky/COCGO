@@ -3,7 +3,10 @@ package com.coc.suncode
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.lifecycleScope
+import com.coc.suncode.core.data.database.GlobalVars
+import com.coc.suncode.core.ui.floatingwindows.UIWindowService
 import com.coc.suncode.core.system.checkpermissions.CheckRootScreen
 import com.coc.suncode.core.system.screencapture.ProjectionPermissionHelper
 import com.coc.suncode.core.system.screencapture.ScreenCaptureManager
@@ -12,6 +15,8 @@ import com.coc.suncode.jar.code.universal.yolo.YoloDetector
 import com.coc.suncode.jar.code.universal.ocr.PpOcrEngine
 import com.coc.suncode.core.util.fileactions.LogHelper
 import com.coc.suncode.core.data.cloud.CloudSyncManager
+import com.coc.suncode.statehelper.AppMode
+import com.coc.suncode.statehelper.AppStateManager
 import com.topjohnwu.superuser.Shell
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -21,6 +26,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = true
         // Install the in-app log sinks before model extraction so startup failures are visible.
         ShowMessage.init(applicationContext)
         LogHelper.initTimber(this)
@@ -53,8 +59,21 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        UIWindowService.isActivityVisible = true
+        if (GlobalVars.isConfigLoaded && AppStateManager.currentMode == AppMode.Run) {
+            // Returning to an existing launcher page must pause the active automation session.
+            GlobalVars.isPlaying.value = false
+            AppStateManager.setMode(AppMode.Main)
+            GlobalVars.autoRunTimer = 60
+            GlobalVars.isAutoRunEnabled = true
+        }
         ShowMessage.record("MainActivity.onResume：启动云同步检查")
         CloudSyncManager.ensureStarted(this)
+    }
+
+    override fun onPause() {
+        UIWindowService.isActivityVisible = false
+        super.onPause()
     }
 
     override fun onDestroy() {

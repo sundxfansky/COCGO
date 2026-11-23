@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1c07f2b30ccf1d49",
+  "schemaVersion": "c83b23d7a197afa1",
   "modules": [
     {
       "name": "GLOBAL_SETTINGS",
@@ -2876,6 +2876,56 @@
           "kind": "number"
         }
       ]
+    }
+  ],
+  "featurePlugins": [
+    {
+      "id": "login",
+      "name": "登录"
+    },
+    {
+      "id": "main_attack",
+      "name": "主世界进攻"
+    },
+    {
+      "id": "builder_attack",
+      "name": "夜世界进攻"
+    },
+    {
+      "id": "clan",
+      "name": "部落"
+    },
+    {
+      "id": "main_research",
+      "name": "主世界研究"
+    },
+    {
+      "id": "builder_research",
+      "name": "夜世界研究"
+    },
+    {
+      "id": "upgrade",
+      "name": "建筑与城墙升级"
+    },
+    {
+      "id": "obstacles",
+      "name": "障碍清理"
+    },
+    {
+      "id": "collection",
+      "name": "资源与奖励收集"
+    },
+    {
+      "id": "heroes",
+      "name": "英雄管理"
+    },
+    {
+      "id": "tutorial",
+      "name": "教程检查"
+    },
+    {
+      "id": "account_create",
+      "name": "批量建号"
     }
   ]
 }

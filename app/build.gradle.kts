@@ -97,6 +97,7 @@ val buildSettingsWeb by tasks.registering(Exec::class) {
         exclude("node_modules/**", "dist/**", "src/schema.json")
     })
     inputs.dir("src/main/java/com/coc/suncode/jar/ui/schema")
+    inputs.file("src/main/assets/feature-plugins.json")
     outputs.dir(rootProject.file("web/dist"))
 }
 val syncSettingsWebAssets by tasks.registering(Sync::class) {
@@ -438,6 +439,7 @@ dependencies {
     implementation(libs.androidx.webkit)
     implementation(libs.okhttp)
     implementation(libs.gson)
+    implementation("com.google.zxing:core:3.5.3")
     implementation(libs.timber)
     implementation(libs.mlkit.text.recognition.chinese)
     implementation(libs.mlkit.text.recognition)
