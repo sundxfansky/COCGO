@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import schema from './schema.json';
 import SettingsEditor, { acceptRuntimeSchema } from './SettingsEditor.jsx';
 import DeviceTools, { ServerDeviceTools } from './DeviceTools.jsx';
+import RemoteRuntimeControls from './RuntimeControls.jsx';
 import { Help, Icon, Modal, Toggle } from './components.jsx';
 import { canApplySnapshot, countAccounts, fetchChangedConfig, normalizeConfig, validateConfig } from './model.js';
 import { apiRequest, isLocal, nativeRequest } from './transport.js';
@@ -153,6 +154,7 @@ function DeviceWorkspace({ device, token, active, onDeviceState, showTools }) {
           onClick={() => setServerTools(!serverTools)}>{serverTools ? '返回设置' : '设备工具'}</button>}
         <button type="button" className="icon-button" disabled={busy} aria-label="刷新当前设备配置" title="刷新配置" onClick={() => dirty ? setReloadConfirm(true) : reload()}><Icon name="refresh"/></button></div>
     </div>
+    {!LOCAL && active && <RemoteRuntimeControls device={device} token={token}/>}
     {!config ? <div className="loading-state" role="status"><span className="spinner"/>{message || '正在读取设备设置…'}{message && <button type="button" onClick={reload}>重试</button>}</div> : <>
       <div className="overview-grid" hidden={showTools}><div className="overview-card"><span className="stat-icon blue"><Icon name="users"/></span><div><span>独立账号</span><strong>{accounts}<small>个</small></strong></div><span className="stat-extra">按账号管理</span></div><div className="overview-card"><span className="stat-icon teal"><Icon name="bolt"/></span><div><span>已开启</span><strong>{enabledCount}<small>个</small></strong></div><span className="stat-extra">随时调整</span></div><div className="overview-card"><span className="stat-icon violet"><Icon name="cloud"/></span><div><span>{LOCAL ? '同步状态' : '配置版本'}</span><strong className="status-value">{LOCAL ? metadata.connection?.enabled ? '远端同步' : '本地模式' : `v${version ?? 0}`}</strong></div><span className="stat-extra">{lastChecked ? `${new Date(lastChecked).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })} 检查` : '等待检查'}</span></div></div>
       {readOnly && <div className="readonly-banner"><Icon name="cloud" size={19}/><span>配置由服务端管理</span><Help>请在服务端选择这台设备进行修改。本地页面不再保存设置，服务端有新版本时会自动更新。关闭远端同步后可恢复本地编辑。</Help>{metadata.sync?.message && <small>{metadata.sync.message}</small>}</div>}

@@ -106,6 +106,10 @@ fun CheckRootScreen() {
     LaunchedEffect(settings, GlobalVars.isAutoRunEnabled, activityVisible) {
         if (activityVisible) settings?.runCountdown()
     }
+    LaunchedEffect(settings, AppStateManager.currentMode, activityVisible) {
+        // A Web command can leave settings just as a local Run or Pause button can.
+        if (activityVisible && AppStateManager.currentMode == AppMode.Run) settings?.finish()
+    }
     BackHandler(enabled = settings != null) {
         settings?.close(play = false, refresh = false)
     }

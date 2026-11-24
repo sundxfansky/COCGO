@@ -3,6 +3,7 @@ package com.coc.suncode.core.qq
 import android.content.Context
 import android.content.Intent
 import com.coc.suncode.core.data.database.GlobalVars
+import com.coc.suncode.core.ui.floatingwindows.RuntimeControls
 import com.coc.suncode.core.util.basic.ShowMessage
 import com.coc.suncode.core.util.basic.ServerShell
 import java.util.UUID
@@ -111,7 +112,7 @@ object QqAuthorizationManager {
             return null
         }
         val request = synchronized(lock) {
-            if (active != null || clearing) null else Request(UUID.randomUUID().toString(), slot, login, allowCapture).also {
+            if (active != null || clearing || RuntimeControls.isSwitchingAccount) null else Request(UUID.randomUUID().toString(), slot, login, allowCapture).also {
                 active = it
                 mutableStatus.value = Status(true, "准备 QQ 授权序号 $slot", mutableStatus.value.revision, accountSlot = slot)
             }

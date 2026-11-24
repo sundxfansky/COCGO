@@ -22,6 +22,7 @@ type server struct {
 	secret           []byte
 	limiter          authLimiter
 	qqAuthorizations qqAuthorizations
+	deviceControls   deviceControls
 }
 
 type credentials struct {

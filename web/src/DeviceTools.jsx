@@ -2,6 +2,8 @@ import React, { useEffect, useId, useRef, useState } from 'react';
 import { Card, EmbeddedSelect, Modal } from './components.jsx';
 import { settingValue } from './model.js';
 import { apiRequest, nativeRequest } from './transport.js';
+import VillageDetails from './VillageDetails.jsx';
+import { LocalQuickSwitch } from './RuntimeControls.jsx';
 
 function AuthorizationLibrary({ setting, config, onChange, disabled, version, onVersion }) {
   const slot = settingValue(config, setting);
@@ -200,7 +202,11 @@ export default function DeviceTools({ catalog, config, onChange, readOnly, busy,
   const settings = Object.fromEntries(catalog.modules.find((module) => module.scope === 'GLOBAL').settings.map((setting) => [setting.key, setting]));
   const edit = (key, value) => onChange({ ...config, [key]: value });
   const featureRevision = readOnly ? version : null;
+  const exportLabel = catalog.modules.flatMap((module) => module.settings)
+    .find((setting) => setting.key === 'export_game_json')?.displayName;
   return <div className="device-tools">
+    <LocalQuickSwitch/>
+    <VillageDetails config={config} exportLabel={exportLabel} canPublish={readOnly}/>
     {!readOnly && settings.qq_account_slot && <AuthorizationLibrary setting={settings.qq_account_slot} config={config}
       onChange={edit} disabled={busy} version={version} onVersion={onVersion}/>}
     <FeaturePlugins configRevision={featureRevision}/>
@@ -304,6 +310,7 @@ export function ServerDeviceTools({ catalog, config, onChange, busy, deviceId, t
     onChange(next);
   }
   return <div className="device-tools">
+    <VillageDetails config={config} deviceId={deviceId} token={token}/>
     {catalog.featurePlugins?.length > 0 && <Card title="功能插件" accent="violet">
       <div className="field-grid">
         {catalog.featurePlugins.map((plugin) => {

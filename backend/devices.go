@@ -44,6 +44,15 @@ func initDevices(db *sql.DB) error {
 			PRIMARY KEY(user_id,device_id),
 			FOREIGN KEY(user_id,device_id) REFERENCES devices(user_id,id)
 		);
+		CREATE TABLE IF NOT EXISTS device_villages(
+			user_id INTEGER NOT NULL,
+			device_id TEXT NOT NULL,
+			region TEXT NOT NULL,
+			account INTEGER NOT NULL,
+			payload TEXT NOT NULL,
+			PRIMARY KEY(user_id,device_id,region,account),
+			FOREIGN KEY(user_id,device_id) REFERENCES devices(user_id,id)
+		);
 		INSERT OR IGNORE INTO devices(user_id,id,name,updated_at)
 			SELECT user_id,'default','默认设备',updated_at FROM configs;
 		CREATE TRIGGER IF NOT EXISTS register_legacy_config_device AFTER INSERT ON configs

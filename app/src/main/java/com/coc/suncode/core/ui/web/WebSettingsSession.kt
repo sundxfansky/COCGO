@@ -5,9 +5,11 @@ import android.graphics.Bitmap
 import com.coc.suncode.BuildConfig
 import com.coc.suncode.core.data.cloud.CloudSyncManager
 import com.coc.suncode.core.data.database.GlobalVars
+import com.coc.suncode.core.data.village.CocVillageExports
 import com.coc.suncode.core.qq.QqAuthorizationManager
 import com.coc.suncode.core.system.screencapture.ScreenCaptureManager
 import com.coc.suncode.core.ui.floatingwindows.BotRuntime
+import com.coc.suncode.core.ui.floatingwindows.RuntimeControls
 import com.coc.suncode.core.util.basic.ShowMessage
 import com.coc.suncode.core.util.exit.AppExitHelper
 import com.coc.suncode.core.util.fileactions.GameSaveTools
@@ -43,9 +45,15 @@ class WebSettingsSession(
     private val onClose: () -> Unit
 ) {
     private val features by lazy { FeatureStore(context.applicationContext) }
+    private var closed = false
 
     suspend fun request(method: String, params: JsonObject): JsonObject = when (method) {
         "getSettingsControls" -> controls()
+        "getRuntimeControls" -> RuntimeControls.status()
+        "switchRuntimeAccount" -> {
+            RuntimeControls.switchAccount(params.string("account").toIntOrNull() ?: 0)
+            close(play = false, refresh = false)
+        }
         "runSettings" -> close(play = true, refresh = true)
         "pauseSettings" -> close(play = false, refresh = true)
         "closeSettings" -> close(play = false, refresh = false)
@@ -54,6 +62,8 @@ class WebSettingsSession(
             JsonObject()
         }
         "getFeaturePlugins" -> featureState()
+        "listVillageExports" -> withContext(Dispatchers.IO) { CocVillageExports.list() }
+        "getVillageExport", "publishVillageExport" -> villageExport(params, publish = method == "publishVillageExport")
         "changeFeaturePlugin" -> changeFeature(params)
         "getQqAuthorizationStatus" -> qqStatus(slot(params))
         "startQqAuthorization" -> startQq(params)
@@ -84,6 +94,14 @@ class WebSettingsSession(
         else -> editor.request(method, params)
     }
 
+    private suspend fun villageExport(params: JsonObject, publish: Boolean): JsonObject {
+        val slot = CocVillageExports.Slot(params.string("region"), params.string("account").toIntOrNull() ?: 0)
+        val snapshot = withContext(Dispatchers.IO) { CocVillageExports.read(slot) }
+            ?: throw SettingsRequestException(404, "这个账号还没有游戏导出")
+        if (publish) CloudSyncManager.publishVillage(slot, snapshot)
+        return snapshot
+    }
+
     private fun controls() = JsonObject().apply {
         addProperty("autoRun", GlobalVars.isAutoRunEnabled)
         addProperty("seconds", GlobalVars.autoRunTimer)
@@ -107,8 +125,15 @@ class WebSettingsSession(
         GlobalVars.updateWindowPosition = true
         GlobalVars.isPlaying.value = play
         AppStateManager.setMode(AppMode.Run)
-        onClose()
+        finish()
         return JsonObject()
+    }
+
+    internal fun finish() {
+        // Closing the activity can be observed by both the local session and its mode watcher.
+        if (closed) return
+        closed = true
+        onClose()
     }
 
     private suspend fun featureState() = withContext(Dispatchers.IO) {

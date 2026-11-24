@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.coc.suncode.BuildConfig
 import com.coc.suncode.core.data.database.GlobalVars
+import com.coc.suncode.core.data.village.CocVillageExports
 import com.google.gson.JsonObject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -35,6 +36,11 @@ object CloudSyncManager {
         private set
 
     fun ensureStarted(context: Context) { if (sync == null) restart(context) }
+
+    internal suspend fun publishVillage(slot: CocVillageExports.Slot, snapshot: JsonObject) {
+        val connection = sync ?: throw IllegalStateException("请先在主页设置中启用远端同步")
+        connection.publishVillage(slot, snapshot)
+    }
 
     fun stop() {
         generation++

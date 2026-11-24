@@ -1,0 +1,15 @@
+COC village catalog and artwork
+
+ClashKing Assets is the primary source for item metadata, Chinese names and images.
+https://github.com/ClashKingInc/ClashKingAssets/tree/9446c022333c591c4cab4422d745f4e90b1d3b00
+See LICENSE-CLASHKING.txt for the GPLv3 text.
+
+CoC Base Tracker provides supplemental names and artwork for levels and collectibles.
+https://github.com/MasteR-NY/CoC-Base-Tracker/tree/95b96db4a34120ee99d1c815309cbf68aaf62ed4
+See LICENSE-COC-BASE-TRACKER.txt for the MIT license notice.
+Part of the supplemental level artwork is indexed by clash-of-clans-data.
+See LICENSE-CLASH-OF-CLANS-DATA.txt for its MIT license notice.
+
+Clash of Clans and the game artwork belong to Supercell. This is an unofficial
+fan project and is not endorsed by Supercell.
+https://supercell.com/en/fan-content-policy/

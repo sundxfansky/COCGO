@@ -3,8 +3,11 @@ package com.coc.suncode.core.data.cloud
 import android.content.Context
 import android.content.SharedPreferences
 import com.coc.suncode.core.data.websocket.ServerActions
+import com.coc.suncode.core.data.village.CocVillageExports
 import com.coc.suncode.core.qq.QqAuthorizationManager
+import com.coc.suncode.core.ui.floatingwindows.RuntimeControls
 import com.coc.suncode.core.util.basic.ShowMessage
+import com.coc.suncode.core.util.exit.AppExitHelper
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import kotlinx.coroutines.CancellationException
@@ -46,6 +49,16 @@ class CloudConfigSync(
         .followRedirects(false).followSslRedirects(false).build()
     private var job: Job? = null
     private var authorizationJob: Job? = null
+    private var controlJob: Job? = null
+
+    internal suspend fun publishVillage(slot: CocVillageExports.Slot, snapshot: JsonObject) {
+        // Registration is idempotent and can race the first configuration poll after enabling sync.
+        getJson("/devices", "POST", JsonObject().apply {
+            addProperty("id", deviceId)
+            addProperty("name", deviceName)
+        })
+        getJson("/devices/$deviceId/villages/${slot.region}/${slot.account}", "PUT", snapshot)
+    }
 
     fun start(scope: CoroutineScope) {
         if (endpoint.isBlank() || token.isBlank() || job?.isActive == true) return
@@ -79,6 +92,60 @@ class CloudConfigSync(
             }
         }
         authorizationJob = scope.launch(Dispatchers.IO) { pollAuthorization() }
+        controlJob = scope.launch(Dispatchers.IO) { pollControls() }
+    }
+
+    private suspend fun pollControls() {
+        val path = "/devices/$deviceId/control/agent"
+        while (currentCoroutineContext().isActive) {
+            val interval = try {
+                val response = getJson(path, "POST", RuntimeControls.status())
+                response.getAsJsonObject("command")?.let { handleControl(path, it) }
+                3_000L
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                // Fail independently so earlier servers can still sync settings and authorization.
+                10_000L
+            }
+            delay(interval)
+        }
+    }
+
+    private suspend fun handleControl(path: String, command: JsonObject) {
+        val id = command.get("id").asString
+        val action = command.get("action").asString
+        val failure = try {
+            when (action) {
+                "start" -> RuntimeControls.start(context)
+                "pause" -> RuntimeControls.pause()
+                "end" -> RuntimeControls.prepareExit()
+                "switch" -> RuntimeControls.switchAccount(command.get("account").asInt, context)
+                else -> error("不支持的设备操作")
+            }
+            null
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            ShowMessage.record("远端设备操作失败：${error.message}", throwable = error)
+            error.message ?: "设备操作失败，请查看设备日志"
+        }
+        val result = JsonObject().apply {
+            addProperty("id", id)
+            addProperty("status", if (failure == null) "completed" else "failed")
+            if (failure != null) addProperty("message", failure.take(100))
+            add("runtime", RuntimeControls.status())
+        }
+        // Report completion before an exit tears down the network connection and the process.
+        try {
+            getJson(path, "PUT", result)
+        } catch (_: IOException) {
+            delay(500)
+            getJson(path, "PUT", result)
+        }
+        if (action == "end" && failure == null) {
+            withContext(Dispatchers.Main.immediate) { AppExitHelper.exitApplication(context) }
+        }
     }
 
     private suspend fun pollAuthorization() {
@@ -139,6 +206,8 @@ class CloudConfigSync(
         job = null
         authorizationJob?.cancel()
         authorizationJob = null
+        controlJob?.cancel()
+        controlJob = null
     }
 
     private companion object { const val MAX_CONFIG_BYTES = 8 * 1024 * 1024L }

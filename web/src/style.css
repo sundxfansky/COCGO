@@ -472,3 +472,57 @@ details.card[open] > summary { border-bottom: 1px solid var(--line); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
+
+.village-card .card-heading { margin-bottom: 12px; }
+.village-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; }
+.village-controls > div:first-child { min-width: 0; }
+.village-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.village-card .select-trigger { width: 100%; justify-content: space-between; text-align: start; }
+.village-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 24px;
+  margin: 14px 0;
+  padding: 11px 14px;
+  border: 1px solid #e8eaf1;
+  border-radius: 10px;
+  background: #f9fafc;
+}
+.village-summary dt { font-size: 11px; color: #667085; }
+.village-summary dd { margin: 3px 0 0; font-size: 13px; font-weight: 700; }
+.village-boosts { margin: 10px 0 14px; font-size: 12px; }
+.village-boosts summary { cursor: pointer; }
+.village-boosts ul { padding-inline-start: 20px; }
+.village-filters { margin: 12px 0; }
+.village-group { margin-top: 16px; }
+.village-group h3 { font-size: 13px; margin-bottom: 7px; }
+.village-items {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 170px), 1fr));
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.village-item {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-height: 60px;
+  padding: 5px 8px;
+  border: 1px solid #e8eaf1;
+  border-radius: 8px;
+}
+.village-art { display: grid; place-items: center; width: 48px; height: 48px; background-repeat: no-repeat; }
+.village-art-missing { border-radius: 8px; background: #f2f3f7; color: #68758c; }
+.village-item strong, .village-item small { display: block; overflow-wrap: anywhere; }
+.village-item strong { font-size: 12px; }
+.village-item small { margin-top: 3px; color: #667085; font-size: 11px; }
+.village-item .village-timer { color: #875432; }
+
+.runtime-card .card-heading { margin-bottom: 10px; }
+.runtime-card .actions { margin-top: 10px; }
+.runtime-card > p { margin-top: 8px; font-size: 12px; }
+.runtime-switch { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.runtime-switch > span { color: #667085; font-size: 12px; }
